@@ -1,0 +1,272 @@
+openapi: 3.1.0
+info:
+  title: PartnerLedger API
+  version: 0.1.0
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      summary: Check if the application process is alive
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+  /readyz:
+    get:
+      summary: Check that the MySQL schema and Redis are ready
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '503':
+          $ref: '#/components/responses/Error'
+  /api/auth/login:
+    post:
+      summary: Start a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, example: dealer_demo }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Session and user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [access_token, token_type, expires_in, user]
+                        properties:
+                          access_token: { type: string }
+                          token_type: { const: Bearer }
+                          expires_in: { type: integer, example: 43200 }
+                          user: { $ref: '#/components/schemas/User' }
+        default:
+          $ref: '#/components/responses/Error'
+  /api/auth/logout:
+    post:
+      summary: Revoke the current session
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/user/profile:
+    get:
+      summary: Read the authenticated user
+      responses:
+        '200':
+          description: Current user and organization
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/User' }
+        default:
+          $ref: '#/components/responses/Error'
+  /api/org/current:
+    get:
+      summary: Read the current organization
+      responses:
+        '200':
+          description: Current organization
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/Organization' }
+        default:
+          $ref: '#/components/responses/Error'
+  /api/products:
+    get:
+      summary: List products visible to the current organization
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: after
+          in: query
+          schema: { type: string, pattern: '^[0-9]+$', default: '0' }
+      responses:
+        '200':
+          description: Product page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [items, next_cursor]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: '#/components/schemas/Product' }
+                          next_cursor: { type: [string, 'null'] }
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create a product as a manufacturer
+      requestBody:
+        $ref: '#/components/requestBodies/Product'
+      responses:
+        '201':
+          $ref: '#/components/responses/Product'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/products/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ID' }
+    get:
+      summary: Read a visible product
+      responses:
+        '200':
+          $ref: '#/components/responses/Product'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      summary: Update a product that belongs to the manufacturer
+      requestBody:
+        $ref: '#/components/requestBodies/Product'
+      responses:
+        '200':
+          $ref: '#/components/responses/Product'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/ai/parse-requirement:
+    post:
+      summary: Extract fields from a reseller's ERP requirement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 2000 }
+            example:
+              text: 我们是 120 人的制造公司，需要财务库存和私有化部署。
+      responses:
+        '200':
+          description: Structured extraction for human confirmation
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/Requirement'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  requestBodies:
+    Product:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProductInput' }
+  responses:
+    Product:
+      description: Visible product
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/Product' }
+    Success:
+      description: Successful operation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Envelope' }
+    Error:
+      description: Invalid input, insufficient permission, missing resource or unavailable dependency
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Envelope' }
+          example:
+            code: 401
+            message: authentication_required
+            data: null
+  schemas:
+    Envelope:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: integer }
+        message: { type: string }
+        data: {}
+    ID:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+      example: '1'
+    Organization:
+      type: object
+      required: [id, name, kind]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        name: { type: string }
+        kind: { type: string, enum: [MANUFACTURER, RESELLER] }
+    User:
+      type: object
+      required: [id, username, organization]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        username: { type: string }
+        organization: { $ref: '#/components/schemas/Organization' }
+    ProductInput:
+      type: object
+      required: [name, version]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        version: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 2000 }
+        published: { type: boolean, default: false }
+    Product:
+      allOf:
+        - $ref: '#/components/schemas/ProductInput'
+        - type: object
+          required: [id, manufacturer_id, description, published]
+          properties:
+            id: { $ref: '#/components/schemas/ID' }
+            manufacturer_id: { $ref: '#/components/schemas/ID' }
+    Requirement:
+      type: object
+      required: [enterprise_type, employee_count, required_modules, deployment_mode, license_count, missing_fields, follow_up_questions, need_user_confirmation]
+      properties:
+        enterprise_type: { type: string }
+        employee_count: { type: [integer, 'null'], minimum: 1 }
+        required_modules: { type: array, items: { type: string } }
+        deployment_mode: { type: string }
+        license_count: { type: [integer, 'null'], minimum: 1 }
+        missing_fields: { type: array, items: { type: string } }
+        follow_up_questions: { type: array, items: { type: string } }
+        need_user_confirmation: { const: true }

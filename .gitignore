@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+/.clerk/
+*.exe
+/backend/var/
