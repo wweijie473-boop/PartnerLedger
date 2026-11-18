@@ -4,3 +4,5 @@
 /.clerk/
 *.exe
 /backend/var/
+node_modules/
+dist/
