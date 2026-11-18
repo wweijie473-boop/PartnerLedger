@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElDialog } from 'element-plus'
+import WorkspaceShell from './WorkspaceShell.vue'
 import { UiBadge, UiButton, UiCard, UiField, UiIcon, UiIconTile, UiMetricCard, UiProgress, UiState } from './ui/index.js'
 import { defaultExpiry, deliverySteps, isValidQuote, money, orderId, productName, products, roles, seedCases, statuses } from './demo'
 
@@ -213,37 +214,15 @@ function reset() {
         <span><strong>{{ item.label }}</strong><small>{{ item.company }}</small></span><UiIcon name="forward" />
       </button>
     </div>
+    <p class="demo-footer"><a class="live-entry" href="/">使用后端账号登录</a></p>
   </div>
 
-  <div v-else class="app-shell">
-    <aside class="sidebar">
-      <button type="button" class="brand" aria-label="渠智链 AI 首页" @click="go('home')">
-        <span class="brand-mark"><UiIcon name="workflow" :size="22" /></span><span><strong>渠智链 AI</strong><small>PARTNERLEDGER</small></span>
-      </button>
-      <div class="sidebar-content">
-        <span class="nav-label">渠道协作</span>
-        <nav aria-label="工作台导航">
-          <button v-for="item in nav" :key="item.id" :class="{ active: view === item.id }" :aria-current="view === item.id ? 'page' : undefined" @click="go(item.id)">
-            <UiIcon :name="item.icon" :size="19" /><span>{{ item.label }}</span><UiIcon v-if="view === item.id" name="chevron-right" :size="14" class="nav-arrow" />
-          </button>
-        </nav>
-      </div>
-      <div class="sidebar-bottom">
-        <div class="environment"><span></span> 本地演示环境</div>
-        <button class="account" @click="modal = 'role'"><span class="avatar">{{ roles[role].initials }}</span><span><strong>{{ roles[role].company }}</strong><small>{{ roles[role].label }}工作台</small></span><UiIcon name="chevron-down" :size="15" /></button>
-      </div>
-    </aside>
-
-    <main class="main">
-      <header class="topbar">
-        <div class="breadcrumbs"><span>工作台</span><UiIcon name="chevron-right" :size="15" /><strong>{{ currentPage.label }}</strong></div>
-        <div class="topbar-actions">
-          <form class="top-search" @submit.prevent="go('requests', true)"><UiIcon name="search" :size="16" /><input v-model="query" placeholder="搜索记录" aria-label="搜索记录" /></form>
-          <button class="role-pill" @click="modal = 'role'"><span></span>{{ roles[role].label }}视角<UiIcon name="chevron-down" :size="14" /></button>
-        </div>
-      </header>
-
-      <div class="content">
+  <WorkspaceShell v-else :nav="nav" :view="view" :organization="roles[role].company"
+    :account-label="`${roles[role].label}工作台`" environment="本地演示环境" @navigate="go" @account="modal = 'role'">
+    <template #actions>
+      <form class="top-search" @submit.prevent="go('requests', true)"><UiIcon name="search" :size="16" /><input v-model="query" placeholder="搜索记录" aria-label="搜索记录" /></form>
+      <button class="role-pill" @click="modal = 'role'"><span></span>{{ roles[role].label }}视角<UiIcon name="chevron-down" :size="14" /></button>
+    </template>
         <section class="page-heading">
           <div><h1>{{ currentPage.label }}</h1>
             <p class="muted">{{ { home: '跟进从客户需求到订单交付的每一步。', catalog: '查看可供询价的 ERP 产品、模块和授权方式。', requests: '跟进需求、提交询价并补充资料。', quotes: '查看报价明细、有效期和历史版本。', orders: '从订单查看授权、部署和上线交接进度。' }[view] }}</p></div>
@@ -301,10 +280,8 @@ function reset() {
           </table></div>
         </UiCard>
 
-        <footer class="demo-footer"><span>演示数据 · 保存在当前浏览器</span><div class="footer-actions"><label v-if="view !== 'catalog'">界面状态 <select v-model="demoState"><option value="normal">正常</option><option value="loading">加载中</option><option value="empty">空数据</option><option value="denied">无权限</option><option value="error">加载失败</option></select></label><button @click="modal = 'reset'">重置数据</button><a href="/ui">组件库</a></div></footer>
-      </div>
-    </main>
-  </div>
+        <footer class="demo-footer"><span>演示数据 · 保存在当前浏览器</span><div class="footer-actions"><label v-if="view !== 'catalog'">界面状态 <select v-model="demoState"><option value="normal">正常</option><option value="loading">加载中</option><option value="empty">空数据</option><option value="denied">无权限</option><option value="error">加载失败</option></select></label><button @click="modal = 'reset'">重置数据</button><a href="/">正式登录</a><a href="/ui">组件库</a></div></footer>
+  </WorkspaceShell>
 
   <ElDialog v-model="modalOpen" :title="modalTitle" width="min(584px, calc(100vw - 28px))" align-center destroy-on-close>
     <div v-if="modal === 'role'" class="role-options">

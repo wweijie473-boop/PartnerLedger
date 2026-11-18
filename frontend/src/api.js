@@ -1,0 +1,57 @@
+const apiMessages = {
+  invalid_credentials: '用户名或密码不正确。',
+  authentication_required: '登录已失效，请重新登录。',
+  forbidden: '当前组织无权执行此操作。',
+  not_found: '这条记录不存在或已不可见。',
+  invalid_product: '请检查产品名称、版本和说明。',
+  invalid_requirement: '请填写 1–2000 字的需求。',
+  invalid_request: '请检查输入后再试。',
+  dependencies_unavailable: '服务依赖暂不可用，请稍后重试。',
+  model_unavailable: 'AI 服务暂不可用，请稍后重试。',
+  model_response_error: 'AI 未返回可用结果，请调整需求或重试。',
+}
+
+export class ApiError extends Error {
+  constructor(status, code, fallback) {
+    super(apiMessages[code] || fallback || `请求失败（${status}），请稍后重试。`)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+export async function requestApi(path, { method = 'GET', token, body, signal, timeout = 12000 } = {}) {
+  const headers = { Accept: 'application/json' }
+  if (token) headers.Authorization = `Bearer ${token}`
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const deadline = AbortSignal.timeout(timeout)
+  const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline
+
+  let response, envelope
+  try {
+    response = await fetch(path, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: requestSignal,
+      cache: 'no-store',
+      redirect: 'error',
+    })
+    envelope = await response.json().catch((error) => {
+      if (requestSignal.aborted) throw error
+      return null
+    })
+  } catch (error) {
+    if (signal?.aborted) throw error
+    const message = deadline.aborted ? '请求超时，请确认结果后再重试。' : '无法连接后端，请确认 Go 服务已启动。'
+    throw new ApiError(0, '', message)
+  }
+
+  if (!response.ok) {
+    const fallback = response.status >= 500 && !envelope ? '无法连接后端，请确认 Go 服务已启动。' : undefined
+    throw new ApiError(response.status, envelope?.message, fallback)
+  }
+  if (envelope?.code !== response.status || !Object.hasOwn(envelope, 'data')) {
+    throw new ApiError(response.status, '', '服务返回了无法识别的数据，请检查后端配置。')
+  }
+  return envelope.data
+}
