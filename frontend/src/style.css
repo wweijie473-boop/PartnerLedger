@@ -88,6 +88,8 @@ tbody tr:hover { background: var(--ui-surface-muted); }
 .filter select { max-width: 130px; padding: 5px; border: 1px solid var(--ui-border); border-radius: 6px; background: var(--ui-surface); color: var(--ui-ink); }
 .demo-footer, .footer-actions { display: flex; align-items: center; gap: 13px; }
 .demo-footer { justify-content: space-between; margin-top: 13px; color: var(--ui-ink-muted); font-size: 11px; flex-wrap: wrap; }
+.live-entry { color: var(--ui-accent); text-underline-offset: 3px; }
+.footer-actions { flex-wrap: wrap; }
 .footer-actions :is(button, select, a) { background: transparent; border: 0; color: var(--ui-accent); font-size: 11px; }
 .footer-actions a { text-underline-offset: 3px; }
 .footer-actions button:hover { text-decoration: underline; }
