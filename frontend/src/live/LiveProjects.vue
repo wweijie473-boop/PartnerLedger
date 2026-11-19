@@ -9,6 +9,7 @@ import { createHttpProjectRepository } from '../channel/httpProjects.js'
 import '../channel/workspace.css'
 
 const props = defineProps({ request: Function, role: String, organizationId: String })
+defineEmits(['capture-opportunity'])
 const repo = createHttpProjectRepository(props.request)
 const rows = ref([])
 const links = ref([])
@@ -206,6 +207,7 @@ onUnmounted(() => {
         <UiButton @click="loadDetail">重试</UiButton><UiButton @click="setSelected('')">返回项目列表</UiButton>
       </UiState>
       <ProjectDetail v-else-if="detail" :project="detail" :role="role" :products="products" live @back="setSelected('')" @action="openAction" />
+      <div v-if="detail && !detailError && role === 'dealer'" class="modal-actions"><UiButton @click="$emit('capture-opportunity',detail.id)">记录附加商机</UiButton></div>
     </template>
     <template v-else>
       <section class="page-heading"><div><h1>{{ role === 'vendor' ? '渠道询价' : role === 'customer' ? '我的采购项目' : '客户项目' }}</h1><p class="muted">需求、询价和补充资料按同一项目流转。</p></div>

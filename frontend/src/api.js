@@ -10,6 +10,7 @@ const apiMessages = {
   idempotency_conflict: '此请求的内容已变更，请重新核对后提交。',
   invalid_transition: '项目状态已变化，当前操作暂不可办理。',
   organization_link_required: '请选择已关联的组织，或联系维护者建立代理关系。',
+  opportunity_exists: '此项目已记录相同的附加需求，请刷新商机台账查看。',
   dependencies_unavailable: '服务依赖暂不可用，请稍后重试。',
   model_unavailable: 'AI 服务暂不可用，请稍后重试。',
   model_response_error: 'AI 未返回可用结果，请调整需求或重试。',

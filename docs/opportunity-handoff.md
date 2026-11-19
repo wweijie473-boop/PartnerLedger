@@ -1,6 +1,6 @@
 # 商机拾遗｜给 mayisuix 的交班单
 
-**Go 已提供商机台账、伙伴档案、跟进动作和拜访草稿接口。** 后端联调使用迁移 `000004` 和 [现行 OpenAPI](../backend/openapi.yaml)。正式前端需要接入这些接口。产品、前端、演示与最终联调由 wweijie473-boop 负责。
+**Go 和正式 Vue 工作台已接通商机台账、伙伴档案、跟进动作和拜访草稿同步。** 后端联调使用迁移 `000004` 和 [现行 OpenAPI](../backend/openapi.yaml)。产品、前端、演示与最终联调由 wweijie473-boop 负责。
 
 ## 先看一笔业务（约三分钟）
 
@@ -21,7 +21,7 @@
 
 ## 商机接口 v1
 
-正式界面可注入现有 [HTTP 适配器](../frontend/src/channel/httpOpportunities.js)。演示使用 [本地仓库](../frontend/src/channel/repository.js)。Go 响应沿用 `{code,message,data}` 信封，适配器的 authenticated 请求函数返回已解包的 data。前缀 `B=/api/channel/v1/opportunities`。
+正式界面已注入 [HTTP 适配器](../frontend/src/channel/httpOpportunities.js)。演示使用 [本地仓库](../frontend/src/channel/repository.js)。Go 响应沿用 `{code,message,data}` 信封，适配器的 authenticated 请求函数返回已解包的 data。前缀 `B=/api/channel/v1/opportunities`。
 
 | 端点 / 方法 | 请求体样例 | 成功 data |
 | --- | --- | --- |
@@ -57,15 +57,25 @@ Opportunity 示例（仅代理商内部可读；示例编号非数据库主键�
 
 ## 正式前端接入
 
-演示复现见 [三端演示脚本](demo-walkthrough.md)。正式「记拜访」当前使用本机存储。接入服务时，使用服务端记录的 ID 和 revision。原始草稿仅允许同组织的创建成员读取或修改。确认产生的独立商机按经办组织可见。
+演示复现见 [三端演示脚本](demo-walkthrough.md)。正式「记拜访」已使用 [服务端适配器](../frontend/src/live/httpVisits.js)，所有写入使用服务端 ID 和 revision。已有本机草稿由成员选择后保存到服务端，原本机记录保留，并标记已同步的服务端 ID。原始草稿仅允许同组织的创建成员读取或修改。确认产生的独立商机按经办组织可见。
 
 商机增量沿用上文路径及 `requestId`、`revision` 约定。
 
 - Opportunity 增加 `knownPartnerIds`、`contactReviews`、`rejections`、`followReason`，旧数据缺省为空。contactReviews 以 partnerId 为键，内容为 `{checks:{version,interfaceAccess,region,availability},note}`，每项为 unknown / confirmed / blocked。只有经办代理商内部成员可见这些字段。
 - 新动作 `contactReview` 输入 `{partnerId,checks,note}`，open 状态可记录联系前核对；有 blocked 项时暂不可登记引荐。`rejectPartner` 输入 `{partnerId,reason}`，保留排除原因并从本商机当前候选中移除此伙伴，商机继续开放。
-- 新动作 `acknowledge` 输入空对象，记录当前成员查看过的候选。演示按团队记录 knownPartnerIds，正式实现应按成员保存已读状态，避免一人查看导致其他人漏掉新伙伴。
+- 动作 `acknowledge` 输入空对象，记录当前成员查看过的候选。演示按团队记录 knownPartnerIds，正式服务按成员保存已读状态。
 - `follow` 支持 open 状态，输入 `{followUp,followReason}`，事项为 customer / partner / fee。引荐成功后的默认事项为伙伴回访；已促成但有待核对介绍费时显示计费条件。GET desk 增加 `tasks:[{opportunityId,projectTitle,reason,action,date}]`，只返回当前组织可见内容，关闭或结清后相应事项消除。
 - 介绍费只记录约定与人工结清。引荐的服务端审计保存确认经办人、时间、手工确认来源及本次约定。
+
+### Issue #2 验收记录
+
+正式代理商登录后进入「记拜访」或「商机拾遗」。2026-11-19 使用独立 MySQL 测试库、迁移 000004、Redis 测试实例和真实 Go HTTP 服务完成以下验证。
+
+- 保存草稿后用同一账号在另一个独立登录会话读取。原有本机草稿只在选择保存后上传，原记录保留。编辑、删除使用服务端 revision。
+- 拜访先保存 reviewed 草稿，确认生成商机后返回 opportunityId。模拟响应丢失，刷新页面后用原请求重放，仍关联同一条商机。原主项目 requirement 和 revision 保持原值。
+- 同组织同事能读取团队商机，读取本人草稿列表为空，直接请求本人草稿返回 404。候选已读后本人待办消除，同事的未读待办保留。其他组织及厂商、客户的隔离由后端集成测试验证。
+- 联系清单存在 blocked 项时，正式引荐被服务端拒绝，页面说明需先核对。两个会话同时编辑草稿，旧 revision 被拒绝，页面重载最新版本供成员重新核对。
+- 前端 `npm test` 与生产构建通过，后端在启用 `PARTNERLEDGER_INTEGRATION_TEST=1` 的隔离环境执行 `go test -count=1 ./...` 通过。测试账号、库、令牌和草稿样例保存在本机。
 
 ### 拜访草稿接口
 

@@ -1,4 +1,3 @@
-// Proposed contract. Enable in the authenticated dealer workspace only after server-side authorization is available.
 export function createHttpOpportunityRepository(request) {
   const base = '/api/channel/v1/opportunities'
   async function write(path, body, requestId = crypto.randomUUID()) {

@@ -5,8 +5,8 @@ import WorkspaceShell from './WorkspaceShell.vue'
 import ProductCatalog from './live/ProductCatalog.vue'
 import RequirementParser from './live/RequirementParser.vue'
 import LiveProjects from './live/LiveProjects.vue'
-import VisitDrafts from './live/VisitDrafts.vue'
-import { createHttpProjectRepository } from './channel/httpProjects.js'
+import LiveVisits from './live/LiveVisits.vue'
+import LiveOpportunities from './live/LiveOpportunities.vue'
 import { entrances, organizationRole } from './live/entrances.js'
 import { UiBadge, UiButton, UiCard, UiField, UiIcon, UiState } from './ui/index.js'
 
@@ -35,7 +35,10 @@ const restoringIdentity = ref(false)
 const loginError = ref('')
 const identityError = ref('')
 const logoutError = ref('')
-const view = ref(new URLSearchParams(location.search).has('project') ? 'projects' : 'overview')
+const entryParams = new URLSearchParams(location.search)
+const view = ref(entryParams.get('view') || (entryParams.has('project') ? 'projects' : 'overview'))
+const captureProject = ref(entryParams.get('captureProject') || '')
+const navigationRevision = ref(0)
 const isManufacturer = computed(() => organization.value?.kind === 'MANUFACTURER')
 const isDealer = computed(() => organization.value?.kind === 'RESELLER')
 const kindLabel = computed(() => portal.value.label)
@@ -45,6 +48,7 @@ const navigation = computed(() => [
   ...(entry.value !== 'customer' ? [{ id: 'catalog', label: '产品目录', icon: 'catalog' }] : []),
   ...(isDealer.value ? [{ id: 'requirement', label: 'AI 需求解析', icon: 'request' }] : []),
   ...(isDealer.value ? [{ id: 'visits', label: '记拜访', icon: 'request' }] : []),
+  ...(isDealer.value ? [{ id: 'opportunities', label: '商机拾遗', icon: 'workflow' }] : []),
   { id: 'account', label: '账号与组织', icon: portal.value.icon },
 ])
 
@@ -104,6 +108,7 @@ async function loadIdentity() {
     document.title = entrances[accountRole].label + '工作台 · 渠智链'
     user.value = profile
     organization.value = currentOrg
+    if (!navigation.value.some(item => item.id === view.value)) view.value = 'overview'
   } catch (error) {
     if (session.value === active) identityError.value = error.message
   } finally {
@@ -151,6 +156,29 @@ async function signOut() {
   } finally {
     signingOut.value = false
   }
+}
+function navigate(target) {
+  navigationRevision.value += 1
+  view.value = target
+  captureProject.value = ''
+  const url = new URL(location.href)
+  url.search = ''
+  url.searchParams.set('view',target)
+  history.replaceState(null,'',url)
+}
+function openProject(id) {
+  navigate('projects')
+  const url = new URL(location.href)
+  url.searchParams.set('project',id)
+  history.replaceState(null,'',url)
+}
+function openOpportunity(id = '', projectId = '') {
+  navigate('opportunities')
+  captureProject.value = projectId
+  const url = new URL(location.href)
+  if (id) url.searchParams.set('op',id)
+  if (projectId) url.searchParams.set('captureProject',projectId)
+  history.replaceState(null,'',url)
 }
 </script>
 
@@ -200,34 +228,34 @@ async function signOut() {
   </main>
 
   <WorkspaceShell v-else :nav="navigation" :view="view" :organization="organization.name"
-    :account-label="user.username" environment="正式工作台" @navigate="view = $event" @account="view = 'account'">
-    <template #actions><UiButton compact variant="text" :icon="portal.icon" @click="view = 'account'">{{ kindLabel }}</UiButton></template>
+    :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
+    <template #actions><UiButton compact variant="text" :icon="portal.icon" @click="navigate('account')">{{ kindLabel }}</UiButton></template>
     <template v-if="view === 'overview'">
       <section class="page-heading"><div><p class="access-kicker">{{ organization.name }}</p><h1>{{ kindLabel }}工作台</h1>
         <p class="muted">{{ isManufacturer ? '接收渠道询价，回复资料问题并记录能力缺口。' : isDealer ? '接收客户需求、发起厂商询价并跟进双方回复。' : '提交采购需求，向经办代理商补充资料并查看进度。' }}</p></div></section>
       <div class="live-tiles">
         <UiCard v-if="entry !== 'customer'" title="产品目录" :description="isManufacturer ? '新增、编辑与发布本组织的软件产品。' : '查看产品版本、说明与厂商发布信息。'">
           <template #actions><UiIcon name="catalog" :size="20" /></template>
-          <UiButton end-icon="forward" @click="view = 'catalog'">打开目录</UiButton>
+          <UiButton end-icon="forward" @click="navigate('catalog')">打开目录</UiButton>
         </UiCard>
         <UiCard v-if="isDealer" title="需求整理" description="录入客户描述，核对授权数、模块和部署方式。">
           <template #actions><UiIcon name="request" :size="20" /></template>
-          <UiButton end-icon="forward" @click="view = 'requirement'">整理需求</UiButton>
+          <UiButton end-icon="forward" @click="navigate('requirement')">整理需求</UiButton>
         </UiCard>
-        <UiCard v-if="isDealer" title="记拜访" description="留下一句话，核对客户主采购事项与附加需求。草稿保存在当前设备。">
-          <UiButton @click="view = 'visits'">记录本次拜访</UiButton>
+        <UiCard v-if="isDealer" title="记拜访" description="留下一句话，核对主采购事项与附加需求，同一账号可继续整理已同步草稿。">
+          <UiButton @click="navigate('visits')">记录本次拜访</UiButton>
         </UiCard>
-        <UiCard v-if="isDealer" title="商机拾遗" description="从附加需求找到做过类似项目的伙伴，跟进引荐结果。当前仅开放独立演示。">
-          <template #actions><UiBadge>演示</UiBadge></template>
-          <a class="access-inline-link" href="/experience/dealer?view=opportunities">查看商机演示</a>
+        <UiCard v-if="isDealer" title="商机拾遗" description="查看团队共享的商机和伙伴，跟进引荐结果、介绍费条件和自己的未读候选。">
+          <UiButton @click="navigate('opportunities')">打开商机台账</UiButton>
         </UiCard>
         <UiCard title="项目协作" description="在关联项目中查看进度，处理需求、询价、补充资料和能力缺口。">
-          <UiButton @click="view = 'projects'">打开项目</UiButton>
+          <UiButton @click="navigate('projects')">打开项目</UiButton>
         </UiCard>
       </div>
     </template>
-    <LiveProjects v-else-if="view === 'projects'" :request="authenticated" :role="entry" :organization-id="organization.id" />
-    <VisitDrafts v-else-if="view === 'visits' && isDealer" :scope="'live:' + organization.id + ':' + user.id" :load-projects="createHttpProjectRepository(authenticated).list" @project="id => { const url = new URL(location.href); url.searchParams.set('project',id); history.replaceState(null,'',url); view = 'projects' }" />
+    <LiveProjects v-else-if="view === 'projects'" :key="navigationRevision" :request="authenticated" :role="entry" :organization-id="organization.id" @capture-opportunity="id => openOpportunity('',id)" />
+    <LiveVisits v-else-if="view === 'visits' && isDealer" :request="authenticated" :scope="organization.id + ':' + user.id" @project="openProject" @opportunity="id => openOpportunity(id)" />
+    <LiveOpportunities v-else-if="view === 'opportunities' && isDealer" :key="navigationRevision" :request="authenticated" :scope="organization.id + ':' + user.id" :project-id="captureProject" :capture="!!captureProject" @project="openProject" />
     <ProductCatalog v-else-if="view === 'catalog' && entry !== 'customer'" :request="authenticated" :is-manufacturer="isManufacturer" />
     <RequirementParser v-else-if="view === 'requirement' && isDealer" :request="authenticated" />
     <template v-else>

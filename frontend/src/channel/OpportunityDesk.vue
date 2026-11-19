@@ -5,7 +5,7 @@ import { UiBadge, UiButton, UiCard, UiState } from '../ui/index.js'
 import OpportunityForm from './OpportunityForm.vue'
 import { categoryLabels, contactFields, opportunityStages, systemLabels } from './opportunities.js'
 
-const props = defineProps({ desk:Object, repo:Object, projects:Array, selected:String, captureFor:String, refresh:Function })
+const props = defineProps({ desk:Object, repo:Object, projects:Array, selected:String, captureFor:String, refresh:Function, live:Boolean, locked:Boolean })
 const emit = defineEmits(['select','capture-opened','project','notice'])
 const tab = ref('ledger'), filter = ref(''), search = ref(''), pending = ref(false), error = ref('')
 const form = ref(null), match = ref(null), startingRevision = ref(0), contextId = ref(''), returningFor = ref('')
@@ -26,25 +26,27 @@ const rows = computed(() => props.desk.items.filter(item =>
   [item.id,item.note,item.projectTitle,categoryLabels[item.category]].join(' ').toLowerCase().includes(search.value.trim().toLowerCase())))
 const titles = {capture:'从拜访记录整理商机',partner:'登记伙伴能力',clarify:'澄清附加需求',introduce:'登记引荐',win:'登记合作结果',lose:'登记未促成',settle:'登记介绍费结清',follow:'调整跟进日期',contactReview:'联系前核对',rejectPartner:'记录未匹配原因'}
 async function acknowledge() {
-  if (pending.value) return
+  if (pending.value || props.locked) return
   pending.value = true
   try { await props.repo.actOpportunity(current.value.id,'acknowledge',{},current.value.revision); await props.refresh() }
-  catch (cause) { emit('notice',cause.message) }
+  catch (cause) { emit('notice',cause.message); if (cause.status === 409) await props.refresh() }
   finally { pending.value = false }
 }
 const activePartner = computed(() => props.desk.partners.find(entry => entry.id === current.value?.partnerId))
 function open(mode, candidate = null, projectId = '') {
+  if (pending.value || props.locked) return
   startingRevision.value = current.value?.revision; error.value = ''; match.value = candidate
   contextId.value = projectId; form.value = mode
 }
 watch(() => props.captureFor, id => { if (id) { open('capture',null,id); emit('capture-opened') } }, { immediate:true })
 watch(() => props.selected, () => { form.value = null })
+watch(() => props.locked, locked => { if (locked) form.value = null })
 function revisit(id) {
   returningFor.value = id; tab.value = 'ledger'; filter.value = ''; search.value = ''
 }
 function choose(section, stage = '') { tab.value = section; filter.value = stage; search.value = ''; returningFor.value = '' }
 async function save(payload) {
-  if (pending.value) return
+  if (pending.value || props.locked) return
   const mode = form.value
   pending.value = true; error.value = ''
   try {
@@ -59,8 +61,14 @@ async function save(payload) {
     if (mode === 'partner') { revisit(record.id); emit('notice','已登记伙伴，请查看可回访的历史商机') }
     else { emit('select',record.id); emit('notice','商机记录已更新') }
   } catch (cause) {
-    error.value = cause.message
-    if (cause.code === 'CONFLICT') await props.refresh()
+    error.value = mode === 'introduce' && cause.code === 'invalid_request' && Object.values(match.value?.checks || {}).includes('blocked')
+      ? '联系前核对仍有未解决的问题，请先更新核对结果再引荐。'
+      : cause.message
+    if (cause.code === 'CONFLICT' || cause.status === 409) {
+      await props.refresh()
+      form.value = null
+      emit('notice',cause.message + ' 请重新打开操作核对最新记录。')
+    }
   } finally { pending.value = false }
 }
 async function copyBrief() {
@@ -72,7 +80,7 @@ async function copyBrief() {
 <template>
   <div class="op-desk">
     <template v-if="!selected">
-      <header class="page-heading ch-head"><div><p class="ch-kicker">代理商团队 · 本地演示</p><h1>商机拾遗</h1><p class="muted">客户额外提的需求，团队里谁能接？从一条走访记录找到有合作依据的伙伴。</p></div>
+      <header class="page-heading ch-head"><div><p class="ch-kicker">代理商团队 · {{ live ? '正式商机' : '本地演示' }}</p><h1>商机拾遗</h1><p class="muted">客户额外提的需求，团队里谁能接？从一条走访记录找到有合作依据的伙伴。</p></div>
         <UiButton variant="primary" icon="add" @click="open('capture')">记录附加需求</UiButton>
       </header>
       <div class="op-metrics">
