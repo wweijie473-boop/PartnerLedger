@@ -1,6 +1,6 @@
 # PartnerLedger 全功能思维导图
 
-核对日期：2026-11-20。已提交基线：`9847c69`；另列当前工作树中未提交的功能。共 11 个主分支、180 个末级条目，条目包含功能、约束和边界，不代表独立模块数量。
+核对日期：2026-11-20。已提交基线：`85e61e1`；另列当前工作树中未提交的功能。共 11 个主分支、185 个末级条目，条目包含功能、约束和边界，不代表独立模块数量。
 
 [打开交互导图](features-mindmap.html) · [完整矢量图](features-mindmap.svg) · [概览图](features-mindmap-overview.svg) · [FreeMind 格式](features-mindmap.mm)
 
@@ -36,6 +36,12 @@ mindmap
         查看个人资料与所属组织 · 正式已接入
         退出登录与会话失效处理 · 正式已接入
         刷新恢复会话并重新核验身份 · 正式已接入
+      组织账号注册 · 正式已接入
+        选择三类身份并填写组织名称、用户名和密码 · 正式已接入
+        用户名格式、密码长度与重复用户名校验 · 正式已接入
+        注册成功后返回登录 · 正式已接入
+        注册频率限制与失败提示 · 正式已接入
+        新客户业务协作仍需维护者建立代理关系 · 正式已接入
     代理商工作台 · 正式已接入
       工作总览 · 正式已接入
         可见项目、待我处理、协作方处理中统计 · 正式已接入
@@ -247,7 +253,7 @@ mindmap
         自动发放真实软件授权码 · 范围边界
         自动发送微信消息或读取通讯录 · 范围边界
         开放供应商交易市场 · 范围边界
-        正式账号自助注册、完整组织成员管理界面 · 范围边界
+        完整组织成员管理与自助绑定代理关系界面 · 范围边界
 ```
 
 </details>
@@ -273,8 +279,14 @@ mindmap
   - 查看个人资料与所属组织 **[正式已接入]**
   - 退出登录与会话失效处理 **[正式已接入]**
   - 刷新恢复会话并重新核验身份 **[正式已接入]**
+- 组织账号注册 **[正式已接入]**
+  - 选择三类身份并填写组织名称、用户名和密码 **[正式已接入]**
+  - 用户名格式、密码长度与重复用户名校验 **[正式已接入]**
+  - 注册成功后返回登录 **[正式已接入]**
+  - 注册频率限制与失败提示 **[正式已接入]**
+  - 新客户业务协作仍需维护者建立代理关系 **[正式已接入]**
 
-代码依据：[frontend/src/Portal.vue](../frontend/src/Portal.vue)、[frontend/src/PortalHeader.vue](../frontend/src/PortalHeader.vue)、[frontend/src/portal-navigation.js](../frontend/src/portal-navigation.js)、[frontend/src/LiveApp.vue](../frontend/src/LiveApp.vue)。
+代码依据：[frontend/src/Portal.vue](../frontend/src/Portal.vue)、[frontend/src/PortalHeader.vue](../frontend/src/PortalHeader.vue)、[frontend/src/portal-navigation.js](../frontend/src/portal-navigation.js)、[frontend/src/LiveApp.vue](../frontend/src/LiveApp.vue)、[backend/internal/api/register.go](../backend/internal/api/register.go)。
 
 ### 代理商工作台
 
@@ -524,7 +536,7 @@ mindmap
   - 自动发放真实软件授权码 **[范围边界]**
   - 自动发送微信消息或读取通讯录 **[范围边界]**
   - 开放供应商交易市场 **[范围边界]**
-  - 正式账号自助注册、完整组织成员管理界面 **[范围边界]**
+  - 完整组织成员管理与自助绑定代理关系界面 **[范围边界]**
 
 代码依据：[frontend/src/live/VisitPartnerFinder.vue](../frontend/src/live/VisitPartnerFinder.vue)、[frontend/src/channel/PartnerRecommendation.vue](../frontend/src/channel/PartnerRecommendation.vue)、[frontend/src/live/httpVisits.js](../frontend/src/live/httpVisits.js)、[frontend/src/live/LiveVisits.vue](../frontend/src/live/LiveVisits.vue)。
 

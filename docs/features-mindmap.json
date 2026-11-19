@@ -1,7 +1,7 @@
 {
   "title": "渠智链 PartnerLedger｜功能全景",
   "date": "2026-11-20",
-  "baseline": "9847c69",
+  "baseline": "85e61e1",
   "subtitle": "面向软件二级代理商的三端协作与商机经营平台",
   "legend": {
     "live": "正式已接入",
@@ -24,7 +24,8 @@
         "frontend/src/Portal.vue",
         "frontend/src/PortalHeader.vue",
         "frontend/src/portal-navigation.js",
-        "frontend/src/LiveApp.vue"
+        "frontend/src/LiveApp.vue",
+        "backend/internal/api/register.go"
       ],
       "children": [
         {
@@ -117,6 +118,38 @@
             }
           ],
           "id": "f12"
+        },
+        {
+          "id": "registration",
+          "title": "组织账号注册",
+          "status": "live",
+          "children": [
+            {
+              "id": "registration-0",
+              "title": "选择三类身份并填写组织名称、用户名和密码",
+              "status": "live"
+            },
+            {
+              "id": "registration-1",
+              "title": "用户名格式、密码长度与重复用户名校验",
+              "status": "live"
+            },
+            {
+              "id": "registration-2",
+              "title": "注册成功后返回登录",
+              "status": "live"
+            },
+            {
+              "id": "registration-3",
+              "title": "注册频率限制与失败提示",
+              "status": "live"
+            },
+            {
+              "id": "registration-4",
+              "title": "新客户业务协作仍需维护者建立代理关系",
+              "status": "live"
+            }
+          ]
         }
       ]
     },
@@ -1321,7 +1354,7 @@
               "status": "scope"
             },
             {
-              "title": "正式账号自助注册、完整组织成员管理界面",
+              "title": "完整组织成员管理与自助绑定代理关系界面",
               "id": "f219",
               "status": "scope"
             }
