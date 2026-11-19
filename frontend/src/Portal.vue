@@ -1,8 +1,10 @@
 <script setup>
 import { ref } from 'vue'
 import PortalArtwork from './PortalArtwork.vue'
+import PortalHeader from './PortalHeader.vue'
 import { UiIcon } from './ui'
 import { entrances } from './entrances.js'
+import { portalMenus } from './portal-navigation.js'
 import './portal.css'
 
 const phase = ref(0)
@@ -14,31 +16,18 @@ const phases = [
 </script>
 
 <template>
-  <div class="pl-portal">
-    <header class="pl-header"><div class="pl-wrap pl-bar">
-      <a class="pl-logo" href="/" aria-label="渠智链首页">
-        <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
-        <b>渠智链</b><small>PartnerLedger</small>
-      </a>
-      <nav aria-label="主导航"><a href="#access">工作台</a><a href="#journey">三方协作</a><a href="/tables">表格</a><a class="pl-nav-cta" href="/login/dealer">代理商登录</a></nav>
-    </div></header>
+  <div id="top" class="pl-portal">
+    <PortalHeader />
     <main>
       <section class="pl-hero" aria-labelledby="portal-title"><div class="pl-wrap pl-intro">
         <div class="pl-hero-copy"><p class="pl-kicker">面向软件渠道的协作平台</p>
           <h1 id="portal-title">每一次客户需求，<br>都有下一步。</h1>
           <p class="pl-subtitle">从客户采购、厂商询价到项目交付，<br class="pl-desktop-break">让代理商的业务与团队经验，在一处连接。</p>
-          <div class="pl-hero-actions"><a class="pl-primary" href="#access">选择你的工作台</a><a class="pl-secondary" href="/experience/dealer">体验代理商演示</a></div>
+          <div class="pl-hero-actions"><a class="pl-primary" href="#journey">了解协作流程</a><a class="pl-secondary" href="/experience/dealer">体验代理商演示</a></div>
         </div>
         <div class="pl-artwork" aria-hidden="true"><PortalArtwork /></div>
       </div></section>
-      <section id="access" class="pl-wrap pl-access-section" aria-labelledby="access-title">
-        <div class="pl-section-heading"><p class="pl-kicker">各司其职，一起推进</p><h2 id="access-title">进入你的工作空间</h2></div>
-        <div class="pl-access"><a v-for="entry in entrances" :key="entry.role" :href="'/login/' + entry.role" class="pl-entry">
-          <div class="pl-entry-top"><span class="pl-tile"><UiIcon :name="entry.icon" :size="25" /></span><span>{{ entry.caption }}</span></div>
-          <h3>{{ entry.label }}工作台</h3><p>{{ entry.description }}</p><span class="pl-entry-link">{{ entry.label }}登录</span>
-        </a></div>
-      </section>
-      <section id="journey" class="pl-flow-section"><div class="pl-wrap pl-journey">
+      <section id="journey" class="pl-flow-section" tabindex="-1"><div class="pl-wrap pl-journey">
         <div><p class="pl-kicker">从同一个项目开始</p><h2>三方协作，<br>每个环节都接得上。</h2>
           <p class="pl-section-note">把原始需求、渠道采购条件和客户方案，交给有权查看的人。</p>
           <div class="pl-phases" aria-label="选择协作阶段"><button v-for="(item,index) in phases" :key="item.title" :aria-pressed="phase === index" @click="phase = index">{{ item.title }}</button></div>
@@ -52,8 +41,30 @@ const phases = [
         <div class="pl-op-illustration" aria-hidden="true"><span class="pl-op-path"></span><div><UiIcon name="request" :size="28" /><span>一条未承接的需求</span></div><div class="pl-op-match"><UiIcon name="workflow" :size="28" /><span>找到有依据的伙伴</span></div></div>
         <div><p class="pl-kicker">商机拾遗</p><h2>客户额外提的需求，<br>团队里谁做过？</h2><p>原厂暂不支持的接口，也许团队认识的人就能承接。保留附加需求，查看合作依据，找到内部引荐人，继续跟进结果。</p><a class="pl-primary" href="/experience/dealer?view=opportunities">体验商机拾遗</a><small>使用虚构的项目与合作记录演示</small></div>
       </section>
-      <section class="pl-start"><div class="pl-wrap"><h2>从一笔项目，开始协作。</h2><p>选择工作台，接着处理属于你的下一步。</p><a class="pl-secondary" href="#access">选择登录入口</a></div></section>
     </main>
-    <footer class="pl-wrap pl-footer"><b>渠智链 · PartnerLedger</b><span>软件渠道协作平台</span><a href="/ui">界面组件</a></footer>
+    <footer class="pl-footer">
+      <div class="pl-wrap">
+        <div class="pl-footer-grid">
+          <section id="about" class="pl-footer-about" tabindex="-1" aria-labelledby="portal-about-title">
+            <a class="pl-logo" href="#top" aria-label="返回渠智链首页顶部">
+              <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
+              <b>渠智链</b><small>PartnerLedger</small>
+            </a>
+            <h2 id="portal-about-title">了解我们</h2>
+            <p>渠智链连接企业客户、代理商和软件厂商，在同一项目中协作采购、询价与交付。</p>
+          </section>
+          <nav v-for="menu in portalMenus" :key="menu.id" :aria-labelledby="'portal-footer-' + menu.id">
+            <h2 :id="'portal-footer-' + menu.id">{{ menu.label }}</h2>
+            <ul><li v-for="link in menu.links" :key="link.href"><a :href="link.href">{{ link.label }}</a></li></ul>
+          </nav>
+          <section id="help" tabindex="-1" aria-labelledby="portal-help-title">
+            <h2 id="portal-help-title">帮助</h2>
+            <p>已有账号可在顶部选择登录身份。</p>
+            <ul><li><a href="/experience/dealer">免登录体验</a></li><li><a href="/ui">界面组件</a></li></ul>
+          </section>
+        </div>
+        <div class="pl-footer-bottom"><span>© {{ new Date().getFullYear() }} 渠智链</span><a href="#top">返回顶部 <span aria-hidden="true">↑</span></a></div>
+      </div>
+    </footer>
   </div>
 </template>
