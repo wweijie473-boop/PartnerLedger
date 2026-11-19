@@ -4,6 +4,7 @@ import { ElDialog } from 'element-plus'
 import { UiBadge, UiButton, UiCard, UiState } from '../ui/index.js'
 import OpportunityForm from './OpportunityForm.vue'
 import { categoryLabels, contactFields, opportunityStages, systemLabels } from './opportunities.js'
+import { statusTone } from '../ui/statusTone.js'
 
 const props = defineProps({ desk:Object, repo:Object, projects:Array, selected:String, captureFor:String, refresh:Function, live:Boolean, locked:Boolean })
 const emit = defineEmits(['select','capture-opened','project','notice'])
@@ -98,7 +99,7 @@ async function copyBrief() {
         <p v-if="returningFor" class="op-inset">可请「{{ desk.partners.find(p => p.id === returningFor)?.name }}」协助的待承接需求（{{ rows.length }}）</p>
         <div v-if="rows.length" class="op-records"><button v-for="item in rows" :key="item.id" @click="$emit('select',item.id)">
           <span><small>{{ item.projectTitle }} · {{ item.id }}</small><b>{{ item.note }}</b><small>{{ categoryLabels[item.category] || '需澄清承接类型' }}<template v-if="item.followUp"> · 下次跟进 {{ item.followUp }}</template></small></span>
-          <UiBadge>{{ opportunityStages[item.stage] }}</UiBadge>
+          <UiBadge :tone="statusTone(item.stage)" dot>{{ opportunityStages[item.stage] }}</UiBadge>
         </button></div><p v-else class="op-muted">暂无符合条件的商机。</p>
       </UiCard>
       <UiCard v-else-if="tab === 'partners'" title="团队伙伴" description="记录合作能力与内部引荐人。先找同事核实，不公开私人通讯录。">
@@ -113,7 +114,7 @@ async function copyBrief() {
     </template>
     <template v-else-if="current">
       <UiButton compact variant="text" icon="back" @click="$emit('select','')">返回商机台账</UiButton>
-      <header class="ch-project-head"><p class="ch-kicker">附加需求 · {{ current.id }}</p><h1>商机跟进</h1><div class="ch-project-meta"><UiBadge>{{ opportunityStages[current.stage] }}</UiBadge><button v-if="sourceProject" class="op-link" @click="$emit('project',sourceProject)">{{ current.projectTitle }} · 查看主单</button></div></header>
+      <header class="ch-project-head"><p class="ch-kicker">附加需求 · {{ current.id }}</p><h1>商机跟进</h1><div class="ch-project-meta"><UiBadge :tone="statusTone(current.stage)" dot>{{ opportunityStages[current.stage] }}</UiBadge><button v-if="sourceProject" class="op-link" @click="$emit('project',sourceProject)">{{ current.projectTitle }} · 查看主单</button></div></header>
       <div class="op-columns"><div class="ch-stack">
         <UiCard title="客户还需要什么"><p class="op-note">{{ current.note }}</p><p>{{ categoryLabels[current.category] || '承接类型待澄清' }} · {{ [systemLabels[current.source],systemLabels[current.target]].filter(Boolean).join(' → ') || '系统待确认' }}</p>
           <ul v-if="current.questions.length"><li v-for="q in current.questions" :key="q">{{ q }}</li></ul>
@@ -124,7 +125,7 @@ async function copyBrief() {
           <p v-if="!current.matches.some(m => m.evidence)" class="op-muted">{{ current.questions.length ? '先澄清需求，再查找有依据的人选。' : '暂无有案例佐证的人选；可在团队伙伴中登记新的能力。' }}</p>
           <article v-for="candidate in current.matches" :key="candidate.partnerId" class="op-line"><h3>{{ candidate.name }} <UiBadge>{{ candidate.evidence ? '有合作记录' : '仅能力登记' }}</UiBadge></h3>
             <p>找 {{ candidate.owner }} 引荐 · {{ candidate.reason }}</p><p>{{ candidate.evidence }}</p><p class="op-muted">{{ candidate.caveat }}</p>
-            <dl class="ch-facts"><template v-for="(label,key) in contactFields" :key="key"><dt>{{ label }}</dt><dd>{{ {confirmed:'已确认可行',blocked:'存在问题'}[candidate.checks?.[key]] || '待确认' }}</dd></template></dl>
+            <dl class="ch-facts"><template v-for="(label,key) in contactFields" :key="key"><dt>{{ label }}</dt><dd><UiBadge :tone="candidate.checks?.[key] === 'blocked' ? 'danger' : candidate.checks?.[key] === 'confirmed' ? 'success' : 'warning'">{{ {confirmed:'已确认可行',blocked:'存在问题'}[candidate.checks?.[key]] || '待确认' }}</UiBadge></dd></template></dl>
             <p v-if="candidate.reviewNote">{{ candidate.reviewNote }}</p>
             <div class="op-tools"><UiButton compact @click="open('contactReview',candidate)">联系前核对</UiButton><UiButton compact @click="open('rejectPartner',candidate)">记录未匹配</UiButton><UiButton compact @click="open('introduce',candidate)">登记引荐</UiButton></div></article>
         </UiCard>

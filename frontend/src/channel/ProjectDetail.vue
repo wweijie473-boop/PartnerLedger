@@ -2,6 +2,8 @@
 import { UiBadge, UiButton, UiCard, UiIcon } from '../ui/index.js'
 import { actionLabels } from './domain.js'
 import QuoteBook from './QuoteBook.vue'
+import UiProjectProgress from '../ui/UiProjectProgress.vue'
+import { statusTone } from '../ui/statusTone.js'
 defineProps({ project: { type: Object, required: true }, role: String, products: { type: Array, default: () => [] }, opportunities: { type: Array, default: () => [] }, live: Boolean })
 defineEmits(['action', 'back', 'capture', 'opportunity'])
 const clock = date => new Date(date).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})
@@ -9,8 +11,9 @@ const clock = date => new Date(date).toLocaleString('zh-CN', {month:'2-digit',da
 <template>
   <UiButton compact icon="back" variant="text" @click="$emit('back')">返回工作列表</UiButton>
   <header class="ch-project-head"><p class="ch-kicker">PROJECT FILE &nbsp; / &nbsp; {{ project.id }}</p><h1>{{ project.title }}</h1>
-    <div class="ch-project-meta"><UiBadge dot>{{ project.stageLabel }}</UiBadge><span v-if="project.customerName">{{ project.customerName }}</span><span v-if="project.dueDate">目标日期 {{ project.dueDate }}</span></div>
+    <div class="ch-project-meta"><UiBadge :tone="statusTone(project.stage)" dot>{{ project.stageLabel }}</UiBadge><span v-if="project.customerName">{{ project.customerName }}</span><span v-if="project.dueDate">目标日期 {{ project.dueDate }}</span></div>
   </header>
+  <UiProjectProgress :role="role" :stage="project.stage" :label="project.stageLabel" />
   <section class="ch-next"><div><p class="ch-kicker">下一步</p><h2>{{ project.nextStep }}</h2></div><div class="ch-buttons"><UiButton v-for="(action,index) in project.actions" :key="action" :variant="index ? 'secondary' : 'primary'" @click="$emit('action', action)">{{ actionLabels[action] }}</UiButton></div></section>
   <div class="ch-detail-grid">
     <div class="ch-stack">

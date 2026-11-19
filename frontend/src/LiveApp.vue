@@ -193,9 +193,9 @@ function openOpportunity(id = '', projectId = '') {
         <p class="access-kicker">PartnerLedger / {{ portal.english }}</p>
         <h1>{{ portal.label }}登录</h1>
         <p class="access-intro">{{ portal.description }}</p>
-        <ol class="access-steps">
-          <li v-for="(step, index) in portal.steps" :key="step"><span>0{{ index + 1 }}</span>{{ step }}</li>
-        </ol>
+        <ul class="access-steps">
+          <li v-for="step in portal.steps" :key="step"><UiIcon name="check" :size="17" />{{ step }}</li>
+        </ul>
       </section>
       <UiCard class="access-panel" title="使用组织账号登录" description="请输入管理员为你开通的账号。">
         <template #actions><UiIcon :name="portal.icon" :size="22" /></template>
@@ -233,6 +233,8 @@ function openOpportunity(id = '', projectId = '') {
     <template v-if="view === 'overview'">
       <section class="page-heading"><div><p class="access-kicker">{{ organization.name }}</p><h1>{{ kindLabel }}工作台</h1>
         <p class="muted">{{ isManufacturer ? '接收渠道询价，回复资料问题并记录能力缺口。' : isDealer ? '接收客户需求、发起厂商询价并跟进双方回复。' : '提交采购需求，向经办代理商补充资料并查看进度。' }}</p></div></section>
+      <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" @open-project="openProject" />
+      <h2 class="live-tools-heading">常用工作</h2>
       <div class="live-tiles">
         <UiCard v-if="entry !== 'customer'" title="产品目录" :description="isManufacturer ? '新增、编辑与发布本组织的软件产品。' : '查看产品版本、说明与厂商发布信息。'">
           <template #actions><UiIcon name="catalog" :size="20" /></template>
@@ -279,6 +281,6 @@ function openOpportunity(id = '', projectId = '') {
 <style scoped>
 .live-login { max-width: 446px; }
 .live-links { display: flex; flex-wrap: wrap; gap: var(--ui-space-4); margin-top: var(--ui-space-5); font-size: var(--ui-text-sm); }
-.live-links a { color: var(--ui-accent); text-underline-offset: 4px; }
+.live-links a { color: var(--ui-link); text-underline-offset: 4px; }
 .live-feedback { margin-top: var(--ui-space-3); }
 </style>

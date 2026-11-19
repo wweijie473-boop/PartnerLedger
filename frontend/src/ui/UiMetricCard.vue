@@ -36,16 +36,18 @@ defineProps({
   background: var(--ui-surface);
   color: var(--ui-ink);
   text-align: left;
+  box-shadow: var(--ui-shadow-card);
+  transition: border-color .15s, background .15s;
 }
 button.ui-metric-card:hover { border-color: var(--ui-border-strong); background: var(--ui-surface-muted); }
 .ui-metric-label { margin-top: var(--ui-space-2); color: var(--ui-ink-secondary); font-size: var(--ui-text-sm); }
-.ui-metric-card strong { font-size: clamp(28px, 3vw, 42px); line-height: 1.05; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+.ui-metric-card strong { font-size: 36px; line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; }
 .ui-metric-card small { color: var(--ui-ink-muted); font-size: var(--ui-text-xs); }
 .ui-metric-arrow { position: absolute; top: var(--ui-space-5); right: var(--ui-space-5); color: var(--ui-ink-muted); }
 @media (max-width: 600px) {
   .ui-metric-card { padding: var(--ui-space-3); }
   .ui-metric-card strong { font-size: 23px; }
-  .ui-metric-card small { font-size: 11px; }
+  .ui-metric-card small { font-size: 12px; }
   .ui-metric-arrow { display: none; }
 }
 </style>

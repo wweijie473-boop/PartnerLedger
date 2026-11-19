@@ -23,7 +23,7 @@ defineProps({ tone: { type: String, default: 'neutral' }, dot: Boolean })
   border-radius: var(--ui-radius-pill);
   color: var(--ui-tone-ink);
   background: var(--ui-tone-bg);
-  font-size: var(--ui-text-xs);
+  font-size: var(--ui-text-sm);
   font-weight: var(--ui-weight-medium);
   line-height: 1.4;
   white-space: nowrap;

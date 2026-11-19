@@ -1,15 +1,16 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElDialog } from 'element-plus'
-import { UiButton, UiCard, UiField, UiState, UiBadge } from '../ui/index.js'
+import { UiButton, UiCard, UiField, UiState, UiBadge, UiMetricCard } from '../ui/index.js'
 import ProjectDetail from '../channel/ProjectDetail.vue'
 import ChannelAction from '../channel/ChannelAction.vue'
 import { actionLabels } from '../channel/domain.js'
 import { createHttpProjectRepository } from '../channel/httpProjects.js'
 import '../channel/workspace.css'
+import { statusTone } from '../ui/statusTone.js'
 
-const props = defineProps({ request: Function, role: String, organizationId: String })
-defineEmits(['capture-opportunity'])
+const props = defineProps({ request: Function, role: String, organizationId: String, overview: Boolean })
+defineEmits(['capture-opportunity', 'open-project'])
 const repo = createHttpProjectRepository(props.request)
 const rows = ref([])
 const links = ref([])
@@ -199,8 +200,27 @@ onUnmounted(() => {
 <template>
   <section>
     <p v-if="notice" class="live-feedback" role="status">{{ notice }}</p>
-    <div class="modal-actions"><UiButton compact :disabled="busy" @click="refreshProgress">刷新协作进度</UiButton></div>
+    <div class="modal-actions live-project-toolbar"><UiButton compact :disabled="busy" @click="refreshProgress">刷新协作进度</UiButton></div>
     <UiState v-if="loading" state="loading" title="正在读取项目" />
+    <template v-else-if="overview">
+      <UiState v-if="loadError" state="error" title="项目待办暂不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton></UiState>
+      <template v-else>
+        <div class="metric-grid ch-metrics live-project-metrics">
+          <UiMetricCard label="可见项目" :value="rows.length" description="当前组织参与的项目" icon="request" />
+          <UiMetricCard label="待我处理" :value="rows.filter(item => item.isTodo).length" description="下一步由本方办理" icon="activity" tone="brand" />
+          <UiMetricCard label="协作方处理中" :value="rows.filter(item => !item.isTodo && item.stage !== 'completed').length" description="可打开项目查看最新进度" icon="time" />
+        </div>
+        <UiCard title="今天的项目待办" description="按项目中的下一步操作继续办理。">
+          <div v-if="rows.some(item => item.isTodo)" class="live-task-list">
+            <button v-for="item in rows.filter(row => row.isTodo)" :key="item.id" @click="$emit('open-project', item.id)">
+              <span><strong>{{ item.title }}</strong><small>{{ item.nextStep }}</small></span>
+              <UiBadge :tone="statusTone(item.stage)" dot>{{ item.stageLabel }}</UiBadge><span class="live-task-action">去处理 →</span>
+            </button>
+          </div>
+          <UiState v-else title="当前没有待办理项目" description="新的需求或协作方回复到达后，会出现在这里。可从项目台账查看全部进度。" />
+        </UiCard>
+      </template>
+    </template>
     <template v-else-if="selected">
       <UiState v-if="detailLoading" state="loading" title="正在读取项目详情" />
       <UiState v-else-if="detailError" :state="detailError.status === 404 ? 'denied' : 'error'" title="项目暂不可访问" :description="detailError.message">
@@ -218,7 +238,7 @@ onUnmounted(() => {
           <select v-model="stage" aria-label="项目状态"><option value="">全部状态</option><option v-for="[key,label] in stages" :key="key" :value="key">{{ label }}</option></select>
           <label><input v-model="todo" type="checkbox"> 待我处理</label></div>
         <div v-if="results.length" class="table-scroll"><table><thead><tr><th>项目</th><th>进度</th><th>下一步</th><th>操作</th></tr></thead><tbody>
-          <tr v-for="item in results" :key="item.id"><td>{{ item.title }}<br><small>{{ item.id }}</small></td><td><UiBadge>{{ item.stageLabel }}</UiBadge></td><td>{{ item.nextStep }}</td><td><UiButton compact @click="openProject(item.id)">查看</UiButton></td></tr>
+          <tr v-for="item in results" :key="item.id"><td>{{ item.title }}<br><small>{{ item.id }}</small></td><td><UiBadge :tone="statusTone(item.stage)" dot>{{ item.stageLabel }}</UiBadge></td><td>{{ item.nextStep }}</td><td><UiButton compact @click="openProject(item.id)">查看</UiButton></td></tr>
         </tbody></table></div>
         <UiState v-else title="暂无符合条件的项目" :description="role === 'vendor' ? '更换筛选条件，或等待代理商向本组织提交询价。' : '更换筛选条件，或建立一笔新的采购需求。'" />
       </UiCard>

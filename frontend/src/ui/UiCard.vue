@@ -30,11 +30,12 @@ defineProps({
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-card);
 }
 .ui-card.is-muted { background: var(--ui-surface-muted); }
 .ui-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--ui-space-3); padding: var(--card-space) var(--card-space) 0; }
-.ui-card-title { margin: 0; font-size: var(--ui-text-lg); line-height: 1.35; font-weight: var(--ui-weight-semibold); letter-spacing: -.02em; }
-.ui-card-description { color: var(--ui-ink-muted); margin: var(--ui-space-1) 0 0; font-size: var(--ui-text-sm); }
+.ui-card-title { margin: 0; font-size: var(--ui-text-lg); line-height: 1.45; font-weight: var(--ui-weight-semibold); }
+.ui-card-description { color: var(--ui-ink-muted); margin: var(--ui-space-1) 0 0; font-size: var(--ui-text-sm); line-height: 1.6; }
 .ui-card-actions { display: flex; align-items: center; gap: var(--ui-space-2); }
 .ui-card-body { padding: var(--card-space); }
 .ui-card-header + .ui-card-body { padding-top: var(--ui-space-4); }

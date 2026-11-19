@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { UiBadge, UiButton, UiCard, UiField, UiIcon, UiIconTile, UiMetricCard, UiProgress, UiState } from './ui/index.js'
+import { UiBadge, UiButton, UiCard, UiField, UiIcon, UiIconTile, UiMetricCard, UiProgress, UiProjectProgress, UiState } from './ui/index.js'
 
 const palette = [
   ['主操作与标题', '--ui-accent'], ['正文', '--ui-ink-secondary'], ['次要文字', '--ui-ink-muted'],
@@ -11,7 +11,7 @@ const tones = [
 ]
 const iconGroups = [
   { title: '业务与导航', names: ['overview', 'workflow', 'catalog', 'product', 'request', 'quote', 'order', 'delivery', 'dealer', 'vendor', 'activity'] },
-  { title: '动作与反馈', names: ['add', 'search', 'back', 'forward', 'open-detail', 'chevron-right', 'chevron-down', 'sign-out', 'check', 'time', 'info', 'permission', 'error', 'loading'] },
+  { title: '动作与反馈', names: ['add', 'search', 'back', 'forward', 'open-detail', 'chevron-right', 'chevron-down', 'sign-out', 'check', 'time', 'info', 'permission', 'error', 'loading', 'menu', 'close'] },
 ]
 const sections = [
   ['colors', '配色'], ['icons', '图标'], ['cards', '卡片'], ['controls', '控件'], ['states', '界面状态'],
@@ -51,7 +51,7 @@ function colorValue(token) {
         <a v-for="[id, label] in sections" :key="id" :href="`#${id}`">{{ label }}</a>
       </nav>
 
-      <UiCard id="colors" title="黑白配色" description="用黑色突出主操作，白色和灰阶区分页面层级。状态由文字和图标表达。">
+      <UiCard id="colors" title="配色与状态" description="蓝色标记操作和选中项，浅色区分信息层级。业务状态同时使用文字、图标与语义颜色。">
         <ul class="swatches">
           <li v-for="[label, token] in palette" :key="token">
             <div class="swatch" :style="{ background: `var(${token})` }"></div>
@@ -73,6 +73,7 @@ function colorValue(token) {
       </UiCard>
 
       <UiCard id="cards" title="卡片" description="统计卡适合总览，内容卡适合产品详情和业务区块。">
+        <UiProjectProgress role="dealer" stage="inquired" label="待厂商回复 · 组件示例" />
         <div class="gallery-metrics">
           <UiMetricCard label="询价记录" :value="16" description="已提交的需求" icon="request" tone="brand" />
           <UiMetricCard label="待确认报价" :value="4" description="等待经销商确认" icon="quote" tone="warning" />
@@ -137,21 +138,21 @@ function colorValue(token) {
 .gallery-top-inner, .gallery-content { max-width: 1120px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 32px); }
 .gallery-top-inner { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 12px; }
 .gallery-back, .gallery-brand { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ui-text-sm); font-weight: var(--ui-weight-semibold); }
-.gallery-back { color: var(--ui-accent); text-decoration: none; }
+.gallery-back { color: var(--ui-link); text-decoration: none; }
 .gallery-back:hover { text-decoration: underline; }
 .gallery-content { display: grid; gap: var(--ui-space-5); padding-block: clamp(28px, 5vw, 58px) var(--ui-space-8); }
 .gallery-content > section { scroll-margin-top: 76px; }
-.gallery-heading h1 { margin: 0 0 var(--ui-space-2); font-size: var(--ui-text-display); letter-spacing: -.045em; }
+.gallery-heading h1 { margin: 0 0 var(--ui-space-2); font-size: var(--ui-text-display); }
 .gallery-heading p { margin: 0; color: var(--ui-ink-muted); font-size: var(--ui-text-md); }
 .gallery-nav { display: flex; flex-wrap: wrap; gap: var(--ui-space-2) var(--ui-space-4); padding-block: var(--ui-space-2); margin: 0; }
-.gallery-nav a { padding: 6px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-pill); background: var(--ui-surface); color: var(--ui-accent); font-size: var(--ui-text-sm); text-decoration: none; }
+.gallery-nav a { padding: 6px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-pill); background: var(--ui-surface); color: var(--ui-link); font-size: var(--ui-text-sm); text-decoration: none; }
 .gallery-nav a:hover { background: var(--ui-surface-hover); }
 .gallery-line { display: flex; gap: var(--ui-space-2); flex-wrap: wrap; align-items: center; }
 .swatches, .icon-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); list-style: none; padding: 0; margin: 0; gap: var(--ui-space-3); }
 .swatches { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .swatches li { display: grid; gap: var(--ui-space-1); font-size: var(--ui-text-sm); }
 .swatches .swatch { height: 48px; margin-bottom: var(--ui-space-1); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); }
-.ui-gallery code { font-family: var(--ui-font-mono); font-size: 11px; color: var(--ui-ink-muted); overflow-wrap: anywhere; }
+.ui-gallery code { font-family: var(--ui-font-mono); font-size: 12px; color: var(--ui-ink-muted); overflow-wrap: anywhere; }
 .tone-samples { margin-top: var(--ui-space-4); }
 .icon-group + .icon-group { margin-top: var(--ui-space-4); padding-top: var(--ui-space-4); border-top: 1px solid var(--ui-border); }
 .icon-group h3 { margin: 0 0 var(--ui-space-3); font-size: var(--ui-text-sm); }
@@ -167,7 +168,7 @@ function colorValue(token) {
 .gallery-progress { display: flex; justify-content: space-between; align-items: baseline; gap: var(--ui-space-2); margin-bottom: 8px; font-size: var(--ui-text-sm); }
 .gallery-progress strong { font-size: 28px; }
 .gallery-fields { margin-top: var(--ui-space-5); }
-.gallery-feedback { margin-top: var(--ui-space-3); font-size: var(--ui-text-sm); color: var(--ui-accent); }
+.gallery-feedback { margin-top: var(--ui-space-3); font-size: var(--ui-text-sm); color: var(--ui-link); }
 .state-preview { margin-top: var(--ui-space-3); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface-muted); }
 @media (max-width: 950px) { .swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 620px) {

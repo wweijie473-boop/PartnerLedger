@@ -12,8 +12,9 @@
 | `UiField` | 设置 `label`、`hint`、`error` 和 `required`，把插槽给出的 `control` 绑定到原生 `input`、`select` 或 `textarea`。业务校验由表单负责。 |
 | `UiState` | `empty`、`loading`、`denied`、`error`。可在失败状态插入重试按钮。 |
 | `UiProgress` | 用 `value` 传入 0–100 的百分比，`label` 提供进度说明。 |
+| `UiProjectProgress` | 传入 `role`（dealer/vendor/customer）、当前身份可见的 `stage` 与 `label`。未知状态不显示进度；不从上游内部状态推断客户进度。 |
 
-使用 `theme.css` 中的 `--ui-*` 变量定义颜色、文字、间距和圆角。主题只用黑、白和灰阶。黑色实底用于主要操作，卡片保留白底和浅灰边框。用文字及图标区分待处理、完成、失败等业务状态。
+使用 `theme.css` 中的 `--ui-*` 变量定义颜色、文字、间距和圆角。蓝色用于主要操作和选中项，白色卡片放在浅蓝灰页面上。成功、警告、失败使用语义颜色，并配合文字及图标。项目状态标签通过 `statusTone.js` 映射，`UiProjectProgress` 根据当前角色可见的状态显示协作阶段。正文采用 14px／22px，关键标签至少 14px，辅助编号为 12px。手机控件触控高度至少 44px。
 
 ```vue
 <script setup>

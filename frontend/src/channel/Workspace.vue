@@ -11,6 +11,7 @@ import DemoCatalog from './DemoCatalog.vue'
 import OpportunityDesk from './OpportunityDesk.vue'
 import VisitDrafts from '../live/VisitDrafts.vue'
 import { createVisitDraftStore } from '../live/visitDrafts.js'
+import { statusTone } from '../ui/statusTone.js'
 import './workspace.css'
 import './opportunities.css'
 
@@ -196,7 +197,7 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
           <template #actions><span class="ch-count">{{ rows.length }} 笔</span></template>
           <div class="ch-tools ch-table-tools"><label class="ch-search"><UiIcon name="search" :size="15" /><input v-model="search" type="search" aria-label="搜索项目" placeholder="搜索项目名称或编号" /></label><select v-model="stage" aria-label="项目状态"><option value="">全部状态</option><option v-for="label in stateOptions" :key="label">{{ label }}</option></select><select v-if="view !== 'overview'" v-model="scope" aria-label="责任筛选"><option value="">所有经办方</option><option value="mine">待我处理</option></select><UiButton v-if="groupMetric" compact :aria-label="'移除筛选：' + groupMetric.label" @click="group = ''">{{ groupMetric.label }} ×</UiButton></div>
           <div v-if="rows.length" class="table-scroll"><table><thead><tr><th>项目 / 编号</th><th>状态</th><th>下一步</th><th>目标日期</th><th><span class="ch-sr">操作</span></th></tr></thead><tbody>
-            <tr v-for="item in rows" :key="item.id"><td><button class="ch-record" @click="openProject(item)"><strong>{{ item.title }}</strong><small>{{ item.id }}<template v-if="item.customerName"> · {{ item.customerName }}</template></small></button></td><td><UiBadge dot>{{ item.stageLabel }}</UiBadge></td><td>{{ item.nextStep }}</td><td class="date">{{ item.dueDate || '未设定' }}</td><td><UiButton compact end-icon="chevron-right" :aria-label="'查看' + item.title" @click="openProject(item)">查看</UiButton></td></tr>
+            <tr v-for="item in rows" :key="item.id"><td><button class="ch-record" @click="openProject(item)"><strong>{{ item.title }}</strong><small>{{ item.id }}<template v-if="item.customerName"> · {{ item.customerName }}</template></small></button></td><td><UiBadge :tone="statusTone(item.stage)" dot>{{ item.stageLabel }}</UiBadge></td><td>{{ item.nextStep }}</td><td class="date">{{ item.dueDate || '未设定' }}</td><td><UiButton compact end-icon="chevron-right" :aria-label="'查看' + item.title" @click="openProject(item)">查看</UiButton></td></tr>
           </tbody></table></div>
           <UiState v-else :title="search || stage || scope || group ? '没有匹配的记录' : view === 'overview' ? '当前没有待你处理的项目' : '暂无业务记录'" :description="search || stage || scope || group ? '可清除筛选或更换关键词。' : '进入项目列表查看进度，或切换演示身份体验协作方的操作。'"><UiButton v-if="search || stage || scope || group" compact @click="clearFilters">清除筛选</UiButton><UiButton v-else-if="view !== 'ledger'" compact @click="navigate('ledger')">查看项目列表</UiButton></UiState>
         </UiCard>

@@ -32,7 +32,7 @@ defineProps({
   min-height: var(--ui-control-height);
   padding: 7px 16px;
   border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-pill);
+  border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   color: var(--ui-ink);
   font-size: var(--ui-text-sm);
@@ -43,12 +43,13 @@ defineProps({
 .ui-button:hover:not(:disabled) { background: var(--ui-surface-hover); }
 .ui-button[data-variant='primary'] { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent); }
 .ui-button[data-variant='primary']:hover:not(:disabled) { background: var(--ui-accent-hover); border-color: var(--ui-accent-hover); }
-.ui-button[data-variant='text'] { background: transparent; border-color: transparent; color: var(--ui-accent); }
+.ui-button[data-variant='text'] { background: transparent; border-color: transparent; color: var(--ui-link); }
 .ui-button[data-variant='danger'] { border-color: var(--ui-danger-ink); color: var(--ui-danger-ink); }
 .ui-button[data-variant='danger']:hover:not(:disabled) { background: var(--ui-danger-bg); }
-.ui-button.is-compact { padding: 4px 9px; min-height: 30px; font-size: var(--ui-text-xs); }
+.ui-button.is-compact { padding: 4px 10px; min-height: 32px; font-size: var(--ui-text-sm); }
 .ui-button:disabled { cursor: default; opacity: .55; }
 .ui-button-spinner { animation: rotate .85s linear infinite; }
 @keyframes rotate { to { transform: rotate(360deg); } }
+@media (max-width: 540px) { .ui-button, .ui-button.is-compact { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .ui-button { transition: none; } .ui-button-spinner { animation: none; } }
 </style>

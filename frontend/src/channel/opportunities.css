@@ -1,17 +1,17 @@
 .op-banner,.op-count,.op-tabs,.op-tools,.op-records button,.op-metrics { display:flex; align-items:center; gap:12px; }
-.op-banner { justify-content:space-between; flex-wrap:wrap; margin:20px 0; background:var(--ui-surface-muted); border:1px solid var(--ui-border); padding:22px; border-radius:var(--ui-radius-lg); }
+.op-banner { justify-content:space-between; flex-wrap:wrap; margin:20px 0; background:var(--ui-surface-muted); border:1px solid var(--ui-border); padding:22px; border-left:3px solid var(--ui-teal); border-radius:var(--ui-radius-lg); }
 .op-banner h2 { margin:7px 0; }
 .op-banner p,.op-muted,.op-line p,.op-form p,.op-desk .ui-card p { line-height:1.7; overflow-wrap:anywhere; }
 .op-muted,.op-line p,.op-banner p { color:var(--ui-ink-muted); }
 .op-metrics { margin-bottom:22px; }
-.op-metrics button { flex:1; text-align:left; background:white; border:1px solid var(--ui-border); border-radius:var(--ui-radius-md); padding:18px; }
+.op-metrics button { flex:1; text-align:left; background:var(--ui-surface); border:1px solid var(--ui-border); border-radius:var(--ui-radius-md); padding:18px; }
 .op-metrics span { display:block; color:var(--ui-ink-muted); font-size:14px; }
-.op-metrics strong { font-size:32px; font-variant-numeric:tabular-nums; display:block; margin-top:8px; }
+.op-metrics strong { font-size:36px; font-variant-numeric:tabular-nums; display:block; margin-top:8px; }
 .op-tabs { gap:4px; margin-bottom:18px; flex-wrap:wrap; }
 .op-tabs button { border:0; background:transparent; border-radius:8px; color:var(--ui-ink-secondary); padding:9px 15px; }
-.op-tabs button[aria-pressed=true] { color:white; background:#222; }
+.op-tabs button[aria-pressed=true] { color:var(--ui-on-accent); background:var(--ui-accent); }
 .op-tools { flex-wrap:wrap; margin-block:10px; }
-.op-tools input,.op-tools select,.op-form :is(input:not([type=checkbox]),select,textarea) { border:1px solid var(--ui-border-strong); background:white; color:var(--ui-ink); border-radius:8px; padding:9px; min-width:0; }
+.op-tools input,.op-tools select,.op-form :is(input:not([type=checkbox]),select,textarea) { border:1px solid var(--ui-border-strong); background:var(--ui-surface); color:var(--ui-ink); border-radius:8px; padding:9px; min-width:0; }
 .op-form { display:grid; gap:16px; }
 .op-form label { display:grid; gap:6px; font-weight:550; }
 .op-form textarea { resize:vertical; }
@@ -37,3 +37,10 @@
   .op-metrics span { font-size:12px; }
   .op-tools input { max-width:100%; }
 }
+.op-desk > .ui-card { margin-bottom: 20px; }
+.op-records button { border-radius: 6px; padding-inline: 12px; }
+.op-records button:hover { background: var(--ui-accent-bg); }
+.op-records button > span:last-child:not(:first-child):not(.ui-badge) { flex-shrink: 0; color: var(--ui-link); font-size: 14px; }
+.op-metrics button { box-shadow: var(--ui-shadow-card); border-top: 3px solid var(--ui-accent-border); }
+.op-line h3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+@media(max-width:540px) { .op-records button { align-items: start; flex-direction: column; } .op-form input:not([type=checkbox]), .op-form select, .op-form textarea { font-size:16px; min-height:44px; } }
