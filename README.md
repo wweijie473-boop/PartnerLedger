@@ -8,6 +8,7 @@
 - [首批 OpenAPI 契约](backend/openapi.yaml)
 - [三端项目协作接口提案与联调样例](docs/channel-contract.md)
 - [商机拾遗 · 给后端伙伴的交班文档](docs/opportunity-handoff.md)
+- [三端协作与商机拾遗演示脚本](docs/demo-walkthrough.md)
 
 默认入口是公开门户。三种角色均可使用组织账号登录，共同办理建项、询价、撤回、补充资料和能力缺口。三个工作台另有免账号的本地演示，包含 ERP 采购样例；正式报价、订单、验收及商机拾遗仍待后续接入。
 

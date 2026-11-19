@@ -5,6 +5,8 @@ import WorkspaceShell from './WorkspaceShell.vue'
 import ProductCatalog from './live/ProductCatalog.vue'
 import RequirementParser from './live/RequirementParser.vue'
 import LiveProjects from './live/LiveProjects.vue'
+import VisitDrafts from './live/VisitDrafts.vue'
+import { createHttpProjectRepository } from './channel/httpProjects.js'
 import { entrances, organizationRole } from './live/entrances.js'
 import { UiBadge, UiButton, UiCard, UiField, UiIcon, UiState } from './ui/index.js'
 
@@ -42,6 +44,7 @@ const navigation = computed(() => [
   { id: 'projects', label: entry.value === 'customer' ? '我的采购项目' : isManufacturer.value ? '渠道询价' : '客户项目', icon: 'request' },
   ...(entry.value !== 'customer' ? [{ id: 'catalog', label: '产品目录', icon: 'catalog' }] : []),
   ...(isDealer.value ? [{ id: 'requirement', label: 'AI 需求解析', icon: 'request' }] : []),
+  ...(isDealer.value ? [{ id: 'visits', label: '记拜访', icon: 'request' }] : []),
   { id: 'account', label: '账号与组织', icon: portal.value.icon },
 ])
 
@@ -211,6 +214,9 @@ async function signOut() {
           <template #actions><UiIcon name="request" :size="20" /></template>
           <UiButton end-icon="forward" @click="view = 'requirement'">整理需求</UiButton>
         </UiCard>
+        <UiCard v-if="isDealer" title="记拜访" description="留下一句话，核对客户主采购事项与附加需求。草稿保存在当前设备。">
+          <UiButton @click="view = 'visits'">记录本次拜访</UiButton>
+        </UiCard>
         <UiCard v-if="isDealer" title="商机拾遗" description="从附加需求找到做过类似项目的伙伴，跟进引荐结果。当前仅开放独立演示。">
           <template #actions><UiBadge>演示</UiBadge></template>
           <a class="access-inline-link" href="/experience/dealer?view=opportunities">查看商机演示</a>
@@ -221,6 +227,7 @@ async function signOut() {
       </div>
     </template>
     <LiveProjects v-else-if="view === 'projects'" :request="authenticated" :role="entry" :organization-id="organization.id" />
+    <VisitDrafts v-else-if="view === 'visits' && isDealer" :scope="'live:' + organization.id + ':' + user.id" :load-projects="createHttpProjectRepository(authenticated).list" @project="id => { const url = new URL(location.href); url.searchParams.set('project',id); history.replaceState(null,'',url); view = 'projects' }" />
     <ProductCatalog v-else-if="view === 'catalog' && entry !== 'customer'" :request="authenticated" :is-manufacturer="isManufacturer" />
     <RequirementParser v-else-if="view === 'requirement' && isDealer" :request="authenticated" />
     <template v-else>

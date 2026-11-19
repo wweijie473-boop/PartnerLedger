@@ -10,6 +10,9 @@ export const systemLabels = Object.freeze({
 export const opportunityStages = Object.freeze({
   open: '待跟进', introduced: '已引荐', won: '已促成', lost: '未促成', settled: '介绍费已结清',
 })
+export const contactFields = Object.freeze({
+  version: '软件与接口版本', interfaceAccess: '接口开放条件', region: '实施地区与方式', availability: '交付档期',
+})
 const twoSystems = ['integration', 'connector', 'migration']
 const copy = value => structuredClone(value)
 function reject(message, code = 'INVALID') { throw Object.assign(new Error(message), { code }) }
@@ -67,12 +70,15 @@ function safeBrief(item) {
 function matchesFor(item, partners) {
   if (questionsFor(item).length) return []
   return partners.filter(partner => {
+    if (item.rejections?.some(entry => entry.partnerId === partner.id)) return false
     if (partner.category !== item.category) return false
     return ['source', 'target'].every(key => !item[key] || !partner[key] || item[key] === partner[key])
   }).map(partner => {
     const aligned = ['source', 'target'].filter(key => item[key] && item[key] === partner[key])
     const missing = ['source', 'target'].filter(key => item[key] && !partner[key])
     return { partnerId:partner.id, name:partner.name, owner:partner.owner, evidence:partner.evidence,
+      checks:copy(item.contactReviews?.[partner.id]?.checks || {}),
+      reviewNote:item.contactReviews?.[partner.id]?.note || '',
       reason: [categoryLabels[item.category], ...aligned.map(key => systemLabels[item[key]])].join(' · '),
       caveat: [!partner.evidence ? '仅有团队登记的能力，尚无案例佐证。' : '',
         missing.length ? '未记录对 ' + missing.map(key => systemLabels[item[key]]).join('、') + ' 的支持。' : '',
@@ -86,7 +92,12 @@ function initialItem(id, orgId, projectId, note, spec, at) {
 }
 // Additive migration for existing three-role demo stores. No projects are recreated.
 export function ensureOpportunityMemory(state, now) {
-  if (state.opportunityMemory) return state.opportunityMemory
+  if (state.opportunityMemory) {
+    for (const item of state.opportunityMemory.items) {
+      if (!item.knownPartnerIds) item.knownPartnerIds = matchesFor(item,state.opportunityMemory.partners.filter(partner => partner.orgId === item.orgId)).map(match => match.partnerId)
+    }
+    return state.opportunityMemory
+  }
   const orgId = roles.reseller.orgId
   const memory = { counter:10, items:[], partners:[
     { id:'PPL-1',orgId,name:'桥川系统集成团队',owner:'王经理',category:'integration',source:'erp',target:'mes',evidence:'去年的制造项目已验收 ERP → MES 工单同步（团队示例记录）。' },
@@ -96,6 +107,7 @@ export function ensureOpportunityMemory(state, now) {
   if (sample) memory.items.push(initialItem('GAP-1', orgId, sample.id,
     'ERP 主单已经实施，客户还要把工单同步到车间 MES；原厂未提供对接服务。',
     { category:'integration',source:'erp',target:'mes' }, now.toISOString()))
+  for (const item of memory.items) item.knownPartnerIds = matchesFor(item,memory.partners).map(match => match.partnerId)
   state.opportunityMemory = memory
   return memory
 }
@@ -103,6 +115,26 @@ function projectItem(state, item, partners) {
   const { orgId, ...record } = item
   return { ...copy(record), projectTitle:state.projects.find(project => project.id === item.projectId)?.title ?? '',
     questions:questionsFor(item), matches:matchesFor(item, partners), brief:safeBrief(item) }
+}
+function workItems(items, now) {
+  const today = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-')
+  return items.flatMap(item => {
+    const task = (reason,action) => ({opportunityId:item.id,projectTitle:item.projectTitle,reason,action,date:item.followUp || ''})
+    if (item.stage === 'won' && Number(item.feeAmount) > 0) {
+      return [task('合作已促成，需核对介绍费条件' + (item.feeTerms ? '（' + item.feeTerms + '）' : ''),'核对结清条件')]
+    }
+    if (!['open','introduced'].includes(item.stage)) return []
+    if (item.followUp && item.followUp <= today) {
+      return [task((item.followReason === 'customer' ? '客户约定答复' : '伙伴回访') + '已到日期 ' + item.followUp,'记录跟进结果')]
+    }
+    if (item.stage === 'open') {
+      const known = item.knownPartnerIds || item.matches.map(match => match.partnerId)
+      const added = item.matches.filter(match => !known.includes(match.partnerId))
+      if (added.length) return [task('新匹配到 ' + added.map(match => match.name).join('、') + '，可以回访此需求','查看新伙伴依据')]
+      if (item.questions.length) return [task('需要确认' + (categoryLabels[item.category] || '承接类型与涉及系统'),'补充需求信息')]
+    }
+    return []
+  }).sort((left,right) => (left.date || '9999').localeCompare(right.date || '9999'))
 }
 function partnersFor(memory, actor) { return memory.partners.filter(partner => partner.orgId === actor.orgId) }
 export function opportunityDesk(state, actor, now) {
@@ -116,7 +148,7 @@ export function opportunityDesk(state, actor, now) {
   const gaps = Object.entries(categoryLabels).map(([category,label]) =>
     ({category,label,count:active.filter(item => item.category === category).length})).filter(gap => gap.count).sort((a,b) => b.count-a.count)
   const reverseMatches = active.flatMap(item => item.matches.map(match => ({partnerId:match.partnerId,opportunityId:item.id})))
-  return { items, partners:partners.map(({orgId,...partner}) => copy(partner)), gaps, reverseMatches }
+  return { items, partners:partners.map(({orgId,...partner}) => copy(partner)), gaps, reverseMatches, tasks:workItems(items,now) }
 }
 export function captureOpportunity(state, actor, projectId, payload, now) {
   guard(actor)
@@ -127,6 +159,7 @@ export function captureOpportunity(state, actor, projectId, payload, now) {
   if (memory.items.some(item => item.projectId === projectId && item.note === note && item.orgId === actor.orgId))
     reject('同项目已有这条拜访记录。', 'CONFLICT')
   const item = initialItem('GAP-' + ++memory.counter, actor.orgId, projectId, note, spec, now.toISOString())
+  item.knownPartnerIds = matchesFor(item,partnersFor(memory,actor)).map(match => match.partnerId)
   memory.items.unshift(item)
   return projectItem(state, item, partnersFor(memory, actor))
 }
@@ -135,7 +168,7 @@ export function addPartner(state, actor, payload, now) {
   const details = { ...scope(payload, true), name:textField(payload.name,'伙伴名称',80),
     owner:textField(payload.owner,'内部引荐人',60), evidence:textField(payload.evidence,'合作依据',500,false) }
   const memory = ensureOpportunityMemory(state, now)
-  const partner = {id:'PPL-' + ++memory.counter, ...details}
+  const partner = {id:'PPL-' + ++memory.counter, ...details,createdAt:now.toISOString()}
   memory.partners.unshift({ ...partner,orgId:actor.orgId })
   return copy(partner)
 }
@@ -160,17 +193,40 @@ export function actOpportunity(state, actor, id, action, payload, revision, now)
   if (item.revision !== revision) reject('商机记录已更新，请重新打开后再操作。', 'CONFLICT')
   const partners = partnersFor(memory, actor)
   let changes, label
-  if (action === 'clarify' && item.stage === 'open') {
+  if (action === 'acknowledge' && item.stage === 'open') {
+    changes = {knownPartnerIds:matchesFor(item,partners).map(match => match.partnerId)}
+    label = '已查看当前伙伴依据'
+  } else if (action === 'contactReview' && item.stage === 'open') {
+    if (!matchesFor(item,partners).some(match => match.partnerId === payload.partnerId)) reject('当前伙伴已不可匹配。','CONFLICT')
+    const checks = {}
+    for (const key of Object.keys(contactFields)) {
+      const value = payload.checks?.[key] || 'unknown'
+      if (!['unknown','confirmed','blocked'].includes(value)) reject('请核对联系清单。')
+      checks[key] = value
+    }
+    const detail = textField(payload.note,'联系备注',500,false)
+    changes = {contactReviews:{...item.contactReviews,[payload.partnerId]:{checks,note:detail}}}
+    label = '记录伙伴联系前核对结果'
+  } else if (action === 'rejectPartner' && item.stage === 'open') {
+    const match = matchesFor(item,partners).find(entry => entry.partnerId === payload.partnerId)
+    if (!match) reject('当前伙伴已不可匹配。','CONFLICT')
+    const reason = textField(payload.reason,'未匹配成的原因',500)
+    changes = {rejections:[...(item.rejections || []),{partnerId:match.partnerId,name:match.name,reason,at:now.toISOString()}]}
+    label = '记录与' + match.name + '未匹配成的原因'
+  } else if (action === 'clarify' && item.stage === 'open') {
     changes = scope(payload, true); label = '更新能力与系统范围'
   } else if (action === 'introduce' && item.stage === 'open') {
     const match = matchesFor(item, partners).find(candidate => candidate.partnerId === payload.partnerId)
     if (!match || payload.consent !== true) reject('请核实伙伴能力并确认双方同意引荐。')
+    if (Object.values(match.checks).includes('blocked')) reject('联系清单存在未解决的问题，请先核实并更新。')
     const feeAmount = amountField(payload.feeAmount)
     const feeTerms = textField(payload.feeTerms, '介绍费条件', 300, Number(feeAmount) > 0)
-    changes = { stage:'introduced', partnerId:match.partnerId, followUp:dateField(payload.followUp),feeAmount,feeTerms }
+    changes = { stage:'introduced', partnerId:match.partnerId, followUp:dateField(payload.followUp),followReason:'partner',feeAmount,feeTerms }
     label = '经双方同意，由' + match.owner + '引荐至' + match.name
-  } else if (action === 'follow' && (item.stage === 'introduced' || (item.stage === 'won' && Number(item.feeAmount) > 0))) {
-    changes = {followUp:dateField(payload.followUp)}
+  } else if (action === 'follow' && (['open','introduced'].includes(item.stage) || (item.stage === 'won' && Number(item.feeAmount) > 0))) {
+    const followReason = payload.followReason || (item.stage === 'open' ? 'customer' : item.stage === 'won' ? 'fee' : 'partner')
+    if (!['customer','partner','fee'].includes(followReason)) reject('请选择跟进事项。')
+    changes = {followUp:dateField(payload.followUp),followReason}
     label = '更新跟进日期至 ' + changes.followUp
   } else if ((action === 'win' && item.stage === 'introduced') || (action === 'lose' && ['open','introduced'].includes(item.stage))) {
     changes = { stage:action === 'win' ? 'won' : 'lost', outcome:textField(payload.outcome,'跟进结果',500) }

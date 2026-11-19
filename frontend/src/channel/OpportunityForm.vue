@@ -1,7 +1,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { UiButton } from '../ui/index.js'
-import { suggestOpportunity } from './opportunities.js'
+import { contactFields, suggestOpportunity } from './opportunities.js'
 import OpportunityFields from './OpportunityFields.vue'
 const props = defineProps({mode:String,item:Object,partner:Object,projects:Array,projectId:String,busy:Boolean,error:String})
 const emit = defineEmits(['save','cancel'])
@@ -10,7 +10,9 @@ const isClarify = props.mode === 'clarify'
 const form = reactive({
   projectId: props.projectId || '', note:'', category:isClarify ? props.item?.category || '' : '',
   source:isClarify ? props.item?.source || '' : '', target:isClarify ? props.item?.target || '' : '',
-  name:'',owner:'',evidence:'',followUp:'',feeTerms:'',feeAmount:'',outcome:'', consentCustomer:false,consentPartner:false,
+  name:'',owner:'',evidence:'',followUp:props.item?.followUp || '',feeTerms:'',feeAmount:'',outcome:'', consentCustomer:false,consentPartner:false,
+  checks: {...props.partner?.checks}, contactNote:props.partner?.reviewNote || '', reason:'',
+  followReason: props.item?.followReason || (props.item?.stage === 'won' ? 'fee' : props.item?.stage === 'open' ? 'customer' : 'partner'),
 })
 const extracted = ref(false)
 const confirmed = ref(false)
@@ -22,7 +24,7 @@ function review() {
   Object.assign(form,{note:result.suggestedNote, category:result.category,source:result.source,target:result.target})
   extracted.value = true; confirmed.value = false
 }
-const buttons = {capture:'确认保存商机',partner:'保存伙伴能力',clarify:'保存澄清结果',introduce:'登记已获同意的引荐',follow:'保存跟进日期',win:'确认合作成功',lose:'关闭此条商机',settle:'确认已结清'}
+const buttons = {capture:'确认保存商机',partner:'保存伙伴能力',clarify:'保存澄清结果',introduce:'登记已获同意的引荐',follow:'保存跟进日期',win:'确认合作成功',lose:'关闭此条商机',settle:'确认已结清',contactReview:'保存核对结果',rejectPartner:'保存未匹配原因'}
 function submit(){
   if(props.busy) return
   if(isCapture){
@@ -32,7 +34,9 @@ function submit(){
   else if(props.mode === 'partner') emit('save',{name:form.name,owner:form.owner,category:form.category,source:form.source,target:form.target,evidence:form.evidence})
   else if(props.mode === 'introduce') emit('save',{partnerId:props.partner.partnerId,followUp:form.followUp,feeTerms:form.feeTerms,feeAmount:form.feeAmount,consent:form.consentCustomer && form.consentPartner})
   else if(props.mode === 'settle') emit('save',{})
-  else if(props.mode === 'follow') emit('save',{followUp:form.followUp})
+  else if(props.mode === 'follow') emit('save',{followUp:form.followUp,followReason:form.followReason})
+  else if(props.mode === 'contactReview') emit('save',{partnerId:props.partner.partnerId,checks:form.checks,note:form.contactNote})
+  else if(props.mode === 'rejectPartner') emit('save',{partnerId:props.partner.partnerId,reason:form.reason})
   else emit('save',{outcome:form.outcome.trim(),remember:remember.value})
 }
 </script>
@@ -70,7 +74,13 @@ function submit(){
       <label class="op-check"><input v-model="form.consentPartner" type="checkbox" required>伙伴已确认可以承接，并同意此次引荐。</label>
     </template>
     <template v-else-if="mode === 'settle'"><p>请与经办人核对已实际收到介绍费 <strong>¥{{ item.feeAmount }}</strong>。这里只登记结果，不执行收付款。</p></template>
-    <label v-else-if="mode === 'follow'">下次跟进日期<input v-model="form.followUp" required type="date"></label>
+    <template v-else-if="mode === 'follow'"><label>跟进事项<select v-model="form.followReason"><option value="customer">客户答复</option><option value="partner">伙伴回访</option><option v-if="item.stage === 'won'" value="fee">介绍费条件</option></select></label><label>下次跟进日期<input v-model="form.followUp" required type="date"></label></template>
+    <template v-else-if="mode === 'contactReview'">
+      <p>与 {{ partner.owner }} 核对 {{ partner.name }} 的承接条件。</p>
+      <label v-for="(label,key) in contactFields" :key="key">{{ label }}<select :value="form.checks[key] || 'unknown'" @change="form.checks[key] = $event.target.value"><option value="unknown">待确认</option><option value="confirmed">已确认可行</option><option value="blocked">存在问题</option></select></label>
+      <label>联系备注<textarea v-model="form.contactNote" rows="3" maxlength="500" placeholder="记录具体版本、地区或下次可交付时间。"></textarea></label>
+    </template>
+    <template v-else-if="mode === 'rejectPartner'"><p>保留与 {{ partner.name }} 未匹配成的原因，此商机仍可继续寻找其他伙伴。</p><label>未匹配原因<textarea v-model="form.reason" rows="3" required maxlength="500" placeholder="例如：只支持旧版接口，无法满足本次版本要求。"></textarea></label></template>
     <template v-else><label>{{ mode === 'win' ? '合作结果' : '关闭原因' }}<textarea v-model="form.outcome" rows="3" required maxlength="500" :placeholder="mode === 'win' ? '记录实际承接的事项。' : '例如：客户决定暂缓该需求。'"></textarea></label>
       <label v-if="mode === 'win'" class="op-check"><input type="checkbox" v-model="remember">已获授权，将此次成交作为团队案例。仅保存商机编号及能力类型。</label>
     </template>

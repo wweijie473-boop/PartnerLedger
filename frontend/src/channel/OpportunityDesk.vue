@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ElDialog } from 'element-plus'
 import { UiBadge, UiButton, UiCard, UiState } from '../ui/index.js'
 import OpportunityForm from './OpportunityForm.vue'
-import { categoryLabels, opportunityStages, systemLabels } from './opportunities.js'
+import { categoryLabels, contactFields, opportunityStages, systemLabels } from './opportunities.js'
 
 const props = defineProps({ desk:Object, repo:Object, projects:Array, selected:String, captureFor:String, refresh:Function })
 const emit = defineEmits(['select','capture-opened','project','notice'])
@@ -13,7 +13,7 @@ const current = computed(() => props.desk.items.find(item => item.id === props.s
 const sourceProject = computed(() => props.projects.find(entry => entry.id === current.value?.projectId))
 const today = () => new Date().toLocaleDateString('sv-SE')
 const outstanding = item => item.stage === 'introduced' || (item.stage === 'won' && Number(item.feeAmount) > 0)
-const due = item => outstanding(item) && item.followUp && item.followUp <= today()
+const due = item => (item.stage === 'open' || outstanding(item)) && item.followUp && item.followUp <= today()
 const stats = computed(() => ({
   open:props.desk.items.filter(item => item.stage === 'open').length,
   due:props.desk.items.filter(due).length,
@@ -24,7 +24,14 @@ const rows = computed(() => props.desk.items.filter(item =>
   (!filter.value || (filter.value === 'due' ? due(item) : filter.value === 'successful' ? ['won','settled'].includes(item.stage) : item.stage === filter.value)) &&
   (!returningFor.value || linksFor(returningFor.value).some(link => link.opportunityId === item.id)) &&
   [item.id,item.note,item.projectTitle,categoryLabels[item.category]].join(' ').toLowerCase().includes(search.value.trim().toLowerCase())))
-const titles = {capture:'从拜访记录整理商机',partner:'登记伙伴能力',clarify:'澄清附加需求',introduce:'登记引荐',win:'登记合作结果',lose:'登记未促成',settle:'登记介绍费结清',follow:'调整跟进日期'}
+const titles = {capture:'从拜访记录整理商机',partner:'登记伙伴能力',clarify:'澄清附加需求',introduce:'登记引荐',win:'登记合作结果',lose:'登记未促成',settle:'登记介绍费结清',follow:'调整跟进日期',contactReview:'联系前核对',rejectPartner:'记录未匹配原因'}
+async function acknowledge() {
+  if (pending.value) return
+  pending.value = true
+  try { await props.repo.actOpportunity(current.value.id,'acknowledge',{},current.value.revision); await props.refresh() }
+  catch (cause) { emit('notice',cause.message) }
+  finally { pending.value = false }
+}
 const activePartner = computed(() => props.desk.partners.find(entry => entry.id === current.value?.partnerId))
 function open(mode, candidate = null, projectId = '') {
   startingRevision.value = current.value?.revision; error.value = ''; match.value = candidate
@@ -73,13 +80,16 @@ async function copyBrief() {
         <button @click="choose('ledger','due')"><span>今天需跟进（含逾期）</span><strong>{{ stats.due }}</strong></button>
         <button @click="choose('ledger','successful')"><span>已促成合作</span><strong>{{ stats.won }}</strong></button>
       </div>
+      <UiCard v-if="desk.tasks?.length" title="今天从这里接着办">
+        <div class="op-records"><button v-for="task in desk.tasks" :key="task.opportunityId" @click="$emit('select',task.opportunityId)"><span><b>{{ task.reason }}</b><small>{{ task.projectTitle }}</small></span><span>{{ task.action }}</span></button></div>
+      </UiCard>
       <nav class="op-tabs" aria-label="商机视图"><button v-for="[key,label] in [['ledger','商机台账'],['partners','团队伙伴'],['gaps','能力缺口']]" :key="key" :aria-pressed="tab === key" @click="choose(key)">{{ label }}</button></nav>
       <UiCard v-if="tab === 'ledger'" title="商机台账">
         <div class="op-tools"><input v-model="search" aria-label="搜索商机" placeholder="搜索需求、项目或编号"><select v-model="filter" aria-label="商机阶段"><option value="">全部阶段</option><option v-for="(label,key) in opportunityStages" :key="key" :value="key">{{ label }}</option><option value="due">今天需跟进</option><option value="successful">全部已促成</option></select>
           <UiButton v-if="returningFor" compact @click="returningFor = ''">清除伙伴回访筛选</UiButton></div>
         <p v-if="returningFor" class="op-inset">可请「{{ desk.partners.find(p => p.id === returningFor)?.name }}」协助的待承接需求（{{ rows.length }}）</p>
         <div v-if="rows.length" class="op-records"><button v-for="item in rows" :key="item.id" @click="$emit('select',item.id)">
-          <span><small>{{ item.projectTitle }} · {{ item.id }}</small><b>{{ item.note }}</b><small>{{ categoryLabels[item.category] || '需澄清承接类型' }}<template v-if="outstanding(item)"> · 下次跟进 {{ item.followUp }}</template></small></span>
+          <span><small>{{ item.projectTitle }} · {{ item.id }}</small><b>{{ item.note }}</b><small>{{ categoryLabels[item.category] || '需澄清承接类型' }}<template v-if="item.followUp"> · 下次跟进 {{ item.followUp }}</template></small></span>
           <UiBadge>{{ opportunityStages[item.stage] }}</UiBadge>
         </button></div><p v-else class="op-muted">暂无符合条件的商机。</p>
       </UiCard>
@@ -102,15 +112,19 @@ async function copyBrief() {
           <template v-if="current.stage === 'open'" #footer><UiButton compact @click="open('clarify')">澄清需求</UiButton></template>
         </UiCard>
         <UiCard v-if="current.stage === 'open'" title="团队里谁做过" description="优先列出有合作记录的伙伴。具体版本、排期仍需核实。">
+          <UiButton v-if="current.matches.length" compact :disabled="pending" @click="acknowledge">已查看这批人选</UiButton>
           <p v-if="!current.matches.some(m => m.evidence)" class="op-muted">{{ current.questions.length ? '先澄清需求，再查找有依据的人选。' : '暂无有案例佐证的人选；可在团队伙伴中登记新的能力。' }}</p>
           <article v-for="candidate in current.matches" :key="candidate.partnerId" class="op-line"><h3>{{ candidate.name }} <UiBadge>{{ candidate.evidence ? '有合作记录' : '仅能力登记' }}</UiBadge></h3>
             <p>找 {{ candidate.owner }} 引荐 · {{ candidate.reason }}</p><p>{{ candidate.evidence }}</p><p class="op-muted">{{ candidate.caveat }}</p>
-            <UiButton compact @click="open('introduce',candidate)">登记引荐</UiButton></article>
+            <dl class="ch-facts"><template v-for="(label,key) in contactFields" :key="key"><dt>{{ label }}</dt><dd>{{ {confirmed:'已确认可行',blocked:'存在问题'}[candidate.checks?.[key]] || '待确认' }}</dd></template></dl>
+            <p v-if="candidate.reviewNote">{{ candidate.reviewNote }}</p>
+            <div class="op-tools"><UiButton compact @click="open('contactReview',candidate)">联系前核对</UiButton><UiButton compact @click="open('rejectPartner',candidate)">记录未匹配</UiButton><UiButton compact @click="open('introduce',candidate)">登记引荐</UiButton></div></article>
         </UiCard>
+        <UiCard v-if="current.rejections?.length" title="已排除的伙伴"><article v-for="entry in current.rejections" :key="entry.partnerId" class="op-line"><h3>{{ entry.name }}</h3><p>{{ entry.reason }}</p></article></UiCard>
         <UiCard v-if="activePartner" title="引荐与介绍费"><dl class="ch-facts"><dt>伙伴 / 引荐人</dt><dd>{{ activePartner.name }} / {{ activePartner.owner }}</dd><dt>跟进日期</dt><dd>{{ current.followUp }}</dd><dt>约定金额</dt><dd>{{ current.feeAmount ? '¥' + current.feeAmount : '未约定' }}</dd><dt>条件</dt><dd>{{ current.feeTerms || '未约定' }}</dd></dl></UiCard>
         <UiCard v-if="current.outcome" title="跟进结果"><p>{{ current.outcome }}</p></UiCard>
         <div class="op-tools"><UiButton v-if="current.stage === 'introduced'" variant="primary" @click="open('win')">登记已促成</UiButton>
-          <UiButton v-if="outstanding(current)" @click="open('follow')">调整跟进日期</UiButton>
+          <UiButton v-if="current.stage === 'open' || outstanding(current)" @click="open('follow')">约定跟进日期</UiButton>
           <UiButton v-if="['open','introduced'].includes(current.stage)" @click="open('lose')">登记未促成</UiButton>
           <UiButton v-if="current.stage === 'won' && Number(current.feeAmount)>0" @click="open('settle')">登记介绍费结清</UiButton></div>
       </div><div class="ch-stack">

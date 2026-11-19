@@ -57,6 +57,18 @@ Opportunity 示例（仅代理商内部可读；示例编号非数据库主键�
 
 ## 交回前端时请一并给出
 
+本轮前端补充了手机拜访草稿、联系前核对清单和带理由的待办。演示复现见 [三端演示脚本](demo-walkthrough.md)。正式「记拜访」当前按组织与成员保存在本机，草稿关联真实可见项目，向团队同步仍需后端接口。接入时由用户确认主采购事项和附加需求后再写入，原始走访记录按代理商内部可见处理。
+
+商机接口下一批请按以下增量对齐，原路径及 requestId/revision 约定沿用上文。
+
+- Opportunity 增加 `knownPartnerIds`、`contactReviews`、`rejections`、`followReason`，旧数据缺省为空。contactReviews 以 partnerId 为键，内容为 `{checks:{version,interfaceAccess,region,availability},note}`，每项为 unknown / confirmed / blocked。只有经办代理商内部成员可见这些字段。
+- 新动作 `contactReview` 输入 `{partnerId,checks,note}`，open 状态可记录联系前核对；有 blocked 项时暂不可登记引荐。`rejectPartner` 输入 `{partnerId,reason}`，保留排除原因并从本商机当前候选中移除此伙伴，商机继续开放。
+- 新动作 `acknowledge` 输入空对象，记录当前成员查看过的候选。演示按团队记录 knownPartnerIds，正式实现应按成员保存已读状态，避免一人查看导致其他人漏掉新伙伴。
+- `follow` 支持 open 状态，输入 `{followUp,followReason}`，事项为 customer / partner / fee。引荐成功后的默认事项为伙伴回访；已促成但有待核对介绍费时显示计费条件。GET desk 增加 `tasks:[{opportunityId,projectTitle,reason,action,date}]`，只返回当前组织可见内容，关闭或结清后相应事项消除。
+- 正式拜访草稿需要成员归属、项目归属、revision 和 requestId。可沿用版本化项目域增加 visits 资源，由用户确认后将附加需求幂等写入 opportunities 并返回关联 ID。主采购事项写入前必须另行确认，草稿保存与项目需求变更分别留审计记录。该资源尚未接入页面，伙伴确定 OpenAPI 后前端替换本机草稿存储。
+
+三端验收应核对同一项目编号。客户需求和对客资料由客户与代理商查看；厂商处理代理商提交的摘要；人脉、排除原因、合作费用、联系清单和拜访原文均只在经办代理商内部流转。模型调用仅使用获授权的内容，待办和提醒由真实记录与状态生成。
+
 - 正式 OpenAPI 更新、迁移与回退说明、两家虚构代理商及厂商/客户的测试账号开通方式、可重置种子数据；令牌或数据库密码不入仓库。
 - 权限、摘要泄露、同意缺失、费用和幂等并发的测试结果。用带电话、联系人、预算的样例验证这些字段不会进入对外摘要、厂商/客户响应或模型日志。
 - 联调时以真实角色、持久化、审计通过为开放条件；正式工作台注入 HTTP 适配器，无接口时显示未开放，不回退本地假记录。前端回归入口：`cd frontend` 后运行 `npm test` 和 `npm run build`。
