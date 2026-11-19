@@ -4,13 +4,13 @@ import { requestApi } from './api.js'
 import WorkspaceShell from './WorkspaceShell.vue'
 import ProductCatalog from './live/ProductCatalog.vue'
 import RequirementParser from './live/RequirementParser.vue'
+import LiveProjects from './live/LiveProjects.vue'
 import { entrances, organizationRole } from './live/entrances.js'
 import { UiBadge, UiButton, UiCard, UiField, UiIcon, UiState } from './ui/index.js'
 
 const props = defineProps({ role: { type: String, required: true, validator: (value) => Object.hasOwn(entrances, value) } })
 const entry = ref(props.role)
 const portal = computed(() => entrances[entry.value])
-const roleNotice = ref('')
 const sessionKey = 'partnerledger-api-session'
 
 function restoreSession() {
@@ -22,7 +22,7 @@ function restoreSession() {
   return null
 }
 
-const session = ref(entry.value === 'customer' ? null : restoreSession())
+const session = ref(restoreSession())
 const user = ref(null)
 const organization = ref(null)
 const username = ref('')
@@ -33,14 +33,16 @@ const restoringIdentity = ref(false)
 const loginError = ref('')
 const identityError = ref('')
 const logoutError = ref('')
-const view = ref('overview')
+const view = ref(new URLSearchParams(location.search).has('project') ? 'projects' : 'overview')
 const isManufacturer = computed(() => organization.value?.kind === 'MANUFACTURER')
-const kindLabel = computed(() => isManufacturer.value ? '软件厂商' : '代理商')
+const isDealer = computed(() => organization.value?.kind === 'RESELLER')
+const kindLabel = computed(() => portal.value.label)
 const navigation = computed(() => [
   { id: 'overview', label: '工作总览', icon: 'overview' },
-  { id: 'catalog', label: '产品目录', icon: 'catalog' },
-  ...(!isManufacturer.value ? [{ id: 'requirement', label: 'AI 需求解析', icon: 'request' }] : []),
-  { id: 'account', label: '账号与组织', icon: isManufacturer.value ? 'vendor' : 'dealer' },
+  { id: 'projects', label: entry.value === 'customer' ? '我的采购项目' : isManufacturer.value ? '渠道询价' : '客户项目', icon: 'request' },
+  ...(entry.value !== 'customer' ? [{ id: 'catalog', label: '产品目录', icon: 'catalog' }] : []),
+  ...(isDealer.value ? [{ id: 'requirement', label: 'AI 需求解析', icon: 'request' }] : []),
+  { id: 'account', label: '账号与组织', icon: portal.value.icon },
 ])
 
 function setSession(value) {
@@ -56,7 +58,6 @@ function clearSession(message = '') {
   user.value = null
   organization.value = null
   view.value = 'overview'
-  roleNotice.value = ''
   document.title = portal.value.label + '登录 · 渠智链'
   identityError.value = ''
   logoutError.value = ''
@@ -93,9 +94,9 @@ async function loadIdentity() {
     const accountRole = organizationRole(profile, currentOrg)
     if (!accountRole) throw new Error('账号与组织信息不一致或组织类型暂不支持。')
     if (entry.value !== accountRole) {
-      roleNotice.value = '此账号属于' + entrances[accountRole].label + '组织，已进入对应工作台。'
-      entry.value = accountRole
-      window.history.replaceState(null, '', '/login/' + accountRole)
+      await authenticated('/api/auth/logout', { method: 'POST' })
+      clearSession('此账号属于' + entrances[accountRole].label + '组织，请从对应入口登录。')
+      return
     }
     document.title = entrances[accountRole].label + '工作台 · 渠智链'
     user.value = profile
@@ -110,7 +111,7 @@ async function loadIdentity() {
 onMounted(loadIdentity)
 
 async function signIn() {
-  if (entry.value === 'customer' || signingIn.value) return
+  if (signingIn.value) return
   loginError.value = ''
   if (!username.value.trim() || !password.value) {
     loginError.value = '请输入用户名和密码。'
@@ -165,10 +166,9 @@ async function signOut() {
           <li v-for="(step, index) in portal.steps" :key="step"><span>0{{ index + 1 }}</span>{{ step }}</li>
         </ol>
       </section>
-      <UiCard class="access-panel" :title="entry === 'customer' ? '体验客户工作台' : '使用组织账号登录'"
-        :description="entry === 'customer' ? '正式客户账号尚未开放。可直接使用本机演示，体验需求、报价确认和项目验收。' : '请输入管理员为你开通的账号。'">
+      <UiCard class="access-panel" title="使用组织账号登录" description="请输入管理员为你开通的账号。">
         <template #actions><UiIcon :name="portal.icon" :size="22" /></template>
-        <form v-if="entry !== 'customer'" class="form-grid" @submit.prevent="signIn">
+        <form class="form-grid" @submit.prevent="signIn">
           <UiField label="用户名" required v-slot="{ control }">
             <input v-bind="control" v-model="username" autocomplete="username" maxlength="64" required />
           </UiField>
@@ -178,10 +178,8 @@ async function signOut() {
           <p v-if="loginError" class="form-error" role="alert">{{ loginError }}</p>
           <UiButton type="submit" variant="primary" end-icon="forward" :loading="signingIn">登录</UiButton>
         </form>
-        <a v-else class="access-primary-link" href="/experience/customer">进入客户演示 <UiIcon name="forward" :size="16" /></a>
         <template #footer>
-          <p v-if="entry === 'customer'" class="access-note">仅在此浏览器中保存演示记录，请使用样例资料。</p>
-          <div v-else class="access-demo"><span>先了解业务流程？</span><a :href="'/experience/' + entry">体验{{ portal.label }}演示 <UiIcon name="open-detail" :size="14" /></a></div>
+          <div class="access-demo"><span>先了解业务流程？</span><a :href="'/experience/' + entry">体验{{ portal.label }}演示 <UiIcon name="open-detail" :size="14" /></a></div>
         </template>
       </UiCard>
     </div>
@@ -200,32 +198,31 @@ async function signOut() {
 
   <WorkspaceShell v-else :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="view = $event" @account="view = 'account'">
-    <template #actions><UiButton compact variant="text" :icon="isManufacturer ? 'vendor' : 'dealer'" @click="view = 'account'">{{ kindLabel }}</UiButton></template>
-    <p v-if="roleNotice" class="identity-notice" role="status"><UiIcon name="info" :size="16" />{{ roleNotice }}</p>
+    <template #actions><UiButton compact variant="text" :icon="portal.icon" @click="view = 'account'">{{ kindLabel }}</UiButton></template>
     <template v-if="view === 'overview'">
       <section class="page-heading"><div><p class="access-kicker">{{ organization.name }}</p><h1>{{ kindLabel }}工作台</h1>
-        <p class="muted">{{ isManufacturer ? '维护可供代理商选用的产品和版本。' : '查阅厂商发布的软件，整理客户的采购需求。' }}</p></div></section>
+        <p class="muted">{{ isManufacturer ? '接收渠道询价，回复资料问题并记录能力缺口。' : isDealer ? '接收客户需求、发起厂商询价并跟进双方回复。' : '提交采购需求，向经办代理商补充资料并查看进度。' }}</p></div></section>
       <div class="live-tiles">
-        <UiCard title="产品目录" :description="isManufacturer ? '新增、编辑与发布本组织的软件产品。' : '查看产品版本、说明与厂商发布信息。'">
+        <UiCard v-if="entry !== 'customer'" title="产品目录" :description="isManufacturer ? '新增、编辑与发布本组织的软件产品。' : '查看产品版本、说明与厂商发布信息。'">
           <template #actions><UiIcon name="catalog" :size="20" /></template>
           <UiButton end-icon="forward" @click="view = 'catalog'">打开目录</UiButton>
         </UiCard>
-        <UiCard v-if="!isManufacturer" title="需求整理" description="录入客户描述，核对授权数、模块和部署方式。">
+        <UiCard v-if="isDealer" title="需求整理" description="录入客户描述，核对授权数、模块和部署方式。">
           <template #actions><UiIcon name="request" :size="20" /></template>
           <UiButton end-icon="forward" @click="view = 'requirement'">整理需求</UiButton>
         </UiCard>
-        <UiCard v-if="!isManufacturer" title="商机拾遗" description="从附加需求找到做过类似项目的伙伴，跟进引荐结果。当前仅开放独立演示。">
+        <UiCard v-if="isDealer" title="商机拾遗" description="从附加需求找到做过类似项目的伙伴，跟进引荐结果。当前仅开放独立演示。">
           <template #actions><UiBadge>演示</UiBadge></template>
           <a class="access-inline-link" href="/experience/dealer?view=opportunities">查看商机演示</a>
         </UiCard>
-        <UiCard title="项目协作" description="项目、询报价、订单与验收尚未开放正式办理。可在独立演示中体验，操作不会写入正式记录。">
-          <template #actions><UiBadge>待接入</UiBadge></template>
-          <a class="access-inline-link" :href="'/experience/' + entry">体验项目协作 <UiIcon name="open-detail" :size="14" /></a>
+        <UiCard title="项目协作" description="在关联项目中查看进度，处理需求、询价、补充资料和能力缺口。">
+          <UiButton @click="view = 'projects'">打开项目</UiButton>
         </UiCard>
       </div>
     </template>
-    <ProductCatalog v-else-if="view === 'catalog'" :request="authenticated" :is-manufacturer="isManufacturer" />
-    <RequirementParser v-else-if="view === 'requirement' && !isManufacturer" :request="authenticated" />
+    <LiveProjects v-else-if="view === 'projects'" :request="authenticated" :role="entry" :organization-id="organization.id" />
+    <ProductCatalog v-else-if="view === 'catalog' && entry !== 'customer'" :request="authenticated" :is-manufacturer="isManufacturer" />
+    <RequirementParser v-else-if="view === 'requirement' && isDealer" :request="authenticated" />
     <template v-else>
       <section class="page-heading"><div><h1>账号与组织</h1></div></section>
       <UiCard title="当前账号">

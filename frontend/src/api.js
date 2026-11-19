@@ -6,6 +6,10 @@ const apiMessages = {
   invalid_product: '请检查产品名称、版本和说明。',
   invalid_requirement: '请填写 1–2000 字的需求。',
   invalid_request: '请检查输入后再试。',
+  revision_conflict: '项目已被协作方更新，请重新核对后办理。',
+  idempotency_conflict: '此请求的内容已变更，请重新核对后提交。',
+  invalid_transition: '项目状态已变化，当前操作暂不可办理。',
+  organization_link_required: '请选择已关联的组织，或联系维护者建立代理关系。',
   dependencies_unavailable: '服务依赖暂不可用，请稍后重试。',
   model_unavailable: 'AI 服务暂不可用，请稍后重试。',
   model_response_error: 'AI 未返回可用结果，请调整需求或重试。',
@@ -16,6 +20,7 @@ export class ApiError extends Error {
     super(apiMessages[code] || fallback || `请求失败（${status}），请稍后重试。`)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 

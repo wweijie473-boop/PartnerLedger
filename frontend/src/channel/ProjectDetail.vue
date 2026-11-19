@@ -2,7 +2,7 @@
 import { UiBadge, UiButton, UiCard, UiIcon } from '../ui/index.js'
 import { actionLabels } from './domain.js'
 import QuoteBook from './QuoteBook.vue'
-defineProps({ project: { type: Object, required: true }, role: String, products: Array, opportunities: Array })
+defineProps({ project: { type: Object, required: true }, role: String, products: { type: Array, default: () => [] }, opportunities: { type: Array, default: () => [] }, live: Boolean })
 defineEmits(['action', 'back', 'capture', 'opportunity'])
 const clock = date => new Date(date).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})
 </script>
@@ -21,15 +21,16 @@ const clock = date => new Date(date).toLocaleString('zh-CN', {month:'2-digit',da
           <template v-if="project.inquiry"><dt>询价摘要</dt><dd>{{ project.inquiry.summary }}</dd></template>
         </dl>
       </UiCard>
-      <UiCard v-if="role === 'dealer'" title="主单之外的商机" description="原厂没有对应产品，或者客户提到新的需求？留下一条团队可跟进的线索。">
+      <UiCard v-if="role === 'dealer' && !live" title="主单之外的商机" description="原厂没有对应产品，或者客户提到新的需求？留下一条团队可跟进的线索。">
         <p v-if="project.inquiry?.gapNote" class="op-inset">厂商反馈：{{ project.inquiry.gapNote }}</p>
         <div v-if="opportunities.length" class="op-project-list">
           <button v-for="item in opportunities" :key="item.id" class="ch-record" @click="$emit('opportunity', item.id)"><strong>{{ item.note }}</strong><small>{{ item.id }} · 查看商机</small></button>
         </div>
         <UiButton icon="add" @click="$emit('capture')">记录走访与补充需求</UiButton>
       </UiCard>
-      <QuoteBook v-if="project.channelQuotes" title="厂商渠道报价" subtitle="厂商与代理商之间的采购条件" :quotes="project.channelQuotes" />
-      <QuoteBook v-if="project.salesQuotes" title="对客销售报价" subtitle="代理商向客户提供的软件授权与实施方案" :quotes="project.salesQuotes" />
+      <UiCard v-if="live && project.inquiry?.gapNote" title="厂商能力缺口"><p>{{ project.inquiry.gapNote }}</p></UiCard>
+      <QuoteBook v-if="!live && project.channelQuotes" title="厂商渠道报价" subtitle="厂商与代理商之间的采购条件" :quotes="project.channelQuotes" />
+      <QuoteBook v-if="!live && project.salesQuotes" title="对客销售报价" subtitle="代理商向客户提供的软件授权与实施方案" :quotes="project.salesQuotes" />
       <UiCard v-if="project.order" title="订单与履约">
         <dl class="ch-facts"><dt>订单编号</dt><dd>{{ project.order.id }}</dd>
           <template v-if="project.order.channelQuoteId"><dt>渠道报价版本</dt><dd>{{ project.order.channelQuoteId }}</dd></template>

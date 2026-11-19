@@ -42,7 +42,7 @@ const phases = [
         <a v-for="entry in entrances" :key="entry.role" :href="'/login/' + entry.role" class="pl-entry">
           <div class="pl-entry-top"><span class="pl-tile"><UiIcon :name="entry.icon" :size="23"/></span><span>{{ entry.caption }}</span></div>
           <h2>{{ entry.label }}登录</h2><p>{{ entry.description }}</p>
-          <span class="pl-entry-link">{{ entry.role === 'customer' ? '查看客户入口 · 演示' : '进入工作台' }}</span>
+          <span class="pl-entry-link">进入工作台</span>
         </a>
       </section>
       <aside class="pl-opportunity"><div><p class="pl-kicker">代理商工作台 · 商机拾遗</p><h2>原厂做不了的接口，团队里谁做过？</h2><p>把走访时听到的附加需求单独记下来，用过往案例找到引荐人。主单照常交付，额外的机会也有人跟进。</p></div><a href="/experience/dealer?view=opportunities">体验商机拾遗演示</a></aside>

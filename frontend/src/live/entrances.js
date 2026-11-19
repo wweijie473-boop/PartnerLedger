@@ -12,5 +12,6 @@ export function organizationRole(profile, organization) {
       profile.organization?.id !== organization.id || profile.organization?.kind !== organization.kind) return null
   if (organization.kind === 'MANUFACTURER') return 'vendor'
   if (organization.kind === 'RESELLER') return 'dealer'
+  if (organization.kind === 'CUSTOMER') return 'customer'
   return null
 }
