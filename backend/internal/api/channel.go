@@ -35,7 +35,7 @@ func (s server) createChannelProject(c *gin.Context) {
 }
 
 func (s server) getChannelProject(c *gin.Context) {
-	id, ok := channelProjectID(c)
+	id, ok := channelResourceID(c)
 	if !ok {
 		return
 	}
@@ -44,7 +44,7 @@ func (s server) getChannelProject(c *gin.Context) {
 }
 
 func (s server) actOnChannelProject(c *gin.Context) {
-	id, ok := channelProjectID(c)
+	id, ok := channelResourceID(c)
 	if !ok {
 		return
 	}
@@ -56,7 +56,7 @@ func (s server) actOnChannelProject(c *gin.Context) {
 	channelResult(c, http.StatusOK, view, err)
 }
 
-func channelProjectID(c *gin.Context) (uint64, bool) {
+func channelResourceID(c *gin.Context) (uint64, bool) {
 	value := c.Param("id")
 	id, err := strconv.ParseUint(value, 10, 64)
 	if err != nil || id == 0 || value != strconv.FormatUint(id, 10) {
@@ -76,7 +76,8 @@ func channelResult(c *gin.Context, status int, result any, err error) {
 		respond(c, http.StatusForbidden, "forbidden", nil)
 	case errors.Is(err, channel.ErrNotFound):
 		respond(c, http.StatusNotFound, "not_found", nil)
-	case errors.Is(err, channel.ErrTransition), errors.Is(err, channel.ErrRevision), errors.Is(err, channel.ErrIdempotency):
+	case errors.Is(err, channel.ErrTransition), errors.Is(err, channel.ErrRevision), errors.Is(err, channel.ErrIdempotency),
+		errors.Is(err, channel.ErrDuplicateOpportunity):
 		respond(c, http.StatusConflict, err.Error(), nil)
 	default:
 		respond(c, http.StatusServiceUnavailable, "dependencies_unavailable", nil)

@@ -76,7 +76,7 @@ func (s Service) Act(ctx context.Context, actor data.User, id uint64, action str
 		if err != nil {
 			return err
 		}
-		return saveResult(tx, entry, p.ID, result)
+		return saveResult(tx, entry, &p.ID, result)
 	})
 	return result, err
 }

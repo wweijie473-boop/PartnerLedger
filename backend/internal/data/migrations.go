@@ -19,7 +19,7 @@ func SchemaReady(ctx context.Context, db *sql.DB) bool {
 	var version int
 	var dirty bool
 	err := db.QueryRowContext(ctx, "SELECT version, dirty FROM pl_schema_migrations").Scan(&version, &dirty)
-	return err == nil && version == 3 && !dirty
+	return err == nil && version == 4 && !dirty
 }
 
 func Migrate(db *sql.DB) error {

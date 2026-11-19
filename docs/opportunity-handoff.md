@@ -1,6 +1,6 @@
 # 商机拾遗｜给 mayisuix 的交班单
 
-**现在可以接手的任务：为代理商私有的商机台账提供真实数据源。** Vue 页面、虚构样例、状态操作和 HTTP 客户端草案已随本次提交交付。Go 暂未实现下面的新端点；没有部署变更或真实客户数据。产品、前端、演示与最终联调仍由 wweijie473-boop 负责。
+**Go 已提供商机台账、伙伴档案、跟进动作和拜访草稿接口。** 后端联调使用迁移 `000004` 和 [现行 OpenAPI](../backend/openapi.yaml)。正式前端需要接入这些接口。产品、前端、演示与最终联调由 wweijie473-boop 负责。
 
 ## 先看一笔业务（约三分钟）
 
@@ -19,9 +19,9 @@
 | 3. 引荐与结果 | 校验双方同意、费用与跟进日期；写状态、事件、幂等结果的同一事务。正式实现保留同意确认人/时间/来源、金额 DECIMAL、版本及审计。 | 重复点击、超时重放、两个标签使用旧版本，不多记引荐/介绍费；无权限不泄露主单和人脉。 |
 | 4. 可选 AI 增强 | 授权的拜访记录仅作候选抽取，模型输出需求片段、字段及追问，禁止自动保存/联系/结算。脱敏后再按项目约定调用模型；模型不可用可手工录入。 | 关键词不清楚时保留未知；推荐给出真实证据引用，无案例不能称已验证。前端演示目前是本地规则。 |
 
-## 拟议接口 v1
+## 商机接口 v1
 
-实际调用形状见 [HTTP 适配器](../frontend/src/channel/httpOpportunities.js)；页面通过相同的仓库方法调用 [演示仓库](../frontend/src/channel/repository.js)。正式登录入口**没有启用**这些端点。Go 响应沿用现有 `{code,message,data}` 信封，适配器注入的 authenticated 请求函数返回已解包的 data。前缀 `B=/api/channel/v1/opportunities`。
+正式界面可注入现有 [HTTP 适配器](../frontend/src/channel/httpOpportunities.js)。演示使用 [本地仓库](../frontend/src/channel/repository.js)。Go 响应沿用 `{code,message,data}` 信封，适配器的 authenticated 请求函数返回已解包的 data。前缀 `B=/api/channel/v1/opportunities`。
 
 | 端点 / 方法 | 请求体样例 | 成功 data |
 | --- | --- | --- |
@@ -53,19 +53,33 @@ Opportunity 示例（仅代理商内部可读；示例编号非数据库主键�
 | win / lose | win：introduced；lose：open 或 introduced | `{outcome:"结果摘要",remember:false}` → won / lost。win 且 remember 为 true 才追加获授权的成交依据，只取编号与能力类别。 |
 | settle | won 且约定金额为正 | `{}` → settled。仅登记人工确认的结果，不发生资金交易。 |
 
-认证失效 401；非代理商办理商机 403；跨组织主单/伙伴/商机 404；无效金额、日期、未获同意 400；旧 revision 或状态不符 409。先验证访问权，再查幂等键，再比 revision。相同组织/资源/动作/请求键重放同内容返回原结果，内容不同返回 409。一次写入产生一条业务事件，不要把客户自由文本写入公共日志。
+认证失效返回 401，非代理商办理返回 403，跨组织主单、伙伴或商机返回 404。参数无效或缺少同意返回 400。旧版本、状态冲突、同键不同内容和同项目重复附加描述返回 409。写入先验证权限，再检查幂等键和 revision。用原请求体和原 `requestId` 重放可得到原结果。商机动作和拜访写入的重放按成员隔离，伙伴登记按组织隔离。商机动作在同一事务写入状态与事件。
 
-## 交回前端时请一并给出
+## 正式前端接入
 
-本轮前端补充了手机拜访草稿、联系前核对清单和带理由的待办。演示复现见 [三端演示脚本](demo-walkthrough.md)。正式「记拜访」当前按组织与成员保存在本机，草稿关联真实可见项目，向团队同步仍需后端接口。接入时由用户确认主采购事项和附加需求后再写入，原始走访记录按代理商内部可见处理。
+演示复现见 [三端演示脚本](demo-walkthrough.md)。正式「记拜访」当前使用本机存储。接入服务时，使用服务端记录的 ID 和 revision。原始草稿仅允许同组织的创建成员读取或修改。确认产生的独立商机按经办组织可见。
 
-商机接口下一批请按以下增量对齐，原路径及 requestId/revision 约定沿用上文。
+商机增量沿用上文路径及 `requestId`、`revision` 约定。
 
 - Opportunity 增加 `knownPartnerIds`、`contactReviews`、`rejections`、`followReason`，旧数据缺省为空。contactReviews 以 partnerId 为键，内容为 `{checks:{version,interfaceAccess,region,availability},note}`，每项为 unknown / confirmed / blocked。只有经办代理商内部成员可见这些字段。
 - 新动作 `contactReview` 输入 `{partnerId,checks,note}`，open 状态可记录联系前核对；有 blocked 项时暂不可登记引荐。`rejectPartner` 输入 `{partnerId,reason}`，保留排除原因并从本商机当前候选中移除此伙伴，商机继续开放。
 - 新动作 `acknowledge` 输入空对象，记录当前成员查看过的候选。演示按团队记录 knownPartnerIds，正式实现应按成员保存已读状态，避免一人查看导致其他人漏掉新伙伴。
 - `follow` 支持 open 状态，输入 `{followUp,followReason}`，事项为 customer / partner / fee。引荐成功后的默认事项为伙伴回访；已促成但有待核对介绍费时显示计费条件。GET desk 增加 `tasks:[{opportunityId,projectTitle,reason,action,date}]`，只返回当前组织可见内容，关闭或结清后相应事项消除。
-- 正式拜访草稿需要成员归属、项目归属、revision 和 requestId。可沿用版本化项目域增加 visits 资源，由用户确认后将附加需求幂等写入 opportunities 并返回关联 ID。主采购事项写入前必须另行确认，草稿保存与项目需求变更分别留审计记录。该资源尚未接入页面，伙伴确定 OpenAPI 后前端替换本机草稿存储。
+- 介绍费只记录约定与人工结清。引荐的服务端审计保存确认经办人、时间、手工确认来源及本次约定。
+
+### 拜访草稿接口
+
+前缀 `V=/api/channel/v1/visits`。除创建时传 `revision:0`，所有写入都带服务端给出的当前 `revision` 和 UUID 格式的 `requestId`。
+
+| 操作 | 请求与响应 |
+| --- | --- |
+| `GET V` | 返回当前成员的 `{items:[Visit]}`，按最近更新排序。 |
+| `GET V/{id}` | 返回当前成员可查看的 `Visit`。 |
+| `POST V` / `PUT V/{id}` | 发送 `{requestId,revision,payload:{projectId,text,main,additional,reviewed}}`。保存草稿时 `projectId` 可为空。创建返回 201，更新返回 200。 |
+| `POST V/{id}/confirm` | 人工复核后发送 `{requestId,revision,confirmed:true,createOpportunity:true}`。可选 `category,source,target`，未知时留空。必须先保存已复核草稿并关联真实项目。返回含 `opportunityId` 的新版 `Visit`。仅记录复核时将 `createOpportunity` 设为 false。 |
+| `DELETE V/{id}` | 发送 `{requestId,revision}`，成功返回 `{id,revision,deleted:true}`。草稿移出列表，保留审计和已确认商机。 |
+
+`Visit` 返回草稿字段和 `id,revision,updatedAt,confirmed,opportunityId`。相同项目与描述已有商机时，确认拜访复用已有记录。同一次确认保存草稿状态、商机和审计。主采购事项留在拜访草稿，项目需求经主单流程更新。
 
 三端验收应核对同一项目编号。客户需求和对客资料由客户与代理商查看；厂商处理代理商提交的摘要；人脉、排除原因、合作费用、联系清单和拜访原文均只在经办代理商内部流转。模型调用仅使用获授权的内容，待办和提醒由真实记录与状态生成。
 

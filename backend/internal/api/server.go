@@ -59,6 +59,16 @@ func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementPars
 	projects.POST("/projects", s.createChannelProject)
 	projects.GET("/projects/:id", s.getChannelProject)
 	projects.POST("/projects/:id/actions/:action", s.actOnChannelProject)
+	projects.GET("/opportunities/desk", s.opportunityDesk)
+	projects.POST("/opportunities", s.captureOpportunity)
+	projects.POST("/opportunities/partners", s.addOpportunityPartner)
+	projects.POST("/opportunities/:id/actions/:action", s.actOnOpportunity)
+	projects.GET("/visits", s.listVisits)
+	projects.POST("/visits", s.saveVisit)
+	projects.GET("/visits/:id", s.getVisit)
+	projects.PUT("/visits/:id", s.saveVisit)
+	projects.DELETE("/visits/:id", s.deleteVisit)
+	projects.POST("/visits/:id/confirm", s.confirmVisit)
 	return r
 }
 

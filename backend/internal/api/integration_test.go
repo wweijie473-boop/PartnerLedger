@@ -254,4 +254,5 @@ func TestOrganizationIsolation(t *testing.T) {
 	if len(outsiderPage.Items) != 0 {
 		t.Fatalf("cross-organization list leaked: %+v", outsiderPage)
 	}
+	testDealerFieldwork(t, db, cache, request, project.ID, dealerID, dealer, otherDealer, customer, first, password)
 }

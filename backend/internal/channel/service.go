@@ -182,6 +182,9 @@ func (s Service) Create(ctx context.Context, actor data.User, input CreateInput)
 			return err
 		}
 		if replay {
+			if request.ProjectID == nil {
+				return errors.New("incomplete project request")
+			}
 			if err := visibleProjects(tx, actor).Where("id = ?", *request.ProjectID).Take(&channelProject{}).Error; err != nil {
 				return err
 			}
@@ -216,7 +219,7 @@ func (s Service) Create(ctx context.Context, actor data.User, input CreateInput)
 			return err
 		}
 		result = projectView(p, role, []channelEvent{event})
-		return saveResult(tx, request, p.ID, result)
+		return saveResult(tx, request, &p.ID, result)
 	})
 	return result, err
 }
@@ -244,13 +247,13 @@ func claim(tx *gorm.DB, organizationID uint64, operation, requestID string, inpu
 	if existing.RequestHash != entry.RequestHash {
 		return existing, false, ErrIdempotency
 	}
-	if existing.ProjectID == nil || len(existing.Result) == 0 {
+	if len(existing.Result) == 0 {
 		return existing, false, errors.New("incomplete channel request")
 	}
 	return existing, true, nil
 }
 
-func saveResult(tx *gorm.DB, request channelRequest, projectID uint64, result View) error {
+func saveResult(tx *gorm.DB, request channelRequest, projectID *uint64, result any) error {
 	b, err := json.Marshal(result)
 	if err != nil {
 		return err

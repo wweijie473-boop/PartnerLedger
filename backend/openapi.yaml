@@ -318,18 +318,283 @@ paths:
           description: revision_conflict, invalid_transition, or idempotency_conflict
         default:
           $ref: '#/components/responses/Error'
+  /api/channel/v1/opportunities/desk:
+    get:
+      summary: Get the current dealer's team workspace and member-specific follow-ups
+      responses:
+        '200':
+          description: Opportunities, partners, gaps, reverse matches, and follow-up tasks
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/OpportunityDesk' }
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/opportunities:
+    post:
+      summary: Capture a confirmed additional requirement for an accessible project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, projectId, payload]
+              properties:
+                requestId: { type: string, format: uuid }
+                projectId: { $ref: '#/components/schemas/ID' }
+                payload:
+                  allOf:
+                    - $ref: '#/components/schemas/FieldworkCapability'
+                    - type: object
+                      required: [note]
+                      properties:
+                        note: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        '201':
+          $ref: '#/components/responses/Opportunity'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/opportunities/partners:
+    post:
+      summary: Record an authorized partner capability and evidence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, payload]
+              properties:
+                requestId: { type: string, format: uuid }
+                payload:
+                  allOf:
+                    - $ref: '#/components/schemas/FieldworkCapability'
+                    - type: object
+                      required: [name, owner, category]
+                      properties:
+                        name: { type: string, minLength: 1, maxLength: 80 }
+                        owner: { type: string, minLength: 1, maxLength: 60 }
+                        evidence: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Created partner
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/FieldworkPartner' }
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/opportunities/{id}/actions/{action}:
+    parameters:
+      - $ref: '#/components/parameters/FieldworkID'
+      - name: action
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [clarify, acknowledge, contactReview, rejectPartner, introduce, follow, win, lose, settle]
+    post:
+      summary: Apply a dealer action with revision and replay protection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/FieldworkRevision'
+                - type: object
+                  required: [payload]
+                  properties:
+                    payload:
+                      type: object
+                      description: Use the fields for the selected action. Acknowledge and settle accept an empty object.
+                      properties:
+                        category: { type: string }
+                        source: { type: string }
+                        target: { type: string }
+                        partnerId: { $ref: '#/components/schemas/ID' }
+                        checks: { $ref: '#/components/schemas/ContactChecks' }
+                        note: { type: string, maxLength: 500 }
+                        reason: { type: string, maxLength: 500 }
+                        consent: { type: boolean, description: Both parties have consented }
+                        followUp: { type: string, format: date }
+                        followReason: { type: string, enum: [customer, partner, fee] }
+                        feeAmount: { type: string, example: '1500.00' }
+                        feeTerms: { type: string, maxLength: 300 }
+                        outcome: { type: string, maxLength: 500 }
+                        remember: { type: boolean }
+            examples:
+              introduce:
+                value:
+                  requestId: 50fcd5ce-ffb8-472e-b28c-306ecb6ca604
+                  revision: 4
+                  payload: { partnerId: '21', consent: true, followUp: '2027-01-15', feeAmount: '1500.00', feeTerms: 验收后 }
+              contactReview:
+                value:
+                  requestId: 50fcd5ce-ffb8-472e-b28c-306ecb6ca605
+                  revision: 3
+                  payload: { partnerId: '21', checks: { version: confirmed, availability: unknown }, note: 已和团队核对版本 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Opportunity'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/visits:
+    get:
+      summary: List the authenticated dealer member's drafts
+      responses:
+        '200':
+          description: Drafts for the current member
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: '#/components/schemas/Visit' }
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Save a new visit draft at revision zero
+      requestBody:
+        $ref: '#/components/requestBodies/VisitSave'
+      responses:
+        '201':
+          $ref: '#/components/responses/Visit'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/visits/{id}:
+    parameters:
+      - $ref: '#/components/parameters/FieldworkID'
+    get:
+      summary: Read one draft owned by the authenticated dealer member
+      responses:
+        '200':
+          $ref: '#/components/responses/Visit'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      summary: Save a new revision of an existing visit draft
+      requestBody:
+        $ref: '#/components/requestBodies/VisitSave'
+      responses:
+        '200':
+          $ref: '#/components/responses/Visit'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Remove a draft from the owner's list while retaining its audit history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FieldworkRevision' }
+      responses:
+        '200':
+          description: Draft removal confirmed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [id, revision, deleted]
+                        properties:
+                          id: { $ref: '#/components/schemas/ID' }
+                          revision: { type: integer }
+                          deleted: { const: true }
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/visits/{id}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/FieldworkID'
+    post:
+      summary: Confirm reviewed notes and optionally link an independent opportunity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/FieldworkRevision'
+                - $ref: '#/components/schemas/FieldworkCapability'
+                - type: object
+                  required: [confirmed]
+                  properties:
+                    confirmed: { const: true }
+                    createOpportunity: { type: boolean, default: false }
+            example:
+              requestId: 50fcd5ce-ffb8-472e-b28c-306ecb6ca606
+              revision: 2
+              confirmed: true
+              createOpportunity: true
+      responses:
+        '200':
+          $ref: '#/components/responses/Visit'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
+  parameters:
+    FieldworkID:
+      name: id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ID' }
   requestBodies:
+    VisitSave:
+      required: true
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/FieldworkRevision'
+              - type: object
+                required: [payload]
+                properties:
+                  payload: { $ref: '#/components/schemas/VisitDraft' }
     Product:
       required: true
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ProductInput' }
   responses:
+    Opportunity:
+      description: Opportunity visible to its dealer team
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/Opportunity' }
+    Visit:
+      description: Visit draft visible only to its creating member
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/Visit' }
     ChannelProject:
       description: Project projected for the caller's role
       content:
@@ -363,6 +628,147 @@ components:
             message: authentication_required
             data: null
   schemas:
+    FieldworkRevision:
+      type: object
+      required: [requestId, revision]
+      properties:
+        requestId: { type: string, format: uuid }
+        revision: { type: integer, minimum: 0 }
+    FieldworkCapability:
+      type: object
+      properties:
+        category: { type: string, enum: ['', integration, connector, plugin, migration, training, other] }
+        source: { $ref: '#/components/schemas/FieldworkSystem' }
+        target: { $ref: '#/components/schemas/FieldworkSystem' }
+    FieldworkSystem:
+      type: string
+      enum: ['', erp, mes, oa, ide, wms, crm, other]
+    FieldworkPartner:
+      allOf:
+        - $ref: '#/components/schemas/FieldworkCapability'
+        - type: object
+          properties:
+            id: { $ref: '#/components/schemas/ID' }
+            name: { type: string }
+            owner: { type: string }
+            evidence: { type: string }
+            createdAt: { type: string, format: date-time }
+    ContactChecks:
+      type: object
+      properties:
+        version: { $ref: '#/components/schemas/CheckState' }
+        interfaceAccess: { $ref: '#/components/schemas/CheckState' }
+        region: { $ref: '#/components/schemas/CheckState' }
+        availability: { $ref: '#/components/schemas/CheckState' }
+    CheckState:
+      type: string
+      enum: ['', unknown, confirmed, blocked]
+    Opportunity:
+      allOf:
+        - $ref: '#/components/schemas/FieldworkCapability'
+        - type: object
+          properties:
+            id: { $ref: '#/components/schemas/ID' }
+            projectId: { $ref: '#/components/schemas/ID' }
+            projectTitle: { type: string }
+            note: { type: string }
+            revision: { type: integer }
+            stage: { type: string, enum: [open, introduced, won, lost, settled] }
+            partnerId: { type: string }
+            followUp: { type: string }
+            followReason: { type: string, enum: ['', customer, partner, fee] }
+            feeAmount: { type: string }
+            feeTerms: { type: string }
+            outcome: { type: string }
+            brief: { type: string }
+            questions: { type: array, items: { type: string } }
+            knownPartnerIds: { type: array, items: { $ref: '#/components/schemas/ID' } }
+            contactReviews:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  checks: { $ref: '#/components/schemas/ContactChecks' }
+                  note: { type: string }
+            rejections:
+              type: array
+              items:
+                type: object
+                properties:
+                  partnerId: { $ref: '#/components/schemas/ID' }
+                  name: { type: string }
+                  reason: { type: string }
+                  at: { type: string, format: date-time }
+            matches:
+              type: array
+              items:
+                type: object
+                properties:
+                  partnerId: { $ref: '#/components/schemas/ID' }
+                  name: { type: string }
+                  owner: { type: string }
+                  evidence: { type: string }
+                  reason: { type: string }
+                  caveat: { type: string }
+                  checks: { $ref: '#/components/schemas/ContactChecks' }
+                  reviewNote: { type: string }
+            history:
+              type: array
+              items:
+                type: object
+                properties:
+                  at: { type: string, format: date-time }
+                  label: { type: string }
+    OpportunityDesk:
+      type: object
+      required: [items, partners, gaps, reverseMatches, tasks]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Opportunity' } }
+        partners: { type: array, items: { $ref: '#/components/schemas/FieldworkPartner' } }
+        gaps:
+          type: array
+          items:
+            type: object
+            properties:
+              category: { type: string }
+              label: { type: string }
+              count: { type: integer }
+        reverseMatches:
+          type: array
+          items:
+            type: object
+            properties:
+              partnerId: { $ref: '#/components/schemas/ID' }
+              opportunityId: { $ref: '#/components/schemas/ID' }
+        tasks:
+          type: array
+          items:
+            type: object
+            properties:
+              opportunityId: { $ref: '#/components/schemas/ID' }
+              projectTitle: { type: string }
+              reason: { type: string }
+              action: { type: string }
+              date: { type: string }
+    VisitDraft:
+      type: object
+      required: [text]
+      properties:
+        projectId: { type: string, description: Empty when a project has not yet been selected }
+        text: { type: string, minLength: 1, maxLength: 2000 }
+        main: { type: string, maxLength: 2000 }
+        additional: { type: string, maxLength: 2000 }
+        reviewed: { type: boolean }
+    Visit:
+      allOf:
+        - $ref: '#/components/schemas/VisitDraft'
+        - type: object
+          properties:
+            id: { $ref: '#/components/schemas/ID' }
+            opportunityId: { type: string }
+            confirmed: { type: boolean }
+            revision: { type: integer }
+            updatedAt: { type: string, format: date-time }
     Envelope:
       type: object
       required: [code, message, data]
