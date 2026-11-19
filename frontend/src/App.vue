@@ -204,7 +204,7 @@ function reset() {
 
 <template>
   <div v-if="!role" class="login-screen">
-    <div class="brand-mark"><UiIcon name="workflow" :size="24" /></div>
+    <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
     <p class="eyebrow">PARTNERLEDGER</p>
     <h1>进入渠道协作工作台</h1>
     <p class="muted">选择一个演示身份体验 ERP 分销协作流程。</p>

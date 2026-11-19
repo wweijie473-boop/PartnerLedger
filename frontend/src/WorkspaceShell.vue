@@ -72,7 +72,7 @@ onUnmounted(() => {
       <div class="sidebar-brand-row">
         <button v-if="mobile" class="nav-close" aria-label="关闭导航" @click="closeDrawer"><UiIcon name="close" /></button>
         <button type="button" class="brand" aria-label="渠智链工作总览" @click="navigate(nav[0].id)">
-          <span class="brand-mark"><UiIcon name="workflow" :size="22" /></span>
+          <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
           <span><strong>渠智链</strong><small>PartnerLedger</small></span>
         </button>
       </div>

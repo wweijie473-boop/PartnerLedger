@@ -39,7 +39,10 @@ function colorValue(token) {
     <header class="gallery-top">
       <div class="gallery-top-inner">
         <a href="/" class="gallery-back"><UiIcon name="back" :size="16" /> 返回平台首页</a>
-        <span class="gallery-brand"><UiIcon name="workflow" :size="16" /> 渠智链 AI</span>
+        <span class="gallery-brand">
+          <img class="brand-mark" src="/brand/partnerledger-logo.png" width="24" height="24" alt="" />
+          渠智链 AI
+        </span>
       </div>
     </header>
     <main class="gallery-content">

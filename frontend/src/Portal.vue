@@ -16,7 +16,10 @@ const phases = [
 <template>
   <div class="pl-portal">
     <header class="pl-header"><div class="pl-wrap pl-bar">
-      <a class="pl-logo" href="/" aria-label="渠智链首页"><span><UiIcon name="workflow" :size="24" /></span><b>渠智链</b><small>PartnerLedger</small></a>
+      <a class="pl-logo" href="/" aria-label="渠智链首页">
+        <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
+        <b>渠智链</b><small>PartnerLedger</small>
+      </a>
       <nav aria-label="主导航"><a href="#access">工作台</a><a href="#journey">三方协作</a><a href="/tables">表格</a><a class="pl-nav-cta" href="/login/dealer">代理商登录</a></nav>
     </div></header>
     <main>

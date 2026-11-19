@@ -4,7 +4,6 @@
 .pl-bar, .pl-logo, .pl-bar nav, .pl-entry-top, .pl-footer { display: flex; align-items: center; }
 .pl-bar { min-height: 72px; justify-content: space-between; gap: 16px; }
 .pl-logo { gap: 10px; text-decoration: none; color: var(--ui-ink); }
-.pl-logo > span { display: grid; place-items: center; width: 38px; height: 38px; color: var(--ui-on-accent); background: var(--ui-accent); border-radius: 9px; }
 .pl-logo b { font-size: 22px; font-weight: 600; }
 .pl-logo small { font-size: 14px; padding-left: 12px; margin-left: 2px; border-left: 1px solid var(--ui-border); color: var(--ui-ink-muted); }
 .pl-bar nav { gap: 26px; }

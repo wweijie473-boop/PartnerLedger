@@ -185,7 +185,10 @@ function openOpportunity(id = '', projectId = '') {
 <template>
   <main v-if="!session" class="access-page">
     <header class="access-header">
-      <a class="access-brand" href="/"><span class="brand-mark"><UiIcon name="workflow" :size="20" /></span>渠智链 AI</a>
+      <a class="access-brand" href="/">
+        <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
+        渠智链 AI
+      </a>
       <a href="/" class="access-back"><UiIcon name="back" :size="15" /> 返回平台首页</a>
     </header>
     <div class="access-grid">
