@@ -181,6 +181,143 @@ paths:
                         $ref: '#/components/schemas/Requirement'
         default:
           $ref: '#/components/responses/Error'
+  /api/channel/v1/organization-links:
+    get:
+      summary: List organizations linked to the current customer or reseller
+      responses:
+        '200':
+          description: Linked organizations
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: '#/components/schemas/Organization' }
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/projects:
+    get:
+      summary: List channel projects visible to the authenticated organization
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: after
+          in: query
+          schema: { type: string, default: '0' }
+      responses:
+        '200':
+          description: Page of projects in the caller's role
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [items, next_cursor]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: '#/components/schemas/ChannelProject' }
+                          next_cursor: { type: [string, 'null'] }
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create a channel project as a customer or its authorized reseller
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, title, requirement]
+              additionalProperties: false
+              properties:
+                requestId: { type: string, format: uuid }
+                title: { type: string, minLength: 1, maxLength: 120 }
+                requirement: { type: string, minLength: 1, maxLength: 3000 }
+                dueDate: { type: string, format: date }
+                customerId:
+                  $ref: '#/components/schemas/ID'
+                  description: Required for a reseller. A customer uses its own organization from the session.
+                resellerId:
+                  $ref: '#/components/schemas/ID'
+                  description: Required for a customer linked to multiple resellers.
+      responses:
+        '201':
+          $ref: '#/components/responses/ChannelProject'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/projects/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ID' }
+    get:
+      summary: Get a project and its visible event history
+      responses:
+        '200':
+          $ref: '#/components/responses/ChannelProject'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/projects/{id}/actions/{action}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ID' }
+      - name: action
+        in: path
+        required: true
+        schema: { type: string, enum: [submitInquiry, withdrawInquiry, flagGap, requestInfo, replyInfo] }
+    post:
+      summary: Apply an inquiry action at the current revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, revision, payload]
+              additionalProperties: false
+              properties:
+                requestId: { type: string, format: uuid }
+                revision: { type: integer, minimum: 1 }
+                payload:
+                  description: Product and summary for submitInquiry, an empty object for withdrawInquiry, or a note for the other actions.
+                  oneOf:
+                    - type: object
+                      additionalProperties: false
+                      required: [product, summary]
+                      properties:
+                        product: { $ref: '#/components/schemas/ID' }
+                        summary: { type: string, minLength: 1, maxLength: 3000 }
+                    - type: object
+                      maxProperties: 0
+                    - type: object
+                      additionalProperties: false
+                      required: [note]
+                      properties:
+                        note: { type: string, minLength: 1, maxLength: 3000 }
+      responses:
+        '200':
+          $ref: '#/components/responses/ChannelProject'
+        '409':
+          description: revision_conflict, invalid_transition, or idempotency_conflict
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -193,6 +330,15 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ProductInput' }
   responses:
+    ChannelProject:
+      description: Project projected for the caller's role
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/ChannelProject' }
     Product:
       description: Visible product
       content:
@@ -234,7 +380,44 @@ components:
       properties:
         id: { $ref: '#/components/schemas/ID' }
         name: { type: string }
-        kind: { type: string, enum: [MANUFACTURER, RESELLER] }
+        kind: { type: string, enum: [MANUFACTURER, RESELLER, CUSTOMER] }
+    ChannelProject:
+      type: object
+      required: [id, title, stage, stageLabel, revision, isTodo, nextStep, actions, timeline]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        title: { type: string }
+        customerName: { type: string, description: Visible to the customer and reseller }
+        requirement: { type: string, description: Visible to the customer and reseller }
+        dueDate: { type: string, format: date }
+        product: { $ref: '#/components/schemas/ID' }
+        stage: { type: string, enum: [requested, customer_info, inquired, vendor_info, processing] }
+        stageLabel: { type: string }
+        revision: { type: integer, minimum: 1 }
+        isTodo: { type: boolean }
+        nextStep: { type: string }
+        actions:
+          type: array
+          items: { type: string, enum: [submitInquiry, withdrawInquiry, flagGap, requestInfo, replyInfo] }
+        inquiry:
+          type: object
+          required: [id, summary, processed]
+          properties:
+            id: { type: string }
+            summary: { type: string }
+            processed: { type: boolean }
+            gapNote: { type: string }
+        channelQuotes: { type: array, maxItems: 0, description: Reserved for channel quote versions }
+        salesQuotes: { type: array, maxItems: 0, description: Reserved for sales quote versions }
+        timeline:
+          type: array
+          items:
+            type: object
+            required: [at, label, detail]
+            properties:
+              at: { type: string, format: date-time }
+              label: { type: string }
+              detail: { type: string }
     User:
       type: object
       required: [id, username, organization]

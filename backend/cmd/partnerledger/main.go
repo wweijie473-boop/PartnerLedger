@@ -33,13 +33,13 @@ func run(args []string) error {
 		command, args = args[0], args[1:]
 	}
 	if command == "help" || command == "-h" || command == "--help" {
-		fmt.Println("usage: partnerledger [serve | check | migrate | bootstrap-org]")
+		fmt.Println("usage: partnerledger [serve | check | migrate | bootstrap-org | link-customer]")
 		return nil
 	}
-	if command != "serve" && command != "check" && command != "migrate" && command != "bootstrap-org" {
-		return errors.New("expected serve, check, migrate or bootstrap-org")
+	if command != "serve" && command != "check" && command != "migrate" && command != "bootstrap-org" && command != "link-customer" {
+		return errors.New("expected serve, check, migrate, bootstrap-org or link-customer")
 	}
-	if len(args) > 0 && command != "bootstrap-org" {
+	if len(args) > 0 && command != "bootstrap-org" && command != "link-customer" {
 		return fmt.Errorf("%s does not accept positional arguments", command)
 	}
 
@@ -72,7 +72,7 @@ func run(args []string) error {
 	}
 	if command == "bootstrap-org" {
 		flags := flag.NewFlagSet(command, flag.ContinueOnError)
-		kind := flags.String("kind", "", "MANUFACTURER or RESELLER")
+		kind := flags.String("kind", "", "MANUFACTURER, RESELLER or CUSTOMER")
 		name := flags.String("name", "", "organization display name")
 		username := flags.String("username", "", "first account username")
 		if err := flags.Parse(args); err != nil {
@@ -86,10 +86,31 @@ func run(args []string) error {
 			return err
 		}
 		password := os.Getenv("PARTNERLEDGER_BOOTSTRAP_PASSWORD")
-		if err := auth.CreateOrganization(ctx, db, *name, *kind, *username, password); err != nil {
+		id, err := auth.CreateOrganization(ctx, db, *name, *kind, *username, password)
+		if err != nil {
 			return fmt.Errorf("create organization and account: %w", err)
 		}
-		fmt.Println("Organization and first account created")
+		fmt.Printf("Organization %d and first account created\n", id)
+		return nil
+	}
+	if command == "link-customer" {
+		flags := flag.NewFlagSet(command, flag.ContinueOnError)
+		customer := flags.Uint64("customer", 0, "customer organization ID")
+		reseller := flags.Uint64("reseller", 0, "reseller organization ID")
+		if err := flags.Parse(args); err != nil {
+			return err
+		}
+		if flags.NArg() != 0 {
+			return errors.New("link-customer accepts flags only")
+		}
+		db, err := data.OpenGORM(sqlDB)
+		if err != nil {
+			return err
+		}
+		if err := auth.LinkCustomer(ctx, db, *customer, *reseller); err != nil {
+			return fmt.Errorf("link organizations: %w", err)
+		}
+		fmt.Println("Customer and reseller linked")
 		return nil
 	}
 

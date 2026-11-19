@@ -3,6 +3,7 @@ package data
 const (
 	Manufacturer = "MANUFACTURER"
 	Reseller     = "RESELLER"
+	Customer     = "CUSTOMER"
 )
 
 type Organization struct {

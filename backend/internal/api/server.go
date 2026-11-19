@@ -14,6 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/ai"
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/auth"
+	"github.com/wweijie473-boop/PartnerLedger/backend/internal/channel"
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/data"
 	"gorm.io/gorm"
 )
@@ -23,15 +24,16 @@ type RequirementParser interface {
 }
 
 type server struct {
-	db     *gorm.DB
-	sql    *sql.DB
-	cache  *redis.Client
-	auth   *auth.Service
-	parser RequirementParser
+	db      *gorm.DB
+	sql     *sql.DB
+	cache   *redis.Client
+	auth    *auth.Service
+	parser  RequirementParser
+	channel channel.Service
 }
 
 func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementParser) http.Handler {
-	s := server{db: db, sql: sqlDB, cache: cache, auth: auth.New(db, cache), parser: parser}
+	s := server{db: db, sql: sqlDB, cache: cache, auth: auth.New(db, cache), parser: parser, channel: channel.New(db)}
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.NoRoute(func(c *gin.Context) { respond(c, http.StatusNotFound, "not_found", nil) })
@@ -51,6 +53,12 @@ func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementPars
 	secured.POST("/products", s.requireManufacturer, s.createProduct)
 	secured.PUT("/products/:id", s.requireManufacturer, s.updateProduct)
 	secured.POST("/ai/parse-requirement", s.parseRequirement)
+	projects := secured.Group("/channel/v1")
+	projects.GET("/organization-links", s.channelLinks)
+	projects.GET("/projects", s.listChannelProjects)
+	projects.POST("/projects", s.createChannelProject)
+	projects.GET("/projects/:id", s.getChannelProject)
+	projects.POST("/projects/:id/actions/:action", s.actOnChannelProject)
 	return r
 }
 

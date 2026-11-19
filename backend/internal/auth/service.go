@@ -38,32 +38,53 @@ func New(db *gorm.DB, sessions *redis.Client) *Service {
 }
 
 // CreateOrganization provisions the first account from the operator CLI.
-func CreateOrganization(ctx context.Context, db *gorm.DB, name, kind, username, password string) error {
+func CreateOrganization(ctx context.Context, db *gorm.DB, name, kind, username, password string) (uint64, error) {
 	name = strings.TrimSpace(name)
 	username = normalize(username)
 	if name == "" || utf8.RuneCountInString(name) > 150 {
-		return errors.New("organization name must contain 1 to 150 characters")
+		return 0, errors.New("organization name must contain 1 to 150 characters")
 	}
-	if kind != data.Manufacturer && kind != data.Reseller {
-		return errors.New("organization kind must be MANUFACTURER or RESELLER")
+	if kind != data.Manufacturer && kind != data.Reseller && kind != data.Customer {
+		return 0, errors.New("organization kind must be MANUFACTURER, RESELLER or CUSTOMER")
 	}
 	if !usernameFormat.MatchString(username) {
-		return errors.New("username must contain 3 to 64 letters, digits, dots, underscores or hyphens")
+		return 0, errors.New("username must contain 3 to 64 letters, digits, dots, underscores or hyphens")
 	}
 	if len(password) < 12 || len(password) > 72 {
-		return errors.New("password must contain 12 to 72 bytes")
+		return 0, errors.New("password must contain 12 to 72 bytes")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		org := data.Organization{Name: name, Kind: kind}
+	org := data.Organization{Name: name, Kind: kind}
+	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&org).Error; err != nil {
 			return err
 		}
 		return tx.Create(&data.User{Username: username, OrganizationID: org.ID, PasswordHash: hash}).Error
 	})
+	if err != nil {
+		return 0, err
+	}
+	return org.ID, nil
+}
+
+func LinkCustomer(ctx context.Context, db *gorm.DB, customerID, resellerID uint64) error {
+	if customerID == 0 || resellerID == 0 {
+		return errors.New("both organization IDs are required")
+	}
+	var count int64
+	if err := db.WithContext(ctx).Model(&data.Organization{}).
+		Where("(id = ? AND kind = ?) OR (id = ? AND kind = ?)", customerID, data.Customer, resellerID, data.Reseller).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count != 2 {
+		return errors.New("expected an existing CUSTOMER and RESELLER")
+	}
+	return db.WithContext(ctx).Exec(`INSERT INTO pl_channel_links (customer_id, reseller_id)
+		VALUES (?, ?) ON DUPLICATE KEY UPDATE reseller_id = pl_channel_links.reseller_id`, customerID, resellerID).Error
 }
 
 func (s *Service) Login(ctx context.Context, username, password string) (data.User, string, error) {

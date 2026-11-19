@@ -1,6 +1,6 @@
 # PartnerLedger Go API
 
-首批接口覆盖登录和退出、当前组织、产品目录及 DeepSeek 需求解析。组织和首个账号由维护者通过命令创建。厂家可维护本组织产品，经销商可查看已发布产品并解析 ERP 需求。询价、报价、订单和交付接口待按团队计划实现。
+接口覆盖登录与退出、三种组织身份、产品目录、DeepSeek 需求解析，以及三端项目和询价。厂家可维护本组织产品，代理商可查看已发布产品并解析 ERP 需求。三端可协作建项、询价、补资料与标记缺口。报价、订单、交付和商机接口按团队计划接续。
 
 ## 连接与启动
 
@@ -14,15 +14,22 @@
    go run ./cmd/partnerledger migrate
    ```
 
-3. 创建厂家和经销商各一个开发账号。每次先在当前进程设置 `PARTNERLEDGER_BOOTSTRAP_PASSWORD`（12–72 字节），按需替换示例名称与用户名。
+3. 创建厂家、代理商和客户开发账号。每次先在当前进程设置 `PARTNERLEDGER_BOOTSTRAP_PASSWORD`（12–72 字节），按需替换示例名称与用户名。记录命令输出的组织 ID。
 
    ```powershell
    go run ./cmd/partnerledger bootstrap-org -kind MANUFACTURER -name "演示厂家" -username vendor_demo
    go run ./cmd/partnerledger bootstrap-org -kind RESELLER -name "演示经销商" -username dealer_demo
+   go run ./cmd/partnerledger bootstrap-org -kind CUSTOMER -name "演示采购方" -username customer_demo
    Remove-Item Env:PARTNERLEDGER_BOOTSTRAP_PASSWORD
    ```
 
-4. 启动 API 和检查就绪状态。
+4. 维护者记录已获授权的代理关系。把示例 ID 替换为上一步取得的实际组织 ID。
+
+   ```powershell
+   go run ./cmd/partnerledger link-customer -customer 31 -reseller 24
+   ```
+
+5. 启动 API 和检查就绪状态。该版本对应数据库迁移 `000003`。
 
    ```powershell
    go run ./cmd/partnerledger serve
@@ -32,9 +39,11 @@
 
 服务默认监听回环地址。前端开发时由 Vite 将 `/api` 代理到 `http://127.0.0.1:8080`。启动后参照 [OpenAPI](openapi.yaml) 调用接口，登录返回的 token 用在 `Authorization: Bearer <token>` 请求头中。AI 解析使用后端的 `DEEPSEEK_API_KEY` 和可配置的 `PARTNERLEDGER_DEEPSEEK_MODEL`。联调请使用脱敏的需求文本。
 
+三端项目通过 `GET /api/channel/v1/organization-links` 查询当前身份的可选关联方，再使用 `/api/channel/v1/projects` 建项和办理。重试同一写入须带回原 `requestId` 和请求体。收到 `revision_conflict` 时先重新加载详情。操作按钮以项目的 `actions` 为准。
+
 ## 验证
 
-`go test ./...` 默认执行模型适配器测试。使用已迁移的开发库时，可按以下方式验证 MySQL、Redis 和产品权限。测试会清理本次创建的账号、商品和会话。
+`go test ./...` 默认执行模型适配器测试。使用已迁移的开发库时，可按以下方式验证 MySQL、Redis、产品和三端项目权限。测试会清理本次创建的账号、商品、项目和会话。
 
 ```powershell
 $env:PARTNERLEDGER_INTEGRATION_TEST = '1'

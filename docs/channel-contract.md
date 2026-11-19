@@ -1,10 +1,10 @@
 # 三端项目协作接口提案 · v1
 
-**状态：供前后端联调，尚未在 Go 服务上线。** 目前正式可用的接口以 [现行 OpenAPI](../backend/openapi.yaml) 为准：登录、注销、个人资料、当前组织、产品目录/发布及代理商 AI 解析。三端演示不请求拟议接口，产品、账号、报价都是本地样例。请勿用演示存储保存客户资料。
+**状态：Go 服务已实现客户身份、组织绑定、项目查询和创建，以及询价、撤回、缺口、补资料操作。** 现行接口以 [OpenAPI](../backend/openapi.yaml) 为准。报价、订单、交付和商机流程仍为后续接口提案。正式 Vue 工作台的对接见 [Issue #1](https://github.com/wweijie473-boop/PartnerLedger/issues/1)。三端演示使用本地样例。
 
 ## 身份和可见范围
 
-建议沿用 `POST /api/auth/login`，请求仍为 `{"username":"采购账号","password":"<输入值>"}`，成功仍返回 `data: {access_token,token_type:"Bearer",expires_in,user}`。新增组织类型 `CUSTOMER` 后，`GET /api/user/profile` 和 `GET /api/org/current` 须同时返回同一组织，例如 `{"id":"31","name":"示例采购企业","kind":"CUSTOMER"}`。不从表单接受角色；完成客户开户、组织关联和权限测试后再开放密码登录。
+继续使用 `POST /api/auth/login`，请求为 `{"username":"采购账号","password":"<输入值>"}`，成功返回 `data: {access_token,token_type:"Bearer",expires_in,user}`。客户的 `GET /api/user/profile` 和 `GET /api/org/current` 返回同一组织，例如 `{"id":"31","name":"示例采购企业","kind":"CUSTOMER"}`。维护者开通组织和账号并登记代理关系，步骤见 [后端启动说明](../backend/README.md)。
 
 | 调用方 | 查询范围与明细 |
 | --- | --- |
@@ -16,7 +16,7 @@
 
 ## 资源、请求和响应
 
-项目接口前缀 `P = /api/channel/v1/projects`。所有请求用 Bearer。沿用 Go 信封 `{"code":200,"message":"ok","data":...}`，以下示例仅写 `data` 或其中标出的字段。项目 ID、报价版本 ID 均作为不透明字符串处理；演示编号不是正式数据库主键规范。
+项目接口前缀 `P = /api/channel/v1/projects`。所有请求用 Bearer。沿用 Go 信封 `{"code":200,"message":"success","data":...}`，以下示例仅写 `data` 或其中标出的字段。项目 ID、报价版本 ID 均作为不透明字符串处理。客户和代理商可调用 `GET /api/channel/v1/organization-links`，返回授权关联的 `items: [{id,name,kind}]`，用于建项时选择关联组织。
 
 | 操作 | 请求样例 | 响应样例 / 约束 |
 | --- | --- | --- |
