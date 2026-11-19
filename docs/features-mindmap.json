@@ -1,0 +1,1334 @@
+{
+  "title": "渠智链 PartnerLedger｜功能全景",
+  "date": "2026-11-20",
+  "baseline": "9847c69",
+  "subtitle": "面向软件二级代理商的三端协作与商机经营平台",
+  "legend": {
+    "live": "正式已接入",
+    "demo": "演示可用 · 正式待接",
+    "ui": "前端公共功能",
+    "wip": "本机开发中",
+    "scope": "范围边界"
+  },
+  "notes": [
+    "正式已接入指代码已连接真实 API，使用时仍需启动后端并配置数据库、账号与相关服务。",
+    "演示可用指本地样例流程，不表示正式业务接口已上线。",
+    "本机开发中来自当前工作树，未计入主分支已交付功能；本图不会提交这些业务代码。"
+  ],
+  "branches": [
+    {
+      "id": "portal",
+      "title": "门户与账号入口",
+      "status": "ui",
+      "sources": [
+        "frontend/src/Portal.vue",
+        "frontend/src/PortalHeader.vue",
+        "frontend/src/portal-navigation.js",
+        "frontend/src/LiveApp.vue"
+      ],
+      "children": [
+        {
+          "title": "平台门户",
+          "children": [
+            {
+              "title": "平台价值与业务介绍",
+              "id": "f2",
+              "status": "ui"
+            },
+            {
+              "title": "原创抽象动态视觉与减少动态效果适配",
+              "id": "f3",
+              "status": "ui"
+            },
+            {
+              "title": "三方协作案例切换",
+              "id": "f4",
+              "status": "ui"
+            },
+            {
+              "title": "商机拾遗场景介绍",
+              "id": "f5",
+              "status": "ui"
+            },
+            {
+              "title": "关于平台与使用帮助",
+              "id": "f6",
+              "status": "ui"
+            }
+          ],
+          "id": "f1",
+          "status": "ui"
+        },
+        {
+          "title": "统一导航",
+          "children": [
+            {
+              "title": "解决方案与协作菜单",
+              "id": "f8",
+              "status": "ui"
+            },
+            {
+              "title": "站内功能入口搜索",
+              "id": "f9",
+              "status": "ui"
+            },
+            {
+              "title": "三种角色的统一登录入口",
+              "id": "f10",
+              "status": "ui"
+            },
+            {
+              "title": "手机导航与弹层操作",
+              "id": "f11",
+              "status": "ui"
+            }
+          ],
+          "id": "f7",
+          "status": "ui"
+        },
+        {
+          "title": "组织账号",
+          "status": "live",
+          "children": [
+            {
+              "title": "代理商、软件厂商、企业客户登录",
+              "id": "f13",
+              "status": "live"
+            },
+            {
+              "title": "按服务端组织类型核验入口",
+              "id": "f14",
+              "status": "live"
+            },
+            {
+              "title": "查看个人资料与所属组织",
+              "id": "f15",
+              "status": "live"
+            },
+            {
+              "title": "退出登录与会话失效处理",
+              "id": "f16",
+              "status": "live"
+            },
+            {
+              "title": "刷新恢复会话并重新核验身份",
+              "id": "f17",
+              "status": "live"
+            }
+          ],
+          "id": "f12"
+        }
+      ]
+    },
+    {
+      "id": "dealer",
+      "title": "代理商工作台",
+      "status": "live",
+      "sources": [
+        "frontend/src/LiveApp.vue",
+        "frontend/src/live/LiveProjects.vue",
+        "frontend/src/live/ProductCatalog.vue",
+        "frontend/src/channel/ProjectDetail.vue"
+      ],
+      "children": [
+        {
+          "title": "工作总览",
+          "children": [
+            {
+              "title": "可见项目、待我处理、协作方处理中统计",
+              "id": "f19",
+              "status": "live"
+            },
+            {
+              "title": "项目待办直接打开对应记录",
+              "id": "f20",
+              "status": "live"
+            },
+            {
+              "title": "产品、AI、拜访、商机常用入口",
+              "id": "f21",
+              "status": "live"
+            }
+          ],
+          "id": "f18",
+          "status": "live"
+        },
+        {
+          "title": "客户项目台账",
+          "children": [
+            {
+              "title": "选择已关联客户代录需求",
+              "id": "f23",
+              "status": "live"
+            },
+            {
+              "title": "项目名称、需求与目标日期",
+              "id": "f24",
+              "status": "live"
+            },
+            {
+              "title": "搜索项目编号或名称、状态筛选",
+              "id": "f25",
+              "status": "live"
+            },
+            {
+              "title": "待我处理筛选与详情查看",
+              "id": "f26",
+              "status": "live"
+            }
+          ],
+          "id": "f22",
+          "status": "live"
+        },
+        {
+          "title": "需求与厂商询价",
+          "children": [
+            {
+              "title": "查看客户原始需求",
+              "id": "f28",
+              "status": "live"
+            },
+            {
+              "title": "选择真实已发布产品",
+              "id": "f29",
+              "status": "live"
+            },
+            {
+              "title": "手工编写或用本地规则整理摘要",
+              "id": "f30",
+              "status": "live"
+            },
+            {
+              "title": "人工核对后提交厂商询价",
+              "id": "f31",
+              "status": "live"
+            },
+            {
+              "title": "未处理询价可撤回",
+              "id": "f32",
+              "status": "live"
+            },
+            {
+              "title": "向客户要求补资料、向厂商回复资料",
+              "id": "f33",
+              "status": "live"
+            },
+            {
+              "title": "查看厂商附加能力缺口",
+              "id": "f34",
+              "status": "live"
+            }
+          ],
+          "id": "f27",
+          "status": "live"
+        }
+      ]
+    },
+    {
+      "id": "vendor",
+      "title": "软件厂商工作台",
+      "status": "live",
+      "sources": [
+        "frontend/src/live/ProductCatalog.vue",
+        "frontend/src/live/LiveProjects.vue",
+        "backend/internal/channel/actions.go"
+      ],
+      "children": [
+        {
+          "title": "渠道供给",
+          "children": [
+            {
+              "title": "本组织产品新增与编辑",
+              "id": "f36",
+              "status": "live"
+            },
+            {
+              "title": "产品名称、版本与说明",
+              "id": "f37",
+              "status": "live"
+            },
+            {
+              "title": "发布或撤下产品",
+              "id": "f38",
+              "status": "live"
+            },
+            {
+              "title": "产品详情、已加载产品搜索与发布筛选",
+              "id": "f39",
+              "status": "live"
+            },
+            {
+              "title": "目录分页继续加载",
+              "id": "f40",
+              "status": "live"
+            }
+          ],
+          "id": "f35",
+          "status": "live"
+        },
+        {
+          "title": "询价办理",
+          "children": [
+            {
+              "title": "待办统计与代理商询价队列",
+              "id": "f42",
+              "status": "live"
+            },
+            {
+              "title": "查看询价摘要与所选产品",
+              "id": "f43",
+              "status": "live"
+            },
+            {
+              "title": "要求代理商补充资料",
+              "id": "f44",
+              "status": "live"
+            },
+            {
+              "title": "查看代理商回传资料",
+              "id": "f45",
+              "status": "live"
+            },
+            {
+              "title": "标记暂不支持的附加需求",
+              "id": "f46",
+              "status": "live"
+            },
+            {
+              "title": "主询价与能力缺口分别跟进",
+              "id": "f47",
+              "status": "live"
+            }
+          ],
+          "id": "f41",
+          "status": "live"
+        },
+        {
+          "title": "报价与履约",
+          "status": "demo",
+          "children": [
+            {
+              "title": "分项渠道报价与改版",
+              "id": "f49",
+              "status": "demo"
+            },
+            {
+              "title": "登记供货与授权交接记录",
+              "id": "f50",
+              "status": "demo"
+            }
+          ],
+          "id": "f48"
+        }
+      ]
+    },
+    {
+      "id": "customer",
+      "title": "企业客户工作台",
+      "status": "live",
+      "sources": [
+        "frontend/src/live/LiveProjects.vue",
+        "frontend/src/channel/domain.js",
+        "frontend/src/channel/ChannelAction.vue"
+      ],
+      "children": [
+        {
+          "title": "采购需求",
+          "children": [
+            {
+              "title": "选择已关联代理商提交需求",
+              "id": "f52",
+              "status": "live"
+            },
+            {
+              "title": "填写项目名称、业务需求、目标日期",
+              "id": "f53",
+              "status": "live"
+            },
+            {
+              "title": "查看采购项目列表与状态",
+              "id": "f54",
+              "status": "live"
+            },
+            {
+              "title": "回复代理商提出的补充问题",
+              "id": "f55",
+              "status": "live"
+            },
+            {
+              "title": "查看本人可见的项目资料与历史",
+              "id": "f56",
+              "status": "live"
+            }
+          ],
+          "id": "f51",
+          "status": "live"
+        },
+        {
+          "title": "方案决策",
+          "status": "demo",
+          "children": [
+            {
+              "title": "查看对客方案、分项报价与版本",
+              "id": "f58",
+              "status": "demo"
+            },
+            {
+              "title": "申请修改方案",
+              "id": "f59",
+              "status": "demo"
+            },
+            {
+              "title": "确认指定有效版本报价",
+              "id": "f60",
+              "status": "demo"
+            }
+          ],
+          "id": "f57"
+        },
+        {
+          "title": "实施验收",
+          "status": "demo",
+          "children": [
+            {
+              "title": "跟踪供货与实施进度",
+              "id": "f62",
+              "status": "demo"
+            },
+            {
+              "title": "提交验收意见并确认验收",
+              "id": "f63",
+              "status": "demo"
+            },
+            {
+              "title": "退回整改并继续跟踪",
+              "id": "f64",
+              "status": "demo"
+            }
+          ],
+          "id": "f61"
+        }
+      ]
+    },
+    {
+      "id": "opportunity",
+      "title": "商机拾遗与团队人脉",
+      "status": "live",
+      "sources": [
+        "frontend/src/channel/OpportunityDesk.vue",
+        "frontend/src/channel/OpportunityForm.vue",
+        "frontend/src/channel/opportunities.js",
+        "backend/internal/channel/opportunity_actions.go"
+      ],
+      "children": [
+        {
+          "title": "留住附加需求",
+          "children": [
+            {
+              "title": "关联主项目记录独立副需求",
+              "id": "f66",
+              "status": "live"
+            },
+            {
+              "title": "先澄清成品接口、对接服务或插件等类型",
+              "id": "f67",
+              "status": "live"
+            },
+            {
+              "title": "记录 ERP、MES、WMS、OA、CRM、IDE 系统范围",
+              "id": "f68",
+              "status": "live"
+            },
+            {
+              "title": "主项目与商机分别留存、互相跳转",
+              "id": "f69",
+              "status": "live"
+            }
+          ],
+          "id": "f65",
+          "status": "live"
+        },
+        {
+          "title": "团队伙伴与可信推荐",
+          "children": [
+            {
+              "title": "登记伙伴能力、内部引荐人与合作依据",
+              "id": "f71",
+              "status": "live"
+            },
+            {
+              "title": "按能力及源目标系统匹配",
+              "id": "f72",
+              "status": "live"
+            },
+            {
+              "title": "优先显示有合作记录的候选",
+              "id": "f73",
+              "status": "live"
+            },
+            {
+              "title": "显示推荐理由、局限及待核实信息",
+              "id": "f74",
+              "status": "live"
+            },
+            {
+              "title": "明确显示待澄清、无人选或仅登记能力",
+              "id": "f75",
+              "status": "live"
+            },
+            {
+              "title": "新伙伴反向唤回未解决旧需求",
+              "id": "f76",
+              "status": "live"
+            },
+            {
+              "title": "团队共享经验，候选已读按成员记录",
+              "id": "f77",
+              "status": "live"
+            }
+          ],
+          "id": "f70",
+          "status": "live"
+        },
+        {
+          "title": "联系前核对",
+          "children": [
+            {
+              "title": "核对软件版本与接口开放条件",
+              "id": "f79",
+              "status": "live"
+            },
+            {
+              "title": "核对实施地区与交付档期",
+              "id": "f80",
+              "status": "live"
+            },
+            {
+              "title": "记录不匹配原因并排除候选",
+              "id": "f81",
+              "status": "live"
+            },
+            {
+              "title": "存在阻碍项时限制引荐",
+              "id": "f82",
+              "status": "live"
+            },
+            {
+              "title": "复制不含客户、预算、联系方式的询问摘要",
+              "id": "f83",
+              "status": "live"
+            }
+          ],
+          "id": "f78",
+          "status": "live"
+        },
+        {
+          "title": "引荐与结果",
+          "children": [
+            {
+              "title": "人工确认双方同意后登记引荐",
+              "id": "f85",
+              "status": "live"
+            },
+            {
+              "title": "记录介绍费金额与结算条件",
+              "id": "f86",
+              "status": "live"
+            },
+            {
+              "title": "约定客户答复、伙伴回访、费用核对日期",
+              "id": "f87",
+              "status": "live"
+            },
+            {
+              "title": "今天及逾期待办回到对应商机",
+              "id": "f88",
+              "status": "live"
+            },
+            {
+              "title": "登记已促成或未促成及原因",
+              "id": "f89",
+              "status": "live"
+            },
+            {
+              "title": "人工登记介绍费已结清",
+              "id": "f90",
+              "status": "live"
+            },
+            {
+              "title": "获授权的成交结果留作后续匹配依据",
+              "id": "f91",
+              "status": "live"
+            }
+          ],
+          "id": "f84",
+          "status": "live"
+        },
+        {
+          "title": "能力缺口汇总",
+          "children": [
+            {
+              "title": "按能力类型汇总团队副需求",
+              "id": "f93",
+              "status": "live"
+            },
+            {
+              "title": "由缺口回到可见的相关记录",
+              "id": "f94",
+              "status": "live"
+            }
+          ],
+          "id": "f92",
+          "status": "live"
+        }
+      ]
+    },
+    {
+      "id": "visits",
+      "title": "手机拜访与草稿",
+      "status": "live",
+      "sources": [
+        "frontend/src/live/LiveVisits.vue",
+        "frontend/src/live/VisitDrafts.vue",
+        "frontend/src/live/visitDrafts.js",
+        "backend/internal/channel/visits.go"
+      ],
+      "children": [
+        {
+          "title": "低成本记录",
+          "children": [
+            {
+              "title": "一句话记下拜访内容",
+              "id": "f96",
+              "status": "live"
+            },
+            {
+              "title": "立即保存或稍后关联客户项目",
+              "id": "f97",
+              "status": "live"
+            },
+            {
+              "title": "用本地规则拆出主采购事项与附加需求",
+              "id": "f98",
+              "status": "live"
+            },
+            {
+              "title": "人工修改并核对两类需求",
+              "id": "f99",
+              "status": "live"
+            }
+          ],
+          "id": "f95",
+          "status": "live"
+        },
+        {
+          "title": "个人草稿同步",
+          "children": [
+            {
+              "title": "草稿保存到当前成员账号",
+              "id": "f101",
+              "status": "live"
+            },
+            {
+              "title": "同账号可继续读取和编辑",
+              "id": "f102",
+              "status": "live"
+            },
+            {
+              "title": "列出、重开、编辑与删除已同步草稿",
+              "id": "f103",
+              "status": "live"
+            },
+            {
+              "title": "草稿按成员隔离，同事不可读取原文",
+              "id": "f104",
+              "status": "live"
+            },
+            {
+              "title": "选择旧本机草稿同步，保留原记录",
+              "id": "f105",
+              "status": "live"
+            }
+          ],
+          "id": "f100",
+          "status": "live"
+        },
+        {
+          "title": "确认与继续办理",
+          "children": [
+            {
+              "title": "显式确认后生成或复用独立商机",
+              "id": "f107",
+              "status": "live"
+            },
+            {
+              "title": "跳转主项目或已关联商机",
+              "id": "f108",
+              "status": "live"
+            },
+            {
+              "title": "确认附加需求不改写主项目",
+              "id": "f109",
+              "status": "live"
+            },
+            {
+              "title": "响应不确定时保留原请求并重放核对",
+              "id": "f110",
+              "status": "live"
+            }
+          ],
+          "id": "f106",
+          "status": "live"
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "title": "AI 需求整理",
+      "status": "live",
+      "sources": [
+        "frontend/src/live/RequirementParser.vue",
+        "backend/internal/ai/deepseek.go",
+        "frontend/src/channel/ChannelAction.vue"
+      ],
+      "children": [
+        {
+          "title": "模型辅助提取",
+          "children": [
+            {
+              "title": "调用后端 DeepSeek 解析脱敏描述",
+              "id": "f112",
+              "status": "live"
+            },
+            {
+              "title": "提取企业类型、模块与部署方式",
+              "id": "f113",
+              "status": "live"
+            },
+            {
+              "title": "员工人数与授权用户数分开提取",
+              "id": "f114",
+              "status": "live"
+            },
+            {
+              "title": "显示缺失字段与追问",
+              "id": "f115",
+              "status": "live"
+            }
+          ],
+          "id": "f111",
+          "status": "live"
+        },
+        {
+          "title": "人工兜底",
+          "children": [
+            {
+              "title": "编辑并确认解析结果",
+              "id": "f117",
+              "status": "live"
+            },
+            {
+              "title": "未知字段保留为空",
+              "id": "f118",
+              "status": "live"
+            },
+            {
+              "title": "模型不可用时切换手工填写",
+              "id": "f119",
+              "status": "live"
+            },
+            {
+              "title": "确认结果仅留在当前页面",
+              "id": "f120",
+              "status": "live"
+            }
+          ],
+          "id": "f116",
+          "status": "live"
+        },
+        {
+          "title": "能力说明",
+          "status": "scope",
+          "children": [
+            {
+              "title": "真实解析需要后端模型密钥与服务可用",
+              "id": "f122",
+              "status": "scope"
+            },
+            {
+              "title": "询价辅助整理和拜访拆分是本地规则",
+              "id": "f123",
+              "status": "scope"
+            },
+            {
+              "title": "未实现自动联系人联络或自动商机决策",
+              "id": "f124",
+              "status": "scope"
+            }
+          ],
+          "id": "f121"
+        }
+      ]
+    },
+    {
+      "id": "collaboration",
+      "title": "三端业务互通",
+      "status": "live",
+      "sources": [
+        "backend/internal/channel/project.go",
+        "backend/internal/channel/actions.go",
+        "frontend/src/channel/domain.js",
+        "docs/channel-contract.md"
+      ],
+      "children": [
+        {
+          "title": "同一项目协作",
+          "children": [
+            {
+              "title": "客户提需求 → 代理商收到待办",
+              "id": "f126",
+              "status": "live"
+            },
+            {
+              "title": "代理商询价 → 厂商收到记录",
+              "id": "f127",
+              "status": "live"
+            },
+            {
+              "title": "厂商补问 → 代理商向客户澄清 → 回传",
+              "id": "f128",
+              "status": "live"
+            },
+            {
+              "title": "厂商标记缺口 → 代理商另找伙伴",
+              "id": "f129",
+              "status": "live"
+            },
+            {
+              "title": "按角色显示进度、动作与事件时间线",
+              "id": "f130",
+              "status": "live"
+            },
+            {
+              "title": "手动刷新、前台定时刷新与返回窗口更新",
+              "id": "f131",
+              "status": "live"
+            }
+          ],
+          "id": "f125",
+          "status": "live"
+        },
+        {
+          "title": "两套报价",
+          "status": "demo",
+          "children": [
+            {
+              "title": "渠道报价与对客报价分别编号、留版本",
+              "id": "f133",
+              "status": "demo"
+            },
+            {
+              "title": "数量、单价、服务明细、有效期、交付周期",
+              "id": "f134",
+              "status": "demo"
+            },
+            {
+              "title": "报价总额与前版变化展示",
+              "id": "f135",
+              "status": "demo"
+            },
+            {
+              "title": "修改报价保留旧版，过期或替代版本受限",
+              "id": "f136",
+              "status": "demo"
+            }
+          ],
+          "id": "f132"
+        },
+        {
+          "title": "交易与履约闭环",
+          "status": "demo",
+          "children": [
+            {
+              "title": "客户确认指定对客报价",
+              "id": "f138",
+              "status": "demo"
+            },
+            {
+              "title": "代理商单独确认下单",
+              "id": "f139",
+              "status": "demo"
+            },
+            {
+              "title": "有效版本校验与重复下单保护",
+              "id": "f140",
+              "status": "demo"
+            },
+            {
+              "title": "厂商供货 → 代理商实施 → 客户验收",
+              "id": "f141",
+              "status": "demo"
+            },
+            {
+              "title": "退回整改 → 再次提交验收",
+              "id": "f142",
+              "status": "demo"
+            }
+          ],
+          "id": "f137"
+        },
+        {
+          "title": "权限边界",
+          "children": [
+            {
+              "title": "客户只看需求及对客资料",
+              "id": "f144",
+              "status": "live"
+            },
+            {
+              "title": "厂商只看询价摘要等上游资料",
+              "id": "f145",
+              "status": "live"
+            },
+            {
+              "title": "客户看不到渠道进价、折扣、毛利",
+              "id": "f146",
+              "status": "live"
+            },
+            {
+              "title": "厂商看不到代理商对客售价",
+              "id": "f147",
+              "status": "live"
+            },
+            {
+              "title": "人脉、拜访原文、介绍费仅代理商内部可见",
+              "id": "f148",
+              "status": "live"
+            }
+          ],
+          "id": "f143",
+          "status": "live"
+        }
+      ]
+    },
+    {
+      "id": "tables",
+      "title": "表格工作台",
+      "status": "live",
+      "sources": [
+        "frontend/src/tables/TableStudio.vue",
+        "frontend/src/tables/DataGrid.vue",
+        "frontend/src/tables/GridSearch.vue",
+        "docs/table-workspace.md"
+      ],
+      "children": [
+        {
+          "title": "创建与共享",
+          "children": [
+            {
+              "title": "新建、打开与分页加载表格",
+              "id": "f150",
+              "status": "live"
+            },
+            {
+              "title": "重命名表格和列",
+              "id": "f151",
+              "status": "live"
+            },
+            {
+              "title": "增加行数与追加列",
+              "id": "f152",
+              "status": "live"
+            },
+            {
+              "title": "通用、文本、数值、日期、布尔列",
+              "id": "f153",
+              "status": "live"
+            },
+            {
+              "title": "仅自己、组织内只读、组织内可编辑",
+              "id": "f154",
+              "status": "live"
+            }
+          ],
+          "id": "f149",
+          "status": "live"
+        },
+        {
+          "title": "编辑与计算",
+          "children": [
+            {
+              "title": "A1 坐标跳转、双击或 F2 编辑",
+              "id": "f156",
+              "status": "live"
+            },
+            {
+              "title": "键盘移动、Shift 扩选与清空",
+              "id": "f157",
+              "status": "live"
+            },
+            {
+              "title": "从 Excel 粘贴、复制矩形区域",
+              "id": "f158",
+              "status": "live"
+            },
+            {
+              "title": "撤销与重做",
+              "id": "f159",
+              "status": "live"
+            },
+            {
+              "title": "A1 引用、四则运算与括号",
+              "id": "f160",
+              "status": "live"
+            },
+            {
+              "title": "SUM、AVERAGE、MIN、MAX、COUNT",
+              "id": "f161",
+              "status": "live"
+            },
+            {
+              "title": "虚拟窗口读取与稀疏单元格存储",
+              "id": "f162",
+              "status": "live"
+            }
+          ],
+          "id": "f155",
+          "status": "live"
+        },
+        {
+          "title": "查找替换",
+          "children": [
+            {
+              "title": "全表查找、继续扫描与定位结果",
+              "id": "f164",
+              "status": "live"
+            },
+            {
+              "title": "区分大小写与整格匹配",
+              "id": "f165",
+              "status": "live"
+            },
+            {
+              "title": "可选检索公式原文",
+              "id": "f166",
+              "status": "live"
+            },
+            {
+              "title": "替换预览、勾选后批量提交",
+              "id": "f167",
+              "status": "live"
+            },
+            {
+              "title": "列类型不符提示、支持撤销替换",
+              "id": "f168",
+              "status": "live"
+            }
+          ],
+          "id": "f163",
+          "status": "live"
+        },
+        {
+          "title": "保存与导出",
+          "children": [
+            {
+              "title": "自动保存、立即保存及状态反馈",
+              "id": "f170",
+              "status": "live"
+            },
+            {
+              "title": "刷新恢复未同步编辑",
+              "id": "f171",
+              "status": "live"
+            },
+            {
+              "title": "冲突后显式重放或放弃本地改动",
+              "id": "f172",
+              "status": "live"
+            },
+            {
+              "title": "同请求键重试与批次原子性",
+              "id": "f173",
+              "status": "live"
+            },
+            {
+              "title": "CSV 导出与外部公式文本保护",
+              "id": "f174",
+              "status": "live"
+            }
+          ],
+          "id": "f169",
+          "status": "live"
+        },
+        {
+          "title": "容量约束",
+          "status": "scope",
+          "children": [
+            {
+              "title": "可寻址上限 10 万行 × 128 列",
+              "id": "f176",
+              "status": "scope"
+            },
+            {
+              "title": "单批写入或粘贴最多 250 格",
+              "id": "f177",
+              "status": "scope"
+            },
+            {
+              "title": "CSV 单次最多 1 万行或 8 MiB 原始内容",
+              "id": "f178",
+              "status": "scope"
+            },
+            {
+              "title": "公式单范围最多 256 格",
+              "id": "f179",
+              "status": "scope"
+            }
+          ],
+          "id": "f175"
+        }
+      ]
+    },
+    {
+      "id": "foundation",
+      "title": "平台基础与演示",
+      "status": "live",
+      "sources": [
+        "frontend/src/ui/README.md",
+        "frontend/src/WorkspaceShell.vue",
+        "frontend/src/main.js",
+        "backend/internal/api/server.go",
+        "backend/README.md"
+      ],
+      "children": [
+        {
+          "title": "统一交互与组件",
+          "status": "ui",
+          "children": [
+            {
+              "title": "蓝白主题、角色导航与面包屑",
+              "id": "f181",
+              "status": "ui"
+            },
+            {
+              "title": "按钮、卡片、统计、字段、状态标签、业务图标",
+              "id": "f182",
+              "status": "ui"
+            },
+            {
+              "title": "角色协作进度条与组件展示页",
+              "id": "f183",
+              "status": "ui"
+            },
+            {
+              "title": "响应式布局、手机导航抽屉",
+              "id": "f184",
+              "status": "ui"
+            },
+            {
+              "title": "键盘焦点、Escape 关闭、减少动态效果",
+              "id": "f185",
+              "status": "ui"
+            },
+            {
+              "title": "加载、空数据、无权限、错误和重试反馈",
+              "id": "f186",
+              "status": "ui"
+            }
+          ],
+          "id": "f180"
+        },
+        {
+          "title": "会话与数据保护",
+          "children": [
+            {
+              "title": "组织及角色访问隔离",
+              "id": "f188",
+              "status": "live"
+            },
+            {
+              "title": "状态及允许动作由服务端校验",
+              "id": "f189",
+              "status": "live"
+            },
+            {
+              "title": "版本检查防止旧内容覆盖",
+              "id": "f190",
+              "status": "live"
+            },
+            {
+              "title": "幂等请求防止重复写入",
+              "id": "f191",
+              "status": "live"
+            },
+            {
+              "title": "不确定提交恢复与人工核对",
+              "id": "f192",
+              "status": "live"
+            },
+            {
+              "title": "权限范围内记录时间线与业务审计",
+              "id": "f193",
+              "status": "live"
+            }
+          ],
+          "id": "f187",
+          "status": "live"
+        },
+        {
+          "title": "维护与接口交接",
+          "children": [
+            {
+              "title": "开通三类组织账号与客户代理关系",
+              "id": "f195",
+              "status": "live"
+            },
+            {
+              "title": "数据库显式迁移与服务连通检查",
+              "id": "f196",
+              "status": "live"
+            },
+            {
+              "title": "健康、就绪探测与模型配置",
+              "id": "f197",
+              "status": "live"
+            },
+            {
+              "title": "OpenAPI、数据访问层及模块交接文档",
+              "id": "f198",
+              "status": "live"
+            }
+          ],
+          "id": "f194",
+          "status": "live"
+        },
+        {
+          "title": "独立演示空间",
+          "status": "demo",
+          "children": [
+            {
+              "title": "三端 ERP 样例共享本地记录",
+              "id": "f200",
+              "status": "demo"
+            },
+            {
+              "title": "切换演示身份与重置三端样例",
+              "id": "f201",
+              "status": "demo"
+            },
+            {
+              "title": "正式记录与演示数据隔离",
+              "id": "f202",
+              "status": "demo"
+            },
+            {
+              "title": "旧双角色原型独立保留",
+              "id": "f203",
+              "status": "demo"
+            },
+            {
+              "title": "旧原型草稿、报价、订单与四节点交付",
+              "id": "f204",
+              "status": "demo"
+            }
+          ],
+          "id": "f199"
+        }
+      ]
+    },
+    {
+      "id": "pending",
+      "title": "本机进行中与范围边界",
+      "status": "wip",
+      "sources": [
+        "frontend/src/live/VisitPartnerFinder.vue",
+        "frontend/src/channel/PartnerRecommendation.vue",
+        "frontend/src/live/httpVisits.js",
+        "frontend/src/live/LiveVisits.vue"
+      ],
+      "children": [
+        {
+          "title": "本机未提交开发",
+          "children": [
+            {
+              "title": "拜访页直接预览团队伙伴推荐",
+              "id": "f206",
+              "status": "wip"
+            },
+            {
+              "title": "显示引荐人、合作依据和匹配局限",
+              "id": "f207",
+              "status": "wip"
+            },
+            {
+              "title": "调整能力类型与系统匹配条件",
+              "id": "f208",
+              "status": "wip"
+            },
+            {
+              "title": "复制面向内部引荐人的微信询问文案",
+              "id": "f209",
+              "status": "wip"
+            },
+            {
+              "title": "拜访确认携带匹配条件到现有商机接口",
+              "id": "f210",
+              "status": "wip"
+            }
+          ],
+          "id": "f205",
+          "status": "wip"
+        },
+        {
+          "title": "正式待接入",
+          "status": "demo",
+          "children": [
+            {
+              "title": "正式渠道报价与对客报价 API",
+              "id": "f212",
+              "status": "demo"
+            },
+            {
+              "title": "正式订单、供货、实施与验收 API",
+              "id": "f213",
+              "status": "demo"
+            }
+          ],
+          "id": "f211"
+        },
+        {
+          "title": "当前未提供",
+          "status": "scope",
+          "children": [
+            {
+              "title": "支付、开票与自动资金结算",
+              "id": "f215",
+              "status": "scope"
+            },
+            {
+              "title": "自动发放真实软件授权码",
+              "id": "f216",
+              "status": "scope"
+            },
+            {
+              "title": "自动发送微信消息或读取通讯录",
+              "id": "f217",
+              "status": "scope"
+            },
+            {
+              "title": "开放供应商交易市场",
+              "id": "f218",
+              "status": "scope"
+            },
+            {
+              "title": "正式账号自助注册、完整组织成员管理界面",
+              "id": "f219",
+              "status": "scope"
+            }
+          ],
+          "id": "f214"
+        }
+      ]
+    }
+  ]
+}
