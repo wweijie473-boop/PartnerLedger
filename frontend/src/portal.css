@@ -17,28 +17,7 @@
 .pl-kicker { font-size:13px; font-weight:620; letter-spacing:.11em; color:var(--ui-ink-muted); }
 .pl-intro h1 { margin:18px 0 16px; font-size:clamp(42px, 4.7vw, 70px); letter-spacing:-.065em; font-weight:720; line-height:1.12; }
 .pl-subtitle, .pl-case > p:not(.pl-kicker) { color:#515151; line-height:1.85; font-size:16px; }
-.pl-visual { max-width:340px; width:100%; justify-self:end; pointer-events:none; }
-.pl-visual svg { display:block; width:100%; }
-.pl-visual-signal { opacity:0; stroke:#2378bd; stroke-width:2.5; stroke-linecap:round; stroke-dasharray:.2 1; }
-.pl-visual-beacon { transform-box:fill-box; transform-origin:center; }
-@media (prefers-reduced-motion: no-preference) {
-  .pl-visual-signal { animation:pl-signal-arrival 1.4s linear var(--signal-delay) both; }
-  .pl-visual-layer { animation:pl-layer-lift 1.55s ease-in-out var(--layer-delay) both; }
-  .pl-visual-beacon { animation:pl-beacon-pulse 1s ease-in-out 2.45s both; }
-}
-@keyframes pl-signal-arrival {
-  0% { opacity:0; stroke-dashoffset:.2; }
-  18%, 75% { opacity:1; }
-  100% { opacity:0; stroke-dashoffset:-1; }
-}
-@keyframes pl-layer-lift {
-  0%, 100% { transform:translateY(0); }
-  45% { transform:translateY(-6px); }
-}
-@keyframes pl-beacon-pulse {
-  0%, 100% { transform:scale(1); }
-  45% { transform:scale(1.65); }
-}
+.pl-visual { display:block; max-width:430px; width:100%; height:auto; justify-self:end; pointer-events:none; }
 .pl-access { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; scroll-margin-top:16px; }
 .pl-entry { display:flex; flex-direction:column; align-items:start; padding:clamp(18px, 2vw, 29px); border:1px solid #dcdcdc; border-radius:var(--ui-radius-lg); text-decoration:none; background:#fff; transition:background .15s, border-color .15s; }
 .pl-entry:first-child { color:white; background:#1a1a1a; border-color:#1a1a1a; }
@@ -83,7 +62,7 @@
   .pl-logo i, .pl-logo small { display:none; }
   .pl-intro { display:block; padding:36px 0 24px; }
   .pl-intro h1 { margin:12px 0; font-size:clamp(33px,8.7vw,44px); }
-  .pl-visual { width:min(100%,250px); margin:12px auto 0; }
+  .pl-visual { width:min(100%,280px); margin:12px auto 0; }
 }
 .pl-opportunity { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:22px; padding:22px; border:1px solid var(--ui-border); border-radius:var(--ui-radius-lg); }
 .pl-opportunity h2 { margin:8px 0; font-size:23px; }
