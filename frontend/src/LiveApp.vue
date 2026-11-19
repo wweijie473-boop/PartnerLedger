@@ -37,6 +37,8 @@ const username = ref('')
 const password = ref('')
 const organizationName = ref('')
 const confirmPassword = ref('')
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+let typingAnimation
 const signingIn = ref(false)
 const signingOut = ref(false)
 const restoringIdentity = ref(false)
@@ -73,6 +75,15 @@ function selectRole(role) {
   url.pathname = accessPath(mode.value)
   history.replaceState(null, '', url)
   document.title = accessTitle.value + ' · 渠智链'
+}
+
+function animateTyping(event) {
+  if (event.isComposing || reducedMotion.matches || !event.target.matches('.ui-field input')) return
+  typingAnimation?.cancel()
+  typingAnimation = event.target.animate([
+    { backgroundColor: '#edf6ff' },
+    { backgroundColor: '#ffffff' },
+  ], { duration: 200, easing: 'ease-out' })
 }
 
 function setSession(value) {
@@ -265,10 +276,10 @@ function openOpportunity(id = '', projectId = '') {
     <section class="access-form-wrap" aria-labelledby="access-title">
       <h1 id="access-title">{{ accessTitle }}</h1>
       <UiCard class="access-panel">
-        <form class="form-grid" aria-labelledby="access-title" @submit.prevent="isRegister ? signUp() : signIn()">
+        <form class="form-grid" aria-labelledby="access-title" @input="animateTyping" @submit.prevent="isRegister ? signUp() : signIn()">
           <fieldset class="access-roles" :disabled="signingIn">
             <legend>选择身份</legend>
-            <div>
+            <div class="access-role-options">
               <label v-for="(identity, role) in entrances" :key="role">
                 <input type="radio" name="role" :value="role" :checked="entry === role" required @change="selectRole(role)">
                 <span>{{ identity.label }}</span>

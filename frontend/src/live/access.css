@@ -3,7 +3,7 @@
   grid-template-rows: auto 1fr;
   min-height: 100svh;
   padding-inline: clamp(16px, 5vw, 72px);
-  background: var(--ui-canvas);
+  background: var(--ui-surface);
 }
 .access-header { width: min(100%,1240px); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 54px; border-bottom: 1px solid var(--ui-border); }
 .access-brand, .access-back, .access-inline-link { display: inline-flex; align-items: center; gap: 6px; color: var(--ui-link); }
@@ -13,18 +13,81 @@
 .access-back:hover, .access-brand:hover { text-decoration: underline; }
 .access-form-wrap { width: min(100%,414px); margin-inline: auto; align-self: center; padding-block: 36px 56px; }
 .access-form-wrap h1 { margin: 0 0 18px; text-align: center; font-size: clamp(22px,4vw,28px); font-weight: 400; }
-.access-panel { --ui-card-padding: 24px; }
+.access-panel.ui-card {
+  --ui-card-padding: 24px;
+  border: 0;
+  background: #e1efff;
+  box-shadow: none;
+  animation: access-panel-in .22s ease-out;
+}
 .access-panel .form-grid { gap: 14px; }
-.access-panel :deep(.ui-field label) { font-size: 13px; font-weight: 400; }
-.access-panel :deep(.ui-field input) { min-height: 36px; font-size: 13px; }
+.access-panel :deep(.ui-field label) {
+  position: relative;
+  font-size: 13px;
+  font-weight: 400;
+  transition: color .16s ease, padding-left .16s ease;
+}
+.access-panel :deep(.ui-field label::before) {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ui-link);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity .16s ease;
+}
+.access-panel :deep(.ui-field:focus-within label) { padding-left: 11px; color: var(--ui-link); }
+.access-panel :deep(.ui-field:focus-within label::before) { opacity: 1; }
+.access-panel :deep(.ui-field input) {
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ui-surface);
+  font-size: 13px;
+  caret-color: var(--ui-link);
+  transition: box-shadow .16s ease;
+}
+.access-panel :deep(.ui-field input:autofill) { box-shadow: inset 0 0 0 100px var(--ui-surface); }
+.access-panel :deep(.ui-field input:focus) { box-shadow: 0 3px 12px #005a9e26; }
+.access-panel :deep(.ui-field input:autofill:focus) { box-shadow: inset 0 0 0 100px var(--ui-surface), 0 3px 12px #005a9e26; }
+.access-panel :deep(.ui-field input:focus-visible) { outline: none; }
 .access-roles { display: block; min-width: 0; padding: 0; margin: 0; border: 0; }
 .access-roles legend { padding: 0; margin-bottom: 6px; font-size: 13px; }
-.access-roles > div { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; }
+.access-role-options {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 3px;
+  border-radius: 9px;
+  background: #cfe3fa;
+}
+.access-role-options::before {
+  content: '';
+  position: absolute;
+  inset: 3px auto 3px 3px;
+  width: calc((100% - 6px) / 3);
+  border-radius: 6px;
+  background: var(--ui-surface);
+  box-shadow: 0 1px 3px #005a9e20;
+  opacity: 0;
+  transform: translateX(var(--role-offset, 0%));
+  transition: opacity .16s ease, transform .23s cubic-bezier(.23, 1, .32, 1);
+  pointer-events: none;
+}
+.access-role-options:has(input:checked)::before { opacity: 1; }
+.access-role-options:has(label:nth-child(2) input:checked) { --role-offset: 100%; }
+.access-role-options:has(label:nth-child(3) input:checked) { --role-offset: 200%; }
 .access-roles label { position: relative; cursor: pointer; }
 .access-roles input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.access-roles span { display: grid; min-height: 34px; place-items: center; padding: 3px; border: 1px solid var(--ui-border); border-radius: 6px; background: var(--ui-surface-muted); font-size: 12px; }
-.access-roles input:checked + span { color: var(--ui-link); border-color: var(--ui-accent); background: var(--ui-accent-bg); }
-.access-roles input:focus-visible + span { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+.access-roles span { display: grid; min-height: 34px; place-items: center; padding: 3px; border-radius: 6px; font-size: 12px; transition: color .16s ease, background-color .16s ease; }
+.access-roles label:hover input:not(:checked, :disabled) + span { background: #ffffff66; }
+.access-roles input:checked + span { color: var(--ui-link); font-weight: 500; }
+.access-roles input:focus-visible + span { outline: 2px solid var(--ui-focus); outline-offset: -2px; }
+.access-roles:disabled label { cursor: default; }
 .access-actions { display: flex; justify-content: center; margin-top: 2px; }
 .access-actions .ui-button { min-width: 78px; min-height: 33px; padding-inline: 14px; font-size: 13px; font-weight: 400; }
 .access-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
@@ -36,9 +99,23 @@
 .live-tiles .ui-card { display: flex; flex-direction: column; border-top: 3px solid var(--ui-accent-border); }
 .live-tiles :deep(.ui-card-body) { margin-top: auto; }
 .identity-notice { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--ui-info-bg); color: var(--ui-info-ink); border-radius: 6px; margin-bottom: 20px; }
+@keyframes access-panel-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media(prefers-reduced-motion: reduce) {
+  .access-panel.ui-card { animation: none; }
+  .access-panel :deep(.ui-field label), .access-panel :deep(.ui-field label::before), .access-panel :deep(.ui-field input), .access-role-options::before, .access-roles span { transition: none; }
+}
+@media(forced-colors: active) {
+  .access-panel :deep(.ui-field input) { border: 1px solid ButtonText; }
+  .access-panel :deep(.ui-field input:focus-visible) { outline: 2px solid Highlight; outline-offset: 2px; }
+  .access-roles input:checked + span { border: 1px solid Highlight; }
+}
 @media(max-width:540px) {
   .access-form-wrap { padding-block: 26px 32px; }
-  .access-panel { --ui-card-padding: 18px; }
+  .access-panel.ui-card { --ui-card-padding: 18px; }
+  .access-panel :deep(.ui-field input) { font-size: 16px; }
   .access-actions .ui-button { min-height: 36px; }
   .access-back { font-size: 12px; }
 }
