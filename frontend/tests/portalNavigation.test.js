@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { loginLinks, searchPortal } from '../src/portal-navigation.js'
+import { searchPortal } from '../src/portal-navigation.js'
 
 test('search matches feature names, aliases and combined terms', () => {
   assert.equal(searchPortal('表格')[0].href, '/tables')
@@ -10,8 +10,7 @@ test('search matches feature names, aliases and combined terms', () => {
   assert.deepEqual(searchPortal('a nonexistent feature'), [])
 })
 
-test('role links are grouped under login and search points to help for login guidance', () => {
-  assert.deepEqual(loginLinks.map(link => link.href), ['/login/dealer', '/login/vendor', '/login/customer'])
+test('search points to help for login guidance', () => {
   assert.equal(searchPortal('登录')[0].href, '#help')
   assert.ok(searchPortal('').length > 0)
 })

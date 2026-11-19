@@ -23,9 +23,10 @@ import (
 const SessionTTL = 12 * time.Hour
 
 var (
-	ErrCredentials = errors.New("invalid credentials")
-	ErrSession     = errors.New("invalid session")
-	usernameFormat = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{2,63}$`)
+	ErrCredentials  = errors.New("invalid credentials")
+	ErrSession      = errors.New("invalid session")
+	ErrRegistration = errors.New("invalid registration")
+	usernameFormat  = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{2,63}$`)
 )
 
 type Service struct {
@@ -37,21 +38,21 @@ func New(db *gorm.DB, sessions *redis.Client) *Service {
 	return &Service{db: db, sessions: sessions}
 }
 
-// CreateOrganization provisions the first account from the operator CLI.
+// CreateOrganization provisions an isolated organization and its first account.
 func CreateOrganization(ctx context.Context, db *gorm.DB, name, kind, username, password string) (uint64, error) {
 	name = strings.TrimSpace(name)
 	username = normalize(username)
 	if name == "" || utf8.RuneCountInString(name) > 150 {
-		return 0, errors.New("organization name must contain 1 to 150 characters")
+		return 0, fmt.Errorf("%w: organization name must contain 1 to 150 characters", ErrRegistration)
 	}
 	if kind != data.Manufacturer && kind != data.Reseller && kind != data.Customer {
-		return 0, errors.New("organization kind must be MANUFACTURER, RESELLER or CUSTOMER")
+		return 0, fmt.Errorf("%w: organization kind must be MANUFACTURER, RESELLER or CUSTOMER", ErrRegistration)
 	}
 	if !usernameFormat.MatchString(username) {
-		return 0, errors.New("username must contain 3 to 64 letters, digits, dots, underscores or hyphens")
+		return 0, fmt.Errorf("%w: username must contain 3 to 64 letters, digits, dots, underscores or hyphens", ErrRegistration)
 	}
 	if len(password) < 12 || len(password) > 72 {
-		return 0, errors.New("password must contain 12 to 72 bytes")
+		return 0, fmt.Errorf("%w: password must contain 12 to 72 bytes", ErrRegistration)
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

@@ -67,6 +67,7 @@ func TestOrganizationIsolation(t *testing.T) {
 	}
 	request(http.MethodGet, "/readyz", "", "", 200, nil)
 	request(http.MethodGet, "/api/products", "", "", 401, nil)
+	testPublicRegistration(t, db, cache, router)
 
 	ctx := context.Background()
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)

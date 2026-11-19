@@ -7,12 +7,18 @@ import RequirementParser from './live/RequirementParser.vue'
 import LiveProjects from './live/LiveProjects.vue'
 import LiveVisits from './live/LiveVisits.vue'
 import LiveOpportunities from './live/LiveOpportunities.vue'
-import { entrances, organizationRole } from './live/entrances.js'
+import { entrances, organizationKinds, organizationRole } from './live/entrances.js'
 import { UiBadge, UiButton, UiCard, UiField, UiIcon, UiState } from './ui/index.js'
 
-const props = defineProps({ role: { type: String, required: true, validator: (value) => Object.hasOwn(entrances, value) } })
+const props = defineProps({
+  role: { type: String, default: '', validator: (value) => value === '' || Object.hasOwn(entrances, value) },
+  mode: { type: String, default: 'login' },
+})
 const entry = ref(props.role)
+const mode = ref(props.mode)
 const portal = computed(() => entrances[entry.value])
+const isRegister = computed(() => mode.value === 'register')
+const accessTitle = computed(() => (portal.value?.label || '') + (isRegister.value ? '注册' : '登录'))
 const sessionKey = 'partnerledger-api-session'
 
 function restoreSession() {
@@ -29,10 +35,13 @@ const user = ref(null)
 const organization = ref(null)
 const username = ref('')
 const password = ref('')
+const organizationName = ref('')
+const confirmPassword = ref('')
 const signingIn = ref(false)
 const signingOut = ref(false)
 const restoringIdentity = ref(false)
 const loginError = ref('')
+const accessNotice = ref('')
 const identityError = ref('')
 const logoutError = ref('')
 const entryParams = new URLSearchParams(location.search)
@@ -41,7 +50,7 @@ const captureProject = ref(entryParams.get('captureProject') || '')
 const navigationRevision = ref(0)
 const isManufacturer = computed(() => organization.value?.kind === 'MANUFACTURER')
 const isDealer = computed(() => organization.value?.kind === 'RESELLER')
-const kindLabel = computed(() => portal.value.label)
+const kindLabel = computed(() => portal.value?.label || '')
 const navigation = computed(() => [
   { id: 'overview', label: '工作总览', icon: 'overview' },
   { id: 'projects', label: entry.value === 'customer' ? '我的采购项目' : isManufacturer.value ? '渠道询价' : '客户项目', icon: 'request' },
@@ -49,8 +58,22 @@ const navigation = computed(() => [
   ...(isDealer.value ? [{ id: 'requirement', label: 'AI 需求解析', icon: 'request' }] : []),
   ...(isDealer.value ? [{ id: 'visits', label: '记拜访', icon: 'request' }] : []),
   ...(isDealer.value ? [{ id: 'opportunities', label: '商机拾遗', icon: 'workflow' }] : []),
-  { id: 'account', label: '账号与组织', icon: portal.value.icon },
+  { id: 'account', label: '账号与组织', icon: portal.value?.icon || 'customer' },
 ])
+
+function accessPath(nextMode, role = entry.value) {
+  return '/' + nextMode + (role ? '/' + role : '')
+}
+
+function selectRole(role) {
+  entry.value = role
+  loginError.value = ''
+  accessNotice.value = ''
+  const url = new URL(location.href)
+  url.pathname = accessPath(mode.value)
+  history.replaceState(null, '', url)
+  document.title = accessTitle.value + ' · 渠智链'
+}
 
 function setSession(value) {
   session.value = value
@@ -65,7 +88,7 @@ function clearSession(message = '') {
   user.value = null
   organization.value = null
   view.value = 'overview'
-  document.title = portal.value.label + '登录 · 渠智链'
+  document.title = accessTitle.value + ' · 渠智链'
   identityError.value = ''
   logoutError.value = ''
   loginError.value = message
@@ -100,10 +123,17 @@ async function loadIdentity() {
     if (session.value !== active) return
     const accountRole = organizationRole(profile, currentOrg)
     if (!accountRole) throw new Error('账号与组织信息不一致或组织类型暂不支持。')
-    if (entry.value !== accountRole) {
+    if (entry.value && entry.value !== accountRole && !isRegister.value) {
       await authenticated('/api/auth/logout', { method: 'POST' })
       clearSession('此账号属于' + entrances[accountRole].label + '组织，请从对应入口登录。')
       return
+    }
+    if (!entry.value || isRegister.value) {
+      entry.value = accountRole
+      mode.value = 'login'
+      const url = new URL(location.href)
+      url.pathname = accessPath('login')
+      history.replaceState(null, '', url)
     }
     document.title = entrances[accountRole].label + '工作台 · 渠智链'
     user.value = profile
@@ -121,8 +151,9 @@ onMounted(loadIdentity)
 async function signIn() {
   if (signingIn.value) return
   loginError.value = ''
-  if (!username.value.trim() || !password.value) {
-    loginError.value = '请输入用户名和密码。'
+  accessNotice.value = ''
+  if (!entry.value || !username.value.trim() || !password.value) {
+    loginError.value = '请选择身份并输入用户名和密码。'
     return
   }
   signingIn.value = true
@@ -140,6 +171,46 @@ async function signIn() {
     loginError.value = error.message
   } finally {
     password.value = ''
+    signingIn.value = false
+  }
+}
+
+async function signUp() {
+  if (signingIn.value) return
+  loginError.value = ''
+  const size = new TextEncoder().encode(password.value).length
+  if (!entry.value || !organizationName.value.trim() || !/^[a-z0-9][a-z0-9_.-]{2,63}$/i.test(username.value.trim())) {
+    loginError.value = '请选择身份、填写组织名称，并使用 3–64 位字母、数字、点、下划线或连字符作为用户名。'
+    return
+  }
+  if (size < 12 || size > 72) {
+    loginError.value = '密码长度须为 12–72 字节。'
+    return
+  }
+  if (password.value !== confirmPassword.value) {
+    loginError.value = '两次输入的密码不一致。'
+    return
+  }
+  signingIn.value = true
+  try {
+    await requestApi('/api/auth/register', {
+      method: 'POST',
+      body: {
+        username: username.value.trim(),
+        password: password.value,
+        organization_name: organizationName.value.trim(),
+        organization_kind: organizationKinds[entry.value],
+      },
+    })
+    password.value = ''
+    confirmPassword.value = ''
+    mode.value = 'login'
+    history.replaceState(null, '', accessPath('login'))
+    document.title = accessTitle.value + ' · 渠智链'
+    accessNotice.value = '注册成功，请用刚创建的账号登录。'
+  } catch (error) {
+    loginError.value = error.message
+  } finally {
     signingIn.value = false
   }
 }
@@ -186,37 +257,46 @@ function openOpportunity(id = '', projectId = '') {
   <main v-if="!session" class="access-page">
     <header class="access-header">
       <a class="access-brand" href="/">
-        <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
+        <img class="brand-mark" src="/brand/partnerledger-logo.png" width="30" height="30" alt="" />
         渠智链 AI
       </a>
-      <a href="/" class="access-back"><UiIcon name="back" :size="15" /> 返回平台首页</a>
+      <a href="/" class="access-back"><UiIcon name="back" :size="14" /> 返回首页</a>
     </header>
-    <div class="access-grid">
-      <section class="access-story">
-        <p class="access-kicker">PartnerLedger / {{ portal.english }}</p>
-        <h1>{{ portal.label }}登录</h1>
-        <p class="access-intro">{{ portal.description }}</p>
-        <ul class="access-steps">
-          <li v-for="step in portal.steps" :key="step"><UiIcon name="check" :size="17" />{{ step }}</li>
-        </ul>
-      </section>
-      <UiCard class="access-panel" title="使用组织账号登录" description="请输入管理员为你开通的账号。">
-        <template #actions><UiIcon :name="portal.icon" :size="22" /></template>
-        <form class="form-grid" @submit.prevent="signIn">
-          <UiField label="用户名" required v-slot="{ control }">
-            <input v-bind="control" v-model="username" autocomplete="username" maxlength="64" required />
+    <section class="access-form-wrap" aria-labelledby="access-title">
+      <h1 id="access-title">{{ accessTitle }}</h1>
+      <UiCard class="access-panel">
+        <form class="form-grid" aria-labelledby="access-title" @submit.prevent="isRegister ? signUp() : signIn()">
+          <fieldset class="access-roles" :disabled="signingIn">
+            <legend>选择身份</legend>
+            <div>
+              <label v-for="(identity, role) in entrances" :key="role">
+                <input type="radio" name="role" :value="role" :checked="entry === role" required @change="selectRole(role)">
+                <span>{{ identity.label }}</span>
+              </label>
+            </div>
+          </fieldset>
+          <UiField v-if="isRegister" label="组织名称" hint="注册会创建一个独立组织。" required v-slot="{ control }">
+            <input v-bind="control" v-model="organizationName" autocomplete="organization" maxlength="150" required />
           </UiField>
-          <UiField label="密码" required v-slot="{ control }">
-            <input v-bind="control" v-model="password" type="password" autocomplete="current-password" required />
+          <UiField label="用户名" required v-slot="{ control }">
+            <input v-bind="control" v-model="username" autocomplete="username" maxlength="64" autocapitalize="none" required />
+          </UiField>
+          <UiField label="密码" :hint="isRegister ? '12–72 字节' : ''" required v-slot="{ control }">
+            <input v-bind="control" v-model="password" type="password" :autocomplete="isRegister ? 'new-password' : 'current-password'" maxlength="72" required />
+          </UiField>
+          <UiField v-if="isRegister" label="确认密码" required v-slot="{ control }">
+            <input v-bind="control" v-model="confirmPassword" type="password" autocomplete="new-password" maxlength="72" required />
           </UiField>
           <p v-if="loginError" class="form-error" role="alert">{{ loginError }}</p>
-          <UiButton type="submit" variant="primary" end-icon="forward" :loading="signingIn">登录</UiButton>
+          <p v-if="accessNotice" class="access-notice" role="status">{{ accessNotice }}</p>
+          <div class="access-actions"><UiButton type="submit" variant="primary" compact :loading="signingIn">{{ isRegister ? '注册' : '登录' }}</UiButton></div>
         </form>
-        <template #footer>
-          <div class="access-demo"><span>先了解业务流程？</span><a :href="'/experience/' + entry">体验{{ portal.label }}演示 <UiIcon name="open-detail" :size="14" /></a></div>
-        </template>
       </UiCard>
-    </div>
+      <div class="access-links">
+        <a :href="accessPath(isRegister ? 'login' : 'register')">{{ isRegister ? '已有账号？登录' : '没有账号？注册' }}</a>
+        <a :href="'/experience/' + (entry || 'dealer')">体验演示</a>
+      </div>
+    </section>
   </main>
 
   <main v-else-if="!user || !organization" class="login-screen live-login">

@@ -12,9 +12,12 @@ const pages = {
   '/ui': ['UI 组件库', () => import('./UiGallery.vue')],
   '/demo': ['双角色原型', () => import('./App.vue')],
   '/tables': ['表格工作台', () => import('./tables/TableStudio.vue')],
+  '/login': ['登录', () => import('./LiveApp.vue')],
+  '/register': ['注册', () => import('./LiveApp.vue'), { mode: 'register' }],
 }
 for (const { role, label } of entrances) {
   pages['/login/' + role] = [label + '登录', () => import('./LiveApp.vue'), { role }]
+  pages['/register/' + role] = [label + '注册', () => import('./LiveApp.vue'), { role, mode: 'register' }]
   pages['/experience/' + role] = [label + '工作台 · 本地演示', () => import('./channel/Workspace.vue'), { role }]
 }
 const route = pages[path]

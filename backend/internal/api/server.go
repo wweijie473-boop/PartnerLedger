@@ -46,6 +46,7 @@ func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementPars
 
 	api := r.Group("/api")
 	api.POST("/auth/login", s.login)
+	api.POST("/auth/register", s.register)
 	secured := api.Group("", s.requireAuth)
 	secured.POST("/auth/logout", s.logout)
 	secured.GET("/user/profile", func(c *gin.Context) { respond(c, http.StatusOK, "success", principal(c)) })
