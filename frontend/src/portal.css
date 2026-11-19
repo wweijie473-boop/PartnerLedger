@@ -82,17 +82,17 @@
 .pl-kicker { font-size: 12px; font-weight: 400; color: var(--ui-link); }
 .pl-hero .pl-kicker { color: var(--ui-on-navy-muted); }
 .pl-intro h1 { margin: 18px 0 24px; font-size: 42px; font-weight: 400; line-height: 1.2; }
-.pl-subtitle { color: var(--ui-on-navy-muted); line-height: 1.8; font-size: 16px; }
+.pl-subtitle { max-width: 31em; color: var(--ui-on-navy-muted); line-height: 1.8; font-size: 16px; }
 .pl-hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
 .pl-primary, .pl-secondary { display: inline-flex; justify-content: center; align-items: center; min-height: 36px; padding: 6px 13px; border: 1px solid transparent; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 400; transition: background .15s; }
 .pl-primary { color: var(--ui-on-accent); background: var(--ui-accent); }
 .pl-primary:hover { background: var(--ui-accent-hover); }
 .pl-secondary { color: var(--ui-on-navy); background: transparent; border-color: var(--ui-on-navy-muted); }
 .pl-secondary:hover { background: #ffffff14; }
-.pl-journey h2, .pl-opportunity h2 { font-size: 36px; line-height: 1.3; font-weight: 400; margin-top: 12px; }
+.pl-journey h2, .pl-role-section h2, .pl-opportunity h2 { font-size: 36px; line-height: 1.3; font-weight: 400; }
 .pl-flow-section { background: var(--ui-canvas); border-block: 1px solid var(--ui-border); }
 .pl-journey { display: grid; grid-template-columns: 1fr 1.15fr; align-items: center; gap: 64px; padding-block: 72px; }
-.pl-section-note { color: var(--ui-ink-secondary); max-width: 35ch; margin: 20px 0 24px; }
+.pl-section-note { color: var(--ui-ink-secondary); max-width: 26em; margin: 20px 0 24px; }
 .pl-phases { display: flex; flex-wrap: wrap; gap: 8px; }
 .pl-phases button { border: 1px solid var(--ui-border); background: var(--ui-surface); padding: 6px 10px; color: var(--ui-link); border-radius: 6px; font-size: 13px; }
 .pl-phases button[aria-pressed=true] { background: var(--ui-accent); color: var(--ui-on-accent); border-color: var(--ui-accent); }
@@ -105,9 +105,17 @@
 .pl-case dt { color: var(--ui-ink-muted); }
 .pl-case dd { margin: 0; }
 .pl-case a { font-size: 14px; font-weight: 400; }
-.pl-opportunity { display: grid; grid-template-columns: 1fr 1.15fr; align-items: center; gap: 64px; padding-block: 88px; }
-.pl-opportunity h2 { margin-bottom: 20px; }
-.pl-opportunity p:not(.pl-kicker) { color: var(--ui-ink-secondary); max-width: 48ch; margin-bottom: 24px; }
+.pl-role-section { padding-block: 72px 64px; }
+.pl-role-section > p { color: var(--ui-ink-secondary); margin-top: 12px; }
+.pl-role-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; list-style: none; padding: 0; margin: 28px 0 0; }
+.pl-role-grid li { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; padding: clamp(18px, 2.4vw, 28px); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); }
+.pl-role-icon { display: grid; width: 38px; height: 38px; place-items: center; margin-bottom: 4px; border-radius: var(--ui-radius-sm); background: var(--ui-accent-bg); color: var(--ui-link); }
+.pl-role-grid h3 { font-size: 18px; font-weight: 500; }
+.pl-role-grid p { color: var(--ui-ink-secondary); }
+.pl-role-grid a { display: inline-flex; align-items: center; gap: 5px; margin-top: auto; padding-top: 8px; font-size: 13px; }
+.pl-opportunity { display: grid; grid-template-columns: 1fr 1.15fr; align-items: center; gap: 64px; padding-block: 72px; border-top: 1px solid var(--ui-border); }
+.pl-opportunity h2 { margin-block: 10px 20px; }
+.pl-opportunity p:not(.pl-kicker) { color: var(--ui-ink-secondary); max-width: 31em; margin-bottom: 24px; }
 .pl-opportunity small { display: block; margin-top: 14px; color: var(--ui-ink-muted); font-size: 12px; }
 .pl-op-illustration { position: relative; min-height: 280px; display: grid; gap: 24px; align-content: center; padding: 32px; background: radial-gradient(ellipse at top left, var(--ui-accent-border), var(--ui-canvas) 70%); border-radius: 24px; }
 .pl-op-illustration > div { position: relative; display: flex; align-items: center; gap: 16px; padding: 22px; background: var(--ui-surface); border: 1px solid var(--ui-accent-border); border-radius: 12px; box-shadow: var(--ui-shadow-card); color: var(--ui-link); }
@@ -151,16 +159,18 @@
   .pl-op-illustration { min-height: 220px; }
   .pl-footer-grid { grid-template-columns: 1fr 1fr; }
 }
+@media(max-width:640px) {
+  .pl-role-grid { grid-template-columns: 1fr; gap: 12px; }
+}
 @media(max-width:540px) {
   .pl-header .pl-wrap { width: calc(100% - 32px); }
   .pl-intro { padding-block: 40px; gap: 32px; }
   .pl-intro h1 { font-size: 32px; line-height: 40px; }
   .pl-subtitle { font-size: 16px; }
-  .pl-desktop-break { display: none; }
   .pl-hero-actions { gap: 8px; }
   .pl-primary, .pl-secondary { padding-inline: 12px; }
-  .pl-journey, .pl-opportunity { padding-block: 40px; }
-  .pl-journey h2, .pl-opportunity h2 { font-size: 28px; line-height: 36px; }
+  .pl-journey, .pl-role-section, .pl-opportunity { padding-block: 40px; }
+  .pl-journey h2, .pl-role-section h2, .pl-opportunity h2 { font-size: 28px; line-height: 36px; }
   .pl-case { padding: 24px; }
   .pl-case h3 { font-size: 22px; }
   .pl-case dl > div { grid-template-columns: 1fr; gap: 4px; }
