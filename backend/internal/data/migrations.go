@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
 
 	"github.com/golang-migrate/migrate/v4"
 	migratemysql "github.com/golang-migrate/migrate/v4/database/mysql"
@@ -23,12 +24,16 @@ func SchemaReady(ctx context.Context, db *sql.DB) bool {
 }
 
 func Migrate(db *sql.DB) error {
-	source, err := iofs.New(migrationFiles, "migrations")
+	return MigrateNamespace(db, migrationFiles, "pl_schema_migrations")
+}
+
+func MigrateNamespace(db *sql.DB, files fs.FS, historyTable string) error {
+	source, err := iofs.New(files, "migrations")
 	if err != nil {
 		return err
 	}
 	driver, err := migratemysql.WithInstance(db, &migratemysql.Config{
-		MigrationsTable: "pl_schema_migrations",
+		MigrationsTable: historyTable,
 	})
 	if err != nil {
 		return fmt.Errorf("initialize migration driver: %w", err)

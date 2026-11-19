@@ -13,6 +13,14 @@ const apiMessages = {
   dependencies_unavailable: '服务依赖暂不可用，请稍后重试。',
   model_unavailable: 'AI 服务暂不可用，请稍后重试。',
   model_response_error: 'AI 未返回可用结果，请调整需求或重试。',
+  invalid_sheet_request: '表格参数无效，或请求超出本次处理范围。',
+  invalid_sheet_cell: '批量编辑包含无效单元格，未保存本次改动。',
+  sheet_not_found: '表格不存在或已不可见。',
+  sheet_write_forbidden: '当前账号没有表格编辑权限。',
+  sheet_revision_conflict: '其他成员已更新表格，请核对后重试。',
+  sheet_request_conflict: '同一请求编号已用于不同的表格改动。',
+  sheet_request_too_large: '表格请求过大。',
+  sheet_storage_unavailable: '表格存储暂不可用，请稍后重试。',
 }
 
 export class ApiError extends Error {

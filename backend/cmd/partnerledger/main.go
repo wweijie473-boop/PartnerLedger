@@ -19,6 +19,7 @@ import (
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/auth"
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/config"
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/data"
+	"github.com/wweijie473-boop/PartnerLedger/backend/internal/tables"
 )
 
 func main() {
@@ -33,11 +34,11 @@ func run(args []string) error {
 		command, args = args[0], args[1:]
 	}
 	if command == "help" || command == "-h" || command == "--help" {
-		fmt.Println("usage: partnerledger [serve | check | migrate | bootstrap-org | link-customer]")
+		fmt.Println("usage: partnerledger [serve | check | migrate | tables-migrate | bootstrap-org | link-customer]")
 		return nil
 	}
-	if command != "serve" && command != "check" && command != "migrate" && command != "bootstrap-org" && command != "link-customer" {
-		return errors.New("expected serve, check, migrate, bootstrap-org or link-customer")
+	if command != "serve" && command != "check" && command != "migrate" && command != "tables-migrate" && command != "bootstrap-org" && command != "link-customer" {
+		return errors.New("expected serve, check, migrate, tables-migrate, bootstrap-org or link-customer")
 	}
 	if len(args) > 0 && command != "bootstrap-org" && command != "link-customer" {
 		return fmt.Errorf("%s does not accept positional arguments", command)
@@ -52,7 +53,7 @@ func run(args []string) error {
 			return err
 		}
 	}
-	sqlDB, err := data.OpenSQL(cfg.MySQLDSN, command == "migrate")
+	sqlDB, err := data.OpenSQL(cfg.MySQLDSN, command == "migrate" || command == "tables-migrate")
 	if err != nil {
 		return err
 	}
@@ -60,11 +61,15 @@ func run(args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if command == "migrate" {
+	if command == "migrate" || command == "tables-migrate" {
 		if err := sqlDB.PingContext(ctx); err != nil {
 			return fmt.Errorf("MySQL connection failed: %w", err)
 		}
-		if err := data.Migrate(sqlDB); err != nil {
+		migrate := data.Migrate
+		if command == "tables-migrate" {
+			migrate = tables.Migrate
+		}
+		if err := migrate(sqlDB); err != nil {
 			return fmt.Errorf("migrate MySQL: %w", err)
 		}
 		fmt.Println("MySQL migrations are up to date")

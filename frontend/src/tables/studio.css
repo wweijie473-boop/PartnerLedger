@@ -1,0 +1,38 @@
+.studio-page { --ink: #233149; --muted: #526377; --line: #dce4ed; min-height: 100vh; color: var(--ink); background: #f5f7fa }
+.studio-top { border-bottom: 1px solid var(--line); background: #fff }
+.studio-top-inner { max-width: 1600px; margin-inline: auto; padding: .9rem clamp(.8rem, 3vw, 2.3rem); display: flex; align-items: center; gap: .8rem; flex-wrap: wrap }
+.studio-brand { font-size: 1.08rem; font-weight: 750; color: inherit; text-decoration: none }
+.studio-crumb { border-inline-start: 1px solid var(--line); padding-inline-start: .8rem; color: var(--muted) }
+.studio-identity { margin-inline-start: auto; color: var(--muted); font-size: .84rem; overflow-wrap: anywhere }
+.studio-content { max-width: 1600px; margin-inline: auto; padding: clamp(.85rem, 3vw, 2.2rem); display: grid; grid-template-columns: minmax(185px, 230px) minmax(0, 1fr); gap: 1.25rem }
+.studio-list { min-width: 0; align-self: start; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: .75rem }
+.studio-list h2 { font-size: .85rem; color: var(--muted); margin: .2rem .3rem .65rem }
+.studio-list nav { display: grid; gap: .2rem; margin-block: .5rem; max-height: 58vh; overflow: auto }
+.studio-list nav button { text-align: left; border-color: transparent; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.studio-list button[aria-current="true"] { background: #eaf2ff; border-color: #98b8e7; color: #17467f }
+.studio-page button.studio-primary { background: #235ba6; border-color: #235ba6; color: #fff }
+.studio-page button.studio-primary:hover:not(:disabled) { background: #16467f }
+.studio-list .studio-primary { width: 100% }
+.studio-work { min-width: 0 }
+.studio-title { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: .75rem; margin-block-end: .9rem }
+.studio-title h1, .studio-auth h1 { font-size: clamp(1.4rem, 3vw, 1.85rem); margin: 0; overflow-wrap: anywhere }
+.studio-title p, .studio-auth p { margin: .2rem 0 0; color: var(--muted); font-size: .88rem }
+.studio-actions { display: flex; flex-wrap: wrap; gap: .5rem }
+.studio-empty, .studio-auth { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 1.3rem }
+.studio-auth { max-width: 440px; margin: clamp(1rem, 8vh, 6rem) auto; width: calc(100% - 2rem) }
+.studio-auth form, .studio-form { display: grid; gap: .7rem }
+.studio-auth form { margin-block-start: 1rem }
+.studio-page label { display: grid; gap: .25rem; font-size: .86rem }
+.studio-page input, .studio-page select { width: 100%; min-width: 0; padding: .42rem .5rem; border: 1px solid #bfcbd9; border-radius: 5px; background: #fff; color: var(--ink); font: inherit }
+.studio-alert { margin: 0 0 .65rem; padding: .54rem .7rem; border-radius: 6px; background: #fff0e7; color: #7d3310; overflow-wrap: anywhere }
+.studio-dialog { width: min(540px, calc(100vw - 1.5rem)); border: 1px solid #bec9d7; border-radius: 12px; padding: 1.15rem; color: var(--ink) }
+.studio-dialog::backdrop { background: #26334470 }
+.studio-dialog h2 { margin: 0 0 .25rem; font-size: 1.12rem }
+.studio-fields { display: grid; gap: .4rem; max-height: 33vh; overflow-y: auto; padding: .2rem }
+.studio-column-edit { display: grid; grid-template-columns: 2.1rem minmax(0, 1fr) minmax(95px, 28%); align-items: center; gap: .4rem }
+.studio-dialog footer { display: flex; justify-content: flex-end; gap: .5rem }
+@media (max-width: 700px) {
+  .studio-content { grid-template-columns: minmax(0, 1fr); gap: .7rem }
+  .studio-list nav { display: flex; overflow-x: auto; max-height: none }
+  .studio-list .studio-primary { width: auto }
+}

@@ -5,6 +5,7 @@
 - [团队分工与开发计划](团队分工与开发计划.md)
 - [启动前端与体验三个工作台](frontend/README.md)
 - [Go 后端启动说明](backend/README.md)
+- [表格工作台与嵌入接口](docs/table-workspace.md)
 - [首批 OpenAPI 契约](backend/openapi.yaml)
 - [三端项目协作接口提案与联调样例](docs/channel-contract.md)
 - [商机拾遗 · 给后端伙伴的交班文档](docs/opportunity-handoff.md)

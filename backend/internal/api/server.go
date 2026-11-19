@@ -16,6 +16,7 @@ import (
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/auth"
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/channel"
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/data"
+	"github.com/wweijie473-boop/PartnerLedger/backend/internal/tables"
 	"gorm.io/gorm"
 )
 
@@ -30,10 +31,11 @@ type server struct {
 	auth    *auth.Service
 	parser  RequirementParser
 	channel channel.Service
+	tables  tables.Service
 }
 
 func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementParser) http.Handler {
-	s := server{db: db, sql: sqlDB, cache: cache, auth: auth.New(db, cache), parser: parser, channel: channel.New(db)}
+	s := server{db: db, sql: sqlDB, cache: cache, auth: auth.New(db, cache), parser: parser, channel: channel.New(db), tables: tables.New(sqlDB)}
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.NoRoute(func(c *gin.Context) { respond(c, http.StatusNotFound, "not_found", nil) })
@@ -69,6 +71,7 @@ func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementPars
 	projects.PUT("/visits/:id", s.saveVisit)
 	projects.DELETE("/visits/:id", s.deleteVisit)
 	projects.POST("/visits/:id/confirm", s.confirmVisit)
+	s.registerSheets(secured.Group("/tables/v1/sheets"))
 	return r
 }
 

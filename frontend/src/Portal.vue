@@ -16,7 +16,7 @@ const phases = [
   <div class="pl-portal">
     <header class="pl-header"><div class="pl-wrap pl-bar">
       <a class="pl-logo" href="/" aria-label="渠智链首页"><span><UiIcon name="workflow" :size="23"/></span><b>渠智链</b><i></i><small>PartnerLedger</small></a>
-      <nav aria-label="主导航"><a href="#access">工作台入口</a><a href="#journey">协作流程</a></nav>
+      <nav aria-label="主导航"><a href="#access">工作台入口</a><a href="/tables">表格</a><a href="#journey">协作流程</a></nav>
     </div></header>
     <main class="pl-wrap">
       <section class="pl-intro" aria-labelledby="portal-title">

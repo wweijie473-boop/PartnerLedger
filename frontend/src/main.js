@@ -11,6 +11,7 @@ const pages = {
   '/': ['软件渠道协作平台', () => import('./Portal.vue')],
   '/ui': ['UI 组件库', () => import('./UiGallery.vue')],
   '/demo': ['双角色原型', () => import('./App.vue')],
+  '/tables': ['表格工作台', () => import('./tables/TableStudio.vue')],
 }
 for (const { role, label } of entrances) {
   pages['/login/' + role] = [label + '登录', () => import('./LiveApp.vue'), { role }]
