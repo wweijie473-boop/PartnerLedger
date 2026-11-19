@@ -46,3 +46,20 @@
 .grid-cell textarea { position: absolute; inset: 0; width: 100%; height: 100%; appearance: none; padding: .27rem .43rem; border: 2px solid var(--grid-accent); border-radius: 0; resize: none; line-height: 20px; font: inherit; color: inherit; z-index: 1; background: #fff }
 .grid-footer { justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--grid-line); color: #57667a; font-size: .78rem }
 .table-message { margin: 0; padding: 1rem; color: #40526b }
+.grid-search { width: min(620px, calc(100vw - 1.5rem)); padding: 1rem; border: 1px solid #cbd5e0; border-radius: 12px; color: #263344 }
+.grid-search::backdrop { background: #26334470 }
+.grid-search-form { display: grid; gap: .65rem }
+.grid-search-form header, .grid-search-options, .grid-search-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem .9rem }
+.grid-search-form header { justify-content: space-between }
+.grid-search-form h2 { margin: 0; font-size: 1.13rem }
+.grid-search-form label { display: grid; gap: .22rem; font-size: .86rem }
+.grid-search-form label.grid-search-option { display: flex; align-items: center; gap: .28rem }
+.grid-search-form input:not([type="checkbox"]) { min-width: 0; padding: .4rem .55rem; border-radius: 5px; border: 1px solid #bfcbd9; font: inherit }
+.studio-page .grid-search-form input[type="checkbox"] { width: auto }
+.grid-search-form p { margin: 0; font-size: .86rem }
+.grid-search-error, .grid-search-value.invalid { color: #913708 }
+.grid-search-summary { color: #526377 }
+.grid-search-results { padding: 0; margin: 0; max-height: 36vh; overflow: auto; list-style: none; border-block: 1px solid #e2e7ed }
+.grid-search-results li { display: flex; align-items: center; gap: .5rem; padding: .3rem .1rem; border-bottom: 1px solid #e2e7ed }
+.grid-search-results li:last-child { border-bottom: 0 }
+.grid-search-value { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis }

@@ -22,6 +22,7 @@ const apiMessages = {
   sheet_request_conflict: '同一请求编号已用于不同的表格改动。',
   sheet_request_too_large: '表格请求过大。',
   sheet_storage_unavailable: '表格存储暂不可用，请稍后重试。',
+  sheet_search_busy: '表格查找暂时繁忙，请稍后重试。',
 }
 
 export class ApiError extends Error {

@@ -15,6 +15,7 @@ go run ./cmd/partnerledger serve
 
 - 从地址栏跳到 A1、AA100000 等单元格。双击或按 F2 编辑，Enter 和 Tab 可以提交并移动，Shift 配合方向键扩选，Delete 清空，Ctrl/Cmd+Z 撤销。
 - 可从 Excel 粘贴矩形区域。每次最多 250 格。一个批次内任一格不通过类型校验时，整批保留待处理。
+- 用工具栏「查找」或 Ctrl/Cmd+F 查找整张表，用 Ctrl/Cmd+H 打开替换。支持区分大小写、整格匹配和定位结果。替换先预览改动并勾选本页单元格，再作为一个批次保存；可撤销。默认跳过公式，勾选「包含公式原文」可检索公式文本。
 - 编辑完成约 450 毫秒后尝试保存。在同一标签页刷新时，未同步的已提交单元格可从恢复草稿继续。出现版本冲突时，可刷新并显式重放自己的改动，或丢弃草稿。
 - 通用与数值列支持同表 A1 引用、四则运算、括号以及 SUM、AVERAGE、MIN、MAX、COUNT。支持每个范围最多 256 格的计算。公式保留输入原文，页面显示计算结果。
 - 表所有者可加行、追加列、重命名表和列，选择仅自己、组织内只读或组织内可编辑。CSV 可以用下载按钮导出。浏览器表格复制时保留本应用内部的公式，外部纯文本和 CSV 中可能触发公式执行的内容会被转为文本。
@@ -45,6 +46,8 @@ const source = createTableRepository(props.request).source(props.sheetId)
 
 需要只读展示时传 `read-only`。保存后可通过引用的 `flush()` 等待待提交批次。业务适配器在自己的后端执行权限、价格和业务状态校验，并以业务记录作为存储来源。
 
+提供可选的 `search(query, signal)` 时，组件还会开放查找和替换。返回值遵循下方查找接口，实际替换通过同一个 `saveChanges` 提交。
+
 ## HTTP 调用
 
 接口前缀为 `/api/tables/v1/sheets`。使用现有的 Bearer 会话。JSON 响应沿用 `{code,message,data}`。金额和公式输入以字符串传输。
@@ -55,6 +58,7 @@ const source = createTableRepository(props.request).source(props.sheetId)
 | `POST /` | 创建表格，传 `requestId`、`name`、`rowCount`、`visibility` 和 `columns: [{label,kind}]`。重复创建键按组织和账号去重。 |
 | `GET /{id}` | 读取表格元数据和操作权限。 |
 | `GET /{id}/window?row=0&col=0&height=40&width=12` | 按矩形读取原始单元格，最多读取 2,048 格。 |
+| `POST /{id}/search` | 全表查找。传 `text` 和可选 `matchCase`、`wholeCell`、`includeFormulas`、`replacement`。返回 `revision`、`matches`、已扫描格数 `scanned` 和 `nextCursor`。翻页带回 `after=nextCursor` 和原 `revision`。 |
 | `POST /{id}/changes` | 写入最多 250 个坐标。空字符串清除单元格。所有者可以在同一请求中传完整 `settings` 更新元数据。 |
 | `GET /{id}/csv?start=0&count=10000` | 按行范围导出 CSV，每次最多 10,000 行或 8 MiB 原始单元格内容。 |
 
@@ -70,6 +74,8 @@ const source = createTableRepository(props.request).source(props.sheetId)
 ```
 
 列类型为 `auto`、`text`、`number`、`date`、`checkbox`。可见范围为 `private`、`org_read`、`org_edit`。表的最大可寻址范围是 100,000 行 × 128 列，空单元格不占存储记录。已存在的列类型和坐标保留，扩容时追加行列。413 代表请求过大，422 在 `data.index` 给出无效单元格的数组位置。读取不可见表格返回 404，能看表但无权修改时返回 403。
+
+查找按行列顺序分页，每次扫描最多 2,048 个非空单元格，最多返回 60 个结果。空结果页仍可能有 `nextCursor`，工作台会继续扫描直到找到一页匹配或到达表尾。`replacement` 为空字符串表示清除匹配内容，省略时只查找。替换预览含 `proposed`，不符合列类型或长度限制的结果标记为 `invalid`。用结果的 `revision` 调用 `changes` 保存所选格子。
 
 ## 测试
 

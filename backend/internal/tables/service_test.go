@@ -85,6 +85,10 @@ func TestSheetStorage(t *testing.T) {
 	if _, err := svc.Apply(ctx, member, sheet.ID, change(2, set(0, 0, "denied"))); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("unexpected write permission: %v", err)
 	}
+	replacement := "different text"
+	if _, err := svc.Search(ctx, member, sheet.ID, SearchInput{Text: "text", Replacement: &replacement}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("read-only account can request replace previews: %v", err)
+	}
 	settings.Visibility = "org_edit"
 	meta = change(2)
 	meta.Settings = &settings
@@ -125,8 +129,34 @@ func TestSheetStorage(t *testing.T) {
 	if err := svc.ExportCSV(ctx, member, sheet.ID, 0, 1, &csv); err != nil || !strings.Contains(csv.String(), "'=UNSUPPORTED()") {
 		t.Fatalf("export did not neutralize formula: %v", err)
 	}
+	query := SearchInput{Text: "测试"}
+	first, err := svc.Search(ctx, member, sheet.ID, query)
+	if err != nil || first.Revision != 4 || len(first.Matches) != maxSearchResult || first.NextCursor == nil {
+		t.Fatalf("first search page: %+v %v", first, err)
+	}
+	query.After, query.Revision = *first.NextCursor, first.Revision
+	second, err := svc.Search(ctx, member, sheet.ID, query)
+	if err != nil || len(second.Matches) != maxSearchResult || second.Matches[0].Row <= first.Matches[len(first.Matches)-1].Row {
+		t.Fatalf("search continuation did not advance: %+v %v", second, err)
+	}
+	if _, err := svc.Search(ctx, outsider, sheet.ID, query); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-organization search: %v", err)
+	}
+	formulaQuery := SearchInput{Text: "unsupported"}
+	hidden, err := svc.Search(ctx, member, sheet.ID, formulaQuery)
+	if err != nil || len(hidden.Matches) != 0 {
+		t.Fatalf("formula should be excluded by default: %+v %v", hidden, err)
+	}
+	formulaQuery.IncludeFormulas = true
+	visible, err := svc.Search(ctx, member, sheet.ID, formulaQuery)
+	if err != nil || len(visible.Matches) != 1 || visible.Matches[0].Row != 0 {
+		t.Fatalf("formula search: %+v %v", visible, err)
+	}
 	if _, err := svc.Apply(ctx, member, sheet.ID, change(4, set(0, 0, ""))); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := svc.Search(ctx, member, sheet.ID, query); !errors.Is(err, ErrConflict) {
+		t.Fatalf("stale search continuation accepted: %v", err)
 	}
 	window, err = svc.ReadWindow(ctx, member, sheet.ID, Area{Height: 1, Width: 1})
 	if err != nil || len(window.Cells) != 0 {

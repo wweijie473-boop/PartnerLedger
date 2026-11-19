@@ -9,6 +9,7 @@ export function createTableRepository(request) {
       return {
         getSheet: () => request(url),
         getWindow: (bounds, signal) => request(url + '/window?' + new URLSearchParams(bounds), { signal }),
+        search: (body, signal) => request(url + '/search', { method: 'POST', body, signal }),
         saveChanges: body => request(url + '/changes', { method: 'POST', body }),
         exportURL: url + '/csv',
       }

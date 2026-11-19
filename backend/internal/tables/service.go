@@ -34,6 +34,7 @@ var (
 	ErrIdempotency = errors.New("sheet_request_conflict")
 	ErrNotFound    = errors.New("sheet_not_found")
 	ErrBusy        = errors.New("sheet_export_busy")
+	ErrSearchBusy  = errors.New("sheet_search_busy")
 	uuidPattern    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 	decimalPattern = regexp.MustCompile(`^-?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$`)
 )
@@ -97,9 +98,12 @@ type Change struct {
 type Service struct {
 	db          *sql.DB
 	exportSlots chan struct{}
+	searchSlots chan struct{}
 }
 
-func New(db *sql.DB) Service { return Service{db: db, exportSlots: make(chan struct{}, 2)} }
+func New(db *sql.DB) Service {
+	return Service{db: db, exportSlots: make(chan struct{}, 2), searchSlots: make(chan struct{}, 3)}
+}
 
 const fields = "id, owner_id, name, visibility, row_count, columns_json, revision, updated_at"
 const access = "organization_id = ? AND (owner_id = ? OR visibility <> 'private')"

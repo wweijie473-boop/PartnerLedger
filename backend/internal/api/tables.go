@@ -33,6 +33,14 @@ func (s server) registerSheets(group *gin.RouterGroup) {
 		sheetResult(c, http.StatusOK, sheet, err)
 	})
 	group.GET("/:id/window", s.readSheetWindow)
+	group.POST("/:id/search", func(c *gin.Context) {
+		var input tables.SearchInput
+		if !decodeSheet(c, &input) {
+			return
+		}
+		page, err := s.tables.Search(c.Request.Context(), principal(c), c.Param("id"), input)
+		sheetResult(c, http.StatusOK, page, err)
+	})
 	group.POST("/:id/changes", func(c *gin.Context) {
 		var change tables.Change
 		if !decodeSheet(c, &change) {
@@ -107,7 +115,7 @@ func sheetResult(c *gin.Context, status int, value any, err error) {
 		respond(c, http.StatusNotFound, err.Error(), nil)
 	case errors.Is(err, tables.ErrForbidden):
 		respond(c, http.StatusForbidden, err.Error(), nil)
-	case errors.Is(err, tables.ErrBusy):
+	case errors.Is(err, tables.ErrBusy), errors.Is(err, tables.ErrSearchBusy):
 		c.Header("Retry-After", "2")
 		respond(c, http.StatusTooManyRequests, err.Error(), nil)
 	case errors.Is(err, tables.ErrConflict), errors.Is(err, tables.ErrIdempotency):

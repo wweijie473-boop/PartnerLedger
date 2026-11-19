@@ -4,6 +4,7 @@ import { clipboardTSV, columnName, internalClipboard, keyFor, MAX_CHANGES, parse
 import { displayCell } from './formulas.js'
 import { createSaveQueue } from './saveQueue.js'
 import { createWindowCache } from './windowCache.js'
+import GridSearch from './GridSearch.vue'
 import './grid.css'
 
 const props = defineProps({
@@ -14,7 +15,7 @@ const props = defineProps({
 const emit = defineEmits(['metadata', 'dirty-change'])
 const rowHeight = 32, headerHeight = 40, indexWidth = 54, cellWidth = 148
 const sheet = shallowRef(null)
-const grid = ref(null), editorElement = ref(null)
+const grid = ref(null), editorElement = ref(null), searchDialog = ref(null)
 const viewport = ref({ x: 0, y: 0, width: 800, height: 420 })
 const selected = ref({ row: 0, col: 0 }), anchor = ref(selected.value)
 const editor = ref(null), bar = ref(''), barFocused = ref(false)
@@ -224,14 +225,42 @@ async function apply(cells, record = true) {
     }
     if (!after.length) return true
     if (state.value.error?.status === 409) return false
-    queue.add(after)
-    if (record) {
-      undoStack.value = [...undoStack.value.slice(-29), { before, after }]
-      redoStack.value = []
-    }
+    stage(after, before, record)
     return true
   } catch (error) { editingError.value = error.message; return false }
   finally { applying.value = false }
+}
+function stage(after, before, record) {
+  queue.add(after)
+  if (record) {
+    undoStack.value = [...undoStack.value.slice(-29), { before, after }]
+    redoStack.value = []
+  }
+}
+async function locateMatch(match, revision) {
+  if (state.value.revision !== revision) await refresh()
+  select(match.row, match.col)
+  focusGrid()
+}
+async function replaceMatches(matches, revision) {
+  if (!editable.value) throw new Error('当前表格为只读。')
+  if (!await flush()) throw new Error('请先处理表格中尚未保存的改动。')
+  if (state.value.revision !== revision) await refresh()
+  if (state.value.revision !== revision || state.value.dirty) throw new Error('表格已有新版本，请重新预览替换。')
+  if (!editable.value) throw new Error('当前表格为只读。')
+
+  const before = [], after = []
+  for (const { row, col, input, proposed } of matches) {
+    const kind = sheet.value.columns[col]?.kind
+    if (!kind || row < 0 || row >= sheet.value.rowCount || typeof proposed !== 'string' || validateCell(kind, proposed)) {
+      throw new Error('替换结果不符合表格列设置。')
+    }
+    before.push({ row, col, input })
+    after.push({ row, col, input: proposed })
+  }
+  stage(after, before, true)
+  select(after[0].row, after[0].col)
+  await queue.flush()
 }
 async function finishEdit(move = '') {
   const cell = editor.value
@@ -300,6 +329,12 @@ function paste(event) {
 }
 function key(event) {
   if (event.isComposing || event.target !== grid.value) return
+  const shortcut = event.key.toLowerCase()
+  if (searchDialog.value && (event.ctrlKey || event.metaKey) && ['f', 'h'].includes(shortcut)) {
+    event.preventDefault()
+    void searchDialog.value.open(shortcut === 'h')
+    return
+  }
   const { row, col } = selected.value
   const directions = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }
   if (directions[event.key]) {
@@ -376,6 +411,7 @@ onBeforeUnmount(() => {
         <button type="button" :disabled="!undoStack.length || !editable" @click="undo()">撤销</button>
         <button type="button" :disabled="!redoStack.length || !editable" @click="undo(true)">重做</button>
         <button type="button" :disabled="!editable || !state.dirty || state.running || state.error?.status === 409" @click="queue.retry()">立即保存</button>
+        <button v-if="source.search" type="button" @click="searchDialog.open(false)">查找</button>
         <span class="grid-save-status" :class="{ warning: Boolean(state.error) }" role="status">{{ editable ? status : '只读' }}</span>
       </div>
       <div v-if="state.error || readError || editingError || storageError" class="grid-notices" role="alert">
@@ -421,6 +457,8 @@ onBeforeUnmount(() => {
       </div>
       <div class="grid-footer"><span>{{ sheet.rowCount.toLocaleString() }} 行 · {{ sheet.columns.length }} 列</span>
         <span>双击编辑 · Shift 扩选 · 支持从 Excel 粘贴</span></div>
+      <GridSearch v-if="source.search" ref="searchDialog" :search="source.search" :prepare="flush" :replace="replaceMatches"
+        :can-edit="editable" @locate="locateMatch" />
     </template>
   </div>
 </template>
