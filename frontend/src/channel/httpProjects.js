@@ -1,0 +1,45 @@
+const base = '/api/channel/v1/projects'
+
+function yuan(value) {
+  const parts = /^(\d{1,8})(?:\.(\d{1,2}))?$/.exec(String(value))
+  if (!parts) throw new RangeError('无效的人民币单价。')
+  return String(Number(parts[1])) + '.' + (parts[2] ?? '').padEnd(2, '0')
+}
+
+export function createHttpProjectRepository(request) {
+  async function post(path, body, requestId) {
+    try {
+      return await request(path, { method: 'POST', body: { ...body, requestId } })
+    } catch (error) {
+      if (error instanceof Error) error.requestId = requestId
+      throw error
+    }
+  }
+  return {
+    async list() {
+      const projects = new Map()
+      const cursors = new Set()
+      const params = new URLSearchParams({ limit: '50' })
+      while (true) {
+        const page = await request(base + '?' + params)
+        if (!Array.isArray(page?.items) || !Object.hasOwn(page, 'next_cursor')) throw new Error('项目列表响应无效。')
+        for (const project of page.items) projects.set(project.id, project)
+        if (page.next_cursor === null) return Array.from(projects.values())
+        const cursor = page.next_cursor
+        if (typeof cursor !== 'string' || !cursor || cursors.has(cursor)) throw new Error('项目列表分页游标无效。')
+        cursors.add(cursor)
+        params.set('after', cursor)
+      }
+    },
+    get: id => request(base + '/' + encodeURIComponent(id)),
+    create(payload, requestId = crypto.randomUUID()) {
+      return post(base, payload, requestId)
+    },
+    act(id, action, payload, revision, requestId = crypto.randomUUID()) {
+      const data = ['channelQuote', 'salesQuote'].includes(action)
+        ? { ...payload, lines: payload.lines.map(line => ({ ...line, unitPrice: yuan(line.unitPrice) })) }
+        : payload
+      return post(base + '/' + encodeURIComponent(id) + '/actions/' + encodeURIComponent(action), { revision, payload: data }, requestId)
+    },
+  }
+}

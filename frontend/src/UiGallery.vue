@@ -38,7 +38,7 @@ function colorValue(token) {
   <div class="ui-gallery">
     <header class="gallery-top">
       <div class="gallery-top-inner">
-        <a href="/" class="gallery-back"><UiIcon name="back" :size="16" /> 返回工作台</a>
+        <a href="/" class="gallery-back"><UiIcon name="back" :size="16" /> 返回平台首页</a>
         <span class="gallery-brand"><UiIcon name="workflow" :size="16" /> 渠智链 AI</span>
       </div>
     </header>

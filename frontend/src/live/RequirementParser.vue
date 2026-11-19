@@ -7,6 +7,7 @@ const text = ref('')
 const result = ref(null)
 const parsing = ref(false)
 const confirmed = ref(false)
+const manual = ref(false)
 const error = ref('')
 const resultError = ref('')
 const controller = new AbortController()
@@ -18,11 +19,21 @@ const labels = {
 onUnmounted(() => controller.abort())
 
 watch(text, () => {
+  if (manual.value) return
   result.value = null
   confirmed.value = false
   error.value = ''
   resultError.value = ''
 })
+
+function enterManually() {
+  if (parsing.value) return
+  manual.value = true
+  error.value = ''
+  resultError.value = ''
+  confirmed.value = false
+  result.value = { enterpriseType: '', employeeCount: '', modules: '', deployment: '', licenseCount: '', missing: [], questions: [] }
+}
 
 async function parse() {
   if (parsing.value) return
@@ -32,6 +43,7 @@ async function parse() {
     return
   }
   parsing.value = true
+  manual.value = false
   confirmed.value = false
   result.value = null
   error.value = ''
@@ -57,6 +69,10 @@ async function parse() {
 }
 
 function confirmResult() {
+  if (!Object.values(result.value).some(value => typeof value === 'number' || typeof value === 'string' && value.trim())) {
+    resultError.value = '请至少填写一个已知需求字段。'
+    return
+  }
   const validCount = (count) => count === '' || (Number.isSafeInteger(count) && count > 0)
   if (!validCount(result.value.employeeCount) || !validCount(result.value.licenseCount)) {
     resultError.value = '人数须为正整数，未知时可以留空。'
@@ -68,7 +84,7 @@ function confirmResult() {
 </script>
 
 <template>
-  <section class="page-heading"><div><h1>AI 需求解析</h1><p class="muted">把自然语言描述整理为可核对的 ERP 需求字段。</p></div></section>
+  <section class="page-heading"><div><h1>需求整理</h1><p class="muted">使用 AI 提取关键字段，或手工填写已知的采购需求。</p></div></section>
 
   <div class="requirement-layout">
     <UiCard title="原始需求">
@@ -78,11 +94,13 @@ function confirmResult() {
             placeholder="例如：一家 120 人的制造企业需要财务和库存模块，希望私有化部署。" />
         </UiField>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-        <UiButton type="submit" variant="primary" icon="request" :loading="parsing">解析需求</UiButton>
+        <div class="requirement-actions"><UiButton type="submit" variant="primary" icon="request" :loading="parsing">解析需求</UiButton>
+          <UiButton v-if="!result" :disabled="parsing" @click="enterManually">手工填写</UiButton>
+        </div>
       </form>
     </UiCard>
 
-    <UiCard title="解析结果">
+    <UiCard :title="manual ? '手工需求字段' : '解析结果'">
       <template v-if="confirmed" #actions><UiBadge tone="success" dot>已确认</UiBadge></template>
       <UiState v-if="parsing" state="loading" title="正在解析需求" />
       <UiState v-else-if="!result" title="暂无解析结果" description="提交描述后，核对提取的字段和待补充信息。" />
@@ -103,7 +121,7 @@ function confirmResult() {
         <p v-if="resultError" class="form-error" role="alert">{{ resultError }}</p>
         <p v-if="confirmed" class="muted requirement-note" role="status">已确认本次结果。结果仅保留在当前页面。</p>
         <UiButton v-if="confirmed" @click="confirmed = false">重新编辑</UiButton>
-        <UiButton v-else type="submit" variant="primary" icon="check">确认解析结果</UiButton>
+        <UiButton v-else type="submit" variant="primary" icon="check">{{ manual ? '确认需求字段' : '确认解析结果' }}</UiButton>
       </form>
     </UiCard>
   </div>
@@ -111,6 +129,7 @@ function confirmResult() {
 
 <style scoped>
 .requirement-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: var(--ui-space-4); align-items: start; }
+.requirement-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .requirement-follow-up { padding: var(--ui-space-3); border-radius: var(--ui-radius-sm); background: var(--ui-surface-muted); font-size: var(--ui-text-sm); }
 .requirement-follow-up ul { margin: var(--ui-space-2) 0 0; padding-inline-start: 20px; }
 .requirement-note { font-size: var(--ui-text-sm); }
