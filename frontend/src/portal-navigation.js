@@ -18,10 +18,6 @@ export const portalMenus = [
   },
 ]
 
-export const loginLinks = entrances.map(({ role, label, icon, caption }) => ({
-  label: label + '登录', href: '/login/' + role, icon, description: caption,
-}))
-
 export const portalResources = [
   { label: '了解我们', href: '#about', icon: 'info', description: '认识渠智链与三方协作的业务范围', keywords: '关于我们 PartnerLedger 官网 平台 介绍' },
   { label: '帮助', href: '#help', icon: 'info', description: '了解如何选择登录身份和开始体验', keywords: '登录 指南 支持 使用帮助 新手' },

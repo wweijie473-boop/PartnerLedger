@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { UiIcon } from './ui'
-import { loginLinks, portalMenus, searchPortal } from './portal-navigation.js'
+import { portalMenus, searchPortal } from './portal-navigation.js'
 
 const header = ref(null)
 const searchInput = ref(null)
@@ -116,18 +116,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
       <nav class="pl-utility" aria-label="关于与帮助">
         <a href="#about" @click="dismiss">了解我们</a><a href="#help" @click="dismiss">帮助</a>
       </nav>
-      <div class="pl-menu pl-login" @pointerenter="hover($event, 'login')"
-        @pointerleave="leave($event, 'login')" @focusout="focusOut($event, 'login')">
-        <button id="portal-toggle-login" class="pl-nav-button pl-nav-cta" type="button" :aria-expanded="active === 'login'"
-          aria-controls="portal-panel-login" @click="toggle('login')" @keydown.down.prevent="focusFirst('login')">
-          登录 <UiIcon name="chevron-down" :size="14" />
-        </button>
-        <ul v-show="active === 'login'" id="portal-panel-login" class="pl-popover">
-          <li v-for="link in loginLinks" :key="link.href">
-            <a :href="link.href" @click="dismiss"><span class="pl-link-icon"><UiIcon :name="link.icon" :size="18" /></span><span><strong>{{ link.label }}</strong><small>{{ link.description }}</small></span></a>
-          </li>
-        </ul>
-      </div>
+      <a class="pl-login pl-nav-button pl-nav-cta" href="/login">登录</a>
     </div>
   </header>
 </template>

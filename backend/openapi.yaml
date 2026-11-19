@@ -23,6 +23,43 @@ paths:
           $ref: '#/components/responses/Success'
         '503':
           $ref: '#/components/responses/Error'
+  /api/auth/register:
+    post:
+      summary: Register the first account for a new organization
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, organization_name, organization_kind]
+              additionalProperties: false
+              properties:
+                username: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{2,63}$' }
+                password: { type: string, format: password, description: 12 to 72 UTF-8 bytes }
+                organization_name: { type: string, minLength: 1, maxLength: 150 }
+                organization_kind: { type: string, enum: [RESELLER, MANUFACTURER, CUSTOMER] }
+      responses:
+        '201':
+          description: Account and isolated organization created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [organization_id]
+                        properties:
+                          organization_id: { $ref: '#/components/schemas/ID' }
+        '409':
+          description: Username unavailable
+        '429':
+          description: Registration rate limited
+        default:
+          $ref: '#/components/responses/Error'
   /api/auth/login:
     post:
       summary: Start a session

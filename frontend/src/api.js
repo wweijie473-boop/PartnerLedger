@@ -1,5 +1,8 @@
 const apiMessages = {
   invalid_credentials: '用户名或密码不正确。',
+  invalid_registration: '请检查身份、组织名称、用户名和密码。',
+  username_unavailable: '这个用户名不可用，请换一个。',
+  registration_rate_limited: '注册尝试过于频繁，请稍后再试。',
   authentication_required: '登录已失效，请重新登录。',
   forbidden: '当前组织无权执行此操作。',
   not_found: '这条记录不存在或已不可见。',
