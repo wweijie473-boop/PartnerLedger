@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { requestApi } from './api.js'
+import { currentSession, saveSession, sessionFromCredentials } from './auth-session.js'
 import WorkspaceShell from './WorkspaceShell.vue'
 import ProductCatalog from './live/ProductCatalog.vue'
 import RequirementParser from './live/RequirementParser.vue'
@@ -19,18 +20,7 @@ const mode = ref(props.mode)
 const portal = computed(() => entrances[entry.value])
 const isRegister = computed(() => mode.value === 'register')
 const accessTitle = computed(() => (portal.value?.label || '') + (isRegister.value ? '注册' : '登录'))
-const sessionKey = 'partnerledger-api-session'
-
-function restoreSession() {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(sessionKey))
-    if (typeof saved?.token === 'string' && saved.expiresAt > Date.now()) return saved
-    sessionStorage.removeItem(sessionKey)
-  } catch { /* A blocked or unreadable store does not prevent sign-in. */ }
-  return null
-}
-
-const session = ref(restoreSession())
+const session = ref(currentSession())
 const user = ref(null)
 const organization = ref(null)
 const username = ref('')
@@ -39,6 +29,7 @@ const organizationName = ref('')
 const confirmPassword = ref('')
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 let typingAnimation
+let requestedRole
 const signingIn = ref(false)
 const signingOut = ref(false)
 const restoringIdentity = ref(false)
@@ -100,14 +91,12 @@ function animateTyping(event) {
 
 function setSession(value) {
   session.value = value
-  try {
-    if (value) sessionStorage.setItem(sessionKey, JSON.stringify(value))
-    else sessionStorage.removeItem(sessionKey)
-  } catch { /* Keep the active tab usable without browser storage. */ }
+  saveSession(value)
 }
 
 function clearSession(message = '') {
   setSession(null)
+  requestedRole = undefined
   user.value = null
   organization.value = null
   view.value = 'overview'
@@ -146,12 +135,13 @@ async function loadIdentity() {
     if (session.value !== active) return
     const accountRole = organizationRole(profile, currentOrg)
     if (!accountRole) throw new Error('账号与组织信息不一致或组织类型暂不支持。')
-    if (entry.value && entry.value !== accountRole && !isRegister.value) {
+    if (requestedRole && requestedRole !== accountRole) {
       await authenticated('/api/auth/logout', { method: 'POST' })
       clearSession('此账号属于' + entrances[accountRole].label + '组织，请从对应入口登录。')
       return
     }
-    if (!entry.value || isRegister.value) {
+    requestedRole = undefined
+    if (entry.value !== accountRole || isRegister.value) {
       entry.value = accountRole
       mode.value = 'login'
       const url = new URL(location.href)
@@ -169,7 +159,11 @@ async function loadIdentity() {
   }
 }
 
-onMounted(loadIdentity)
+onMounted(() => {
+  loadIdentity()
+  window.addEventListener('popstate', restoreWorkspaceView)
+})
+onUnmounted(() => window.removeEventListener('popstate', restoreWorkspaceView))
 
 async function signIn() {
   if (signingIn.value) return
@@ -184,11 +178,9 @@ async function signIn() {
     const credentials = await requestApi('/api/auth/login', {
       method: 'POST', body: { username: username.value.trim(), password: password.value },
     })
-    if (!credentials?.access_token || credentials.token_type !== 'Bearer' ||
-        !Number.isFinite(credentials.expires_in) || credentials.expires_in <= 0) {
-      throw new Error('后端未返回可用的登录会话。')
-    }
-    setSession({ token: credentials.access_token, expiresAt: Date.now() + credentials.expires_in * 1000 })
+    const active = sessionFromCredentials(credentials)
+    requestedRole = entry.value
+    setSession(active)
     await loadIdentity()
   } catch (error) {
     loginError.value = error.message
@@ -251,20 +243,27 @@ async function signOut() {
     signingOut.value = false
   }
 }
-function navigate(target) {
+function restoreWorkspaceView() {
+  const params = new URLSearchParams(location.search)
+  const target = params.get('view') || (params.has('project') ? 'projects' : 'overview')
+  const next = navigation.value.some(item => item.id === target) ? target : 'overview'
+  if (next !== view.value) {
+    navigationRevision.value += 1
+    view.value = next
+    captureProject.value = params.get('captureProject') || ''
+  }
+}
+function navigate(target, params = {}) {
   navigationRevision.value += 1
   view.value = target
   captureProject.value = ''
   const url = new URL(location.href)
-  url.search = ''
-  url.searchParams.set('view',target)
-  history.replaceState(null,'',url)
+  url.search = new URLSearchParams({ view: target, ...params })
+  history.replaceState(null, '', url)
+  window.scrollTo(0, 0)
 }
-function openProject(id) {
-  navigate('projects')
-  const url = new URL(location.href)
-  url.searchParams.set('project',id)
-  history.replaceState(null,'',url)
+function openProject(id, scope = 'all') {
+  navigate('projects', { project: id, scope })
 }
 function openOpportunity(id = '', projectId = '') {
   navigate('opportunities')
@@ -336,7 +335,8 @@ function openOpportunity(id = '', projectId = '') {
   <WorkspaceShell v-else :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
     <template v-if="view === 'overview'">
-      <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" @open-project="openProject">
+      <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id"
+        @open-project="openProject" @open-list="scope => navigate('projects', { scope })">
         <template #heading>
           <div>
             <p class="workspace-kicker">{{ organization.name }}</p>

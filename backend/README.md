@@ -43,6 +43,21 @@
 
 代理商使用 `/api/channel/v1/opportunities` 管理团队商机与伙伴，通过 `/api/channel/v1/visits` 保存当前成员的拜访草稿。用两个不同经办组织以及同一组织的两个成员分别检查团队隔离和草稿归属。可用前述命令开通两个 `RESELLER` 组织、厂家和客户，并把示例客户授权给相应代理商。联调数据和请求约定见 [商机与拜访交班](../docs/opportunity-handoff.md)。
 
+## 创建一组三端测试账号
+
+在已执行迁移的测试库中，可以用一条命令完成上面的开户和关联。先为当前进程设置 `PARTNERLEDGER_MYSQL_DSN` 与自选的 `PARTNERLEDGER_BOOTSTRAP_PASSWORD`。三个账号使用本次输入的同一个测试密码。
+
+```powershell
+go run ./cmd/partnerledger bootstrap-test-workspaces
+Remove-Item Env:PARTNERLEDGER_BOOTSTRAP_PASSWORD
+```
+
+- 代理商 `test_dealer` 从 `/login/dealer` 登录。
+- 软件厂商 `test_vendor` 从 `/login/vendor` 登录。
+- 企业客户 `test_customer` 从 `/login/customer` 登录。
+
+命令会关联本组客户与代理商，厂商在发起询价时选择。多人共用一个测试库时，可传 `-prefix qa1`，生成 `qa1_dealer`、`qa1_vendor`、`qa1_customer`。用户名冲突或关联失败时整组回滚。
+
 ## 验证
 
 `go test ./...` 默认执行模型适配器测试。使用已迁移的开发库时，可按以下方式验证 MySQL、Redis、产品、三端权限、商机与拜访。测试会清理本次创建的账号、商品、项目、拜访、商机和会话。

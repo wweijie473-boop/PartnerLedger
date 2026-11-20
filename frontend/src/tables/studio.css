@@ -3,7 +3,8 @@
 .studio-top-inner { max-width: 1600px; margin-inline: auto; padding: .9rem clamp(.8rem, 3vw, 2.3rem); display: flex; align-items: center; gap: .8rem; flex-wrap: wrap }
 .studio-brand { font-size: 1.08rem; font-weight: 600; color: inherit; text-decoration: none }
 .studio-crumb { border-inline-start: 1px solid var(--line); padding-inline-start: .8rem; color: var(--muted) }
-.studio-identity { margin-inline-start: auto; color: var(--muted); font-size: .875rem; overflow-wrap: anywhere }
+.studio-identity { margin-inline-start: auto; color: var(--muted); font-size: .875rem; overflow-wrap: anywhere; text-decoration: none }
+.studio-identity:hover { color: var(--ui-link); text-decoration: underline }
 .studio-content { max-width: 1600px; margin-inline: auto; padding: clamp(.875rem, 3vw, 2.2rem); display: grid; grid-template-columns: minmax(185px, 230px) minmax(0, 1fr); gap: 1.25rem }
 .studio-list { min-width: 0; align-self: start; background: var(--ui-surface); border: 1px solid var(--line); border-radius: 12px; padding: .75rem }
 .studio-list h2 { font-size: .875rem; color: var(--muted); margin: .2rem .3rem .65rem }

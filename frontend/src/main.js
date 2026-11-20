@@ -5,6 +5,9 @@ import 'element-plus/theme-chalk/el-overlay.css'
 import './ui/theme.css'
 import './style.css'
 import { entrances } from './entrances.js'
+import { reloadOnSessionChange } from './auth-session.js'
+
+window.addEventListener('pageshow', reloadOnSessionChange)
 
 const path = window.location.pathname.replace(/\/+$/, '') || '/'
 const pages = {

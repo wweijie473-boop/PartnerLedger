@@ -1,22 +1,23 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElDialog } from 'element-plus'
-import { UiButton, UiField, UiState, UiBadge, UiMetricCard } from '../ui/index.js'
+import { UiButton, UiField, UiState, UiMetricCard } from '../ui/index.js'
 import ProjectDetail from '../channel/ProjectDetail.vue'
+import ProjectList from '../channel/ProjectList.vue'
 import ChannelAction from '../channel/ChannelAction.vue'
 import { actionLabels } from '../channel/domain.js'
 import { createHttpProjectRepository } from '../channel/httpProjects.js'
 import '../channel/workspace.css'
-import { statusTone } from '../ui/statusTone.js'
 
 const props = defineProps({ request: Function, role: String, organizationId: String, overview: Boolean })
-defineEmits(['capture-opportunity', 'open-project'])
+defineEmits(['capture-opportunity', 'open-project', 'open-list'])
 const repo = createHttpProjectRepository(props.request)
 const rows = ref([])
 const links = ref([])
 const products = ref([])
 const record = ref(null)
-const selected = ref(new URLSearchParams(location.search).get('project') || '')
+const projectParams = () => new URLSearchParams(location.search)
+const selected = ref(props.overview ? '' : projectParams().get('project') || '')
 const loading = ref(true)
 const loadError = ref('')
 const detailError = ref(null)
@@ -25,25 +26,44 @@ const dialog = ref('')
 const busy = ref(false)
 const formError = ref('')
 const notice = ref('')
-const keyword = ref('')
-const stage = ref('')
-const todo = ref(false)
+const scopeLabels = { all: '全部项目', mine: '待我处理', partners: '协作方处理中' }
+const listScope = () => {
+  const value = projectParams().get('scope')
+  return Object.hasOwn(scopeLabels, value) ? value : 'all'
+}
+const scope = ref(listScope())
+const savedList = () => {
+  const state = history.state?.projectList
+  return state?.organizationId === props.organizationId ? state : null
+}
+const keyword = ref(savedList()?.keyword || '')
+const stage = ref(savedList()?.stage || '')
+const stageLabel = ref(savedList()?.stageLabel || '')
+const list = ref(null)
+const detailTop = ref(null)
 const contextLoading = ref(false)
 const contextError = ref('')
 const pending = ref(null)
 const form = reactive({ title: '', requirement: '', dueDate: '', organization: '' })
 const storageKey = 'partnerledger-project-request-' + props.role + '-' + props.organizationId
-const results = computed(() => rows.value.filter(item => (!todo.value || item.isTodo) &&
-  (!stage.value || item.stage === stage.value) &&
-  [item.id,item.title,item.customerName].filter(Boolean).join(' ').toLowerCase().includes(keyword.value.toLowerCase())))
-const tasks = computed(() => rows.value.filter(item => item.isTodo))
-const stages = computed(() => [...new Map(rows.value.map(item => [item.stage,item.stageLabel])).entries()])
+const tasks = computed(() => rows.value.filter(item => item.isTodo)
+  .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999')))
+const partnerTasks = computed(() => rows.value.filter(item => !item.isTodo && item.stage !== 'completed'))
+const scopedRows = computed(() => ({ all: rows.value, mine: tasks.value, partners: partnerTasks.value }))
+const results = computed(() => scopedRows.value[scope.value].filter(item => (!stage.value || item.stage === stage.value) &&
+  [item.id, item.title, item.customerName].filter(Boolean).join(' ').toLowerCase().includes(keyword.value.trim().toLowerCase())))
+const stages = computed(() => {
+  const labels = new Map(rows.value.map(item => [item.stage, item.stageLabel]))
+  if (stage.value && stageLabel.value && !labels.has(stage.value)) labels.set(stage.value, stageLabel.value)
+  return [...labels]
+})
 const allowed = new Set(['submitInquiry','withdrawInquiry','requestInfo','replyInfo','flagGap'])
 const detail = computed(() => record.value ? { ...record.value, actions:record.value.actions.filter(action => allowed.has(action)) } : null)
 const title = computed(() => pending.value ? '核对尚未确认的提交' : dialog.value === 'create' ? '建立采购项目' : actionLabels[dialog.value])
 let timer
 let unmounted = false
 let refreshing = false
+let listSequence = 0
 let detailSequence = 0
 
 function storePending(value) {
@@ -53,17 +73,82 @@ function storePending(value) {
     else sessionStorage.removeItem(storageKey)
   } catch { notice.value = '浏览器无法保留待核对提交，关闭页面前请先确认办理结果。' }
 }
-function setSelected(id) {
-  selected.value = id
+function setSelected(id, listState) {
   const url = new URL(location.href)
-  if (id) url.searchParams.set('project',id)
+  if (id) url.searchParams.set('project', id)
   else url.searchParams.delete('project')
-  history.replaceState(null,'',url)
+  if (listState) {
+    history.replaceState({ projectList: listState }, '', location.href)
+    history.pushState({ projectList: listState, fromProjectList: true }, '', url)
+  } else {
+    history.replaceState(history.state, '', url)
+  }
+  selected.value = id
+}
+function chooseScope(value) {
+  scope.value = value
+  const url = new URL(location.href)
+  if (value === 'all') url.searchParams.delete('scope')
+  else url.searchParams.set('scope', value)
+  history.replaceState(null, '', url)
+}
+function clearFilters() {
+  keyword.value = ''
+  stage.value = ''
+  stageLabel.value = ''
+}
+function rememberStageLabel(event) {
+  stageLabel.value = event.target.selectedOptions[0]?.textContent || ''
+}
+async function restoreListPosition(state) {
+  await nextTick()
+  if (!list.value || selected.value) return
+  const row = state?.id && list.value.querySelector(`[data-project-id="${CSS.escape(state.id)}"]`)
+  const remaining = list.value.querySelectorAll('[data-project-id]')
+  const nearby = state?.index >= 0 && remaining[Math.min(state.index, remaining.length - 1)]
+  const target = row || nearby || list.value.querySelector('[aria-pressed="true"]')
+  target?.focus({ preventScroll: true })
+  window.scrollTo(0, state?.top || 0)
+}
+function syncProjectFromHistory() {
+  const id = projectParams().get('project') || ''
+  scope.value = listScope()
+  if (id === selected.value) return
+  selected.value = id
+  detailSequence += 1
+  detailLoading.value = false
+  detailError.value = null
+  record.value = null
+  if (id) {
+    loadDetail()
+  } else {
+    const state = savedList()
+    keyword.value = state?.keyword || ''
+    stage.value = state?.stage || ''
+    stageLabel.value = state?.stageLabel || ''
+    restoreListPosition(state)
+  }
+}
+function returnToList() {
+  if (history.state?.fromProjectList && savedList()) {
+    history.back()
+    return
+  }
+  const url = new URL(location.href)
+  url.searchParams.delete('project')
+  history.replaceState(history.state, '', url)
+  syncProjectFromHistory()
+}
+function projectListState(id) {
+  return {
+    organizationId: props.organizationId, keyword: keyword.value, stage: stage.value, stageLabel: stageLabel.value,
+    top: window.scrollY, id, index: results.value.findIndex(item => item.id === id),
+  }
 }
 async function loadDetail() {
   if (!selected.value) return
   const sequence = ++detailSequence
-  detailLoading.value = true
+  detailLoading.value = record.value?.id !== selected.value
   detailError.value = null
   try {
     const item = await repo.get(selected.value)
@@ -75,23 +160,29 @@ async function loadDetail() {
     }
   } finally { if (!unmounted && sequence === detailSequence) detailLoading.value = false }
 }
-async function refresh() {
-  if (refreshing || unmounted) return
+async function refresh({ force = false } = {}) {
+  if (unmounted || (refreshing && !force)) return
+  const sequence = ++listSequence
   refreshing = true
   try {
     const items = await repo.list()
-    if (!unmounted) { rows.value = items; loadError.value = '' }
+    if (!unmounted && sequence === listSequence) { rows.value = items; loadError.value = '' }
   } catch (error) {
-    if (!unmounted && error.name !== 'AbortError') loadError.value = error.message
+    if (!unmounted && sequence === listSequence && error.name !== 'AbortError') loadError.value = error.message
   } finally {
-    refreshing = false
-    if (!unmounted) loading.value = false
+    if (sequence === listSequence) {
+      refreshing = false
+      if (!unmounted) loading.value = false
+    }
   }
 }
-async function openProject(id) {
-  setSelected(id)
+async function openProject(item) {
+  setSelected(item.id, projectListState(item.id))
   record.value = null
-  await loadDetail()
+  window.scrollTo(0, 0)
+  loadDetail()
+  await nextTick()
+  detailTop.value?.focus({ preventScroll: true })
 }
 async function backgroundRefresh() {
   if (document.hidden || dialog.value || busy.value) return
@@ -152,16 +243,20 @@ async function sendPending() {
   if (busy.value || !pending.value) return
   busy.value = true; formError.value = ''
   const job = pending.value
+  const projectAtSubmit = selected.value
   try {
     const updated = job.action === 'create' ? await repo.create(job.payload,job.requestId) :
       await repo.act(job.id,job.action,job.payload,job.revision,job.requestId)
     storePending(null)
+    if (unmounted) return
     dialog.value = ''
-    record.value = updated
-    setSelected(updated.id)
+    if (selected.value === projectAtSubmit) {
+      record.value = updated
+      setSelected(updated.id, projectAtSubmit ? undefined : projectListState(updated.id))
+      if (!projectAtSubmit) window.scrollTo(0, 0)
+    }
     notice.value = '办理结果已保存，协作方可在关联项目中查看。'
-    await refresh()
-    await loadDetail()
+    await Promise.all([refresh({ force: true }), loadDetail()])
   } catch (error) {
     if (error.status >= 400 && error.status < 500) {
       storePending(null)
@@ -172,11 +267,12 @@ async function sendPending() {
     } else {
       formError.value = '提交结果尚待确认。已保留本次请求，请先检查最新记录。'
       await refresh()
-      if (job.id) { setSelected(job.id); await loadDetail() }
+      if (!unmounted && job.id && selected.value === projectAtSubmit) { setSelected(job.id); await loadDetail() }
     }
   } finally { busy.value = false }
 }
 onMounted(async () => {
+  if (!props.overview) window.addEventListener('popstate', syncProjectFromHistory)
   try {
     const job = JSON.parse(sessionStorage.getItem(storageKey))
     if (job?.requestId && job.payload && job.action) {
@@ -184,8 +280,9 @@ onMounted(async () => {
       dialog.value = job.action
     }
   } catch { notice.value = '上次请求记录无法读取，请先检查项目台账再办理。' }
-  await refresh()
-  await loadDetail()
+  await Promise.all([refresh(), loadDetail()])
+  if (unmounted) return
+  if (!props.overview && !selected.value && savedList()) restoreListPosition(savedList())
   timer = setInterval(backgroundRefresh,20000)
   window.addEventListener('focus',backgroundRefresh)
   document.addEventListener('visibilitychange',backgroundRefresh)
@@ -193,6 +290,7 @@ onMounted(async () => {
 onUnmounted(() => {
   unmounted = true
   clearInterval(timer)
+  window.removeEventListener('popstate', syncProjectFromHistory)
   window.removeEventListener('focus',backgroundRefresh)
   document.removeEventListener('visibilitychange',backgroundRefresh)
 })
@@ -200,7 +298,7 @@ onUnmounted(() => {
 
 <template>
   <section>
-    <header class="page-heading">
+    <header v-if="overview || !selected" class="page-heading">
       <slot v-if="overview" name="heading" />
       <div v-else-if="!selected">
         <h1>{{ role === 'vendor' ? '渠道询价' : role === 'customer' ? '我的采购项目' : '客户项目' }}</h1>
@@ -217,48 +315,54 @@ onUnmounted(() => {
       <UiState v-if="loadError" state="error" title="项目待办暂不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton></UiState>
       <template v-else>
         <section class="metric-grid" aria-label="协作数据">
-          <UiMetricCard label="可见项目" :value="rows.length" description="当前组织参与的项目" icon="request" />
-          <UiMetricCard label="待我处理" :value="tasks.length" description="下一步由本方办理" icon="activity" tone="brand" />
-          <UiMetricCard label="协作方处理中" :value="rows.filter(item => !item.isTodo && item.stage !== 'completed').length" description="可打开项目查看最新进度" icon="time" />
+          <UiMetricCard label="可见项目" :value="rows.length" description="当前组织参与的项目" icon="request" interactive @click="$emit('open-list', 'all')" />
+          <UiMetricCard label="待我处理" :value="tasks.length" description="下一步由本方办理" icon="activity" tone="brand" interactive @click="$emit('open-list', 'mine')" />
+          <UiMetricCard label="协作方处理中" :value="partnerTasks.length" description="等待协作方推进" icon="time" interactive @click="$emit('open-list', 'partners')" />
         </section>
         <section class="workspace-section" aria-labelledby="project-tasks">
-          <header class="workspace-section-heading"><h2 id="project-tasks">今天的项目待办</h2></header>
-          <div v-if="tasks.length" class="live-task-list">
-            <button v-for="item in tasks" :key="item.id" type="button" @click="$emit('open-project', item.id)">
-              <span><strong>{{ item.title }}</strong><small>{{ item.nextStep }}</small></span>
-              <UiBadge :tone="statusTone(item.stage)" dot>{{ item.stageLabel }}</UiBadge><span class="live-task-action">去处理 →</span>
-            </button>
-          </div>
+          <header class="workspace-section-heading">
+            <h2 id="project-tasks">项目待办</h2>
+            <UiButton v-if="tasks.length" variant="text" end-icon="forward" @click="$emit('open-list', 'mine')">查看全部待办</UiButton>
+          </header>
+          <ProjectList v-if="tasks.length" :projects="tasks.slice(0, 5)" :show-customer="role === 'dealer'" @open="item => $emit('open-project', item.id, 'mine')" />
           <UiState v-else title="当前没有待办理项目" description="新的需求或协作方回复到达后，会出现在这里。可从项目台账查看全部进度。" />
         </section>
       </template>
     </template>
-    <template v-else-if="selected">
+    <div v-else-if="selected" ref="detailTop" tabindex="-1">
       <UiState v-if="detailLoading" state="loading" title="正在读取项目详情" />
       <UiState v-else-if="detailError" :state="detailError.status === 404 ? 'denied' : 'error'" title="项目暂不可访问" :description="detailError.message">
-        <UiButton @click="loadDetail">重试</UiButton><UiButton @click="setSelected('')">返回项目列表</UiButton>
+        <UiButton @click="loadDetail">重试</UiButton><UiButton @click="returnToList">返回项目列表</UiButton>
       </UiState>
-      <ProjectDetail v-else-if="detail" :project="detail" :role="role" :products="products" live @back="setSelected('')" @action="openAction" />
-      <div v-if="detail && !detailError && role === 'dealer'" class="modal-actions"><UiButton @click="$emit('capture-opportunity',detail.id)">记录附加商机</UiButton></div>
-    </template>
+      <ProjectDetail v-else-if="detail" :project="detail" :role="role" :products="products" live @back="returnToList" @action="openAction">
+        <template #toolbar>
+          <UiButton variant="text" :disabled="busy" @click="refreshProgress">刷新协作进度</UiButton>
+          <UiButton v-if="role === 'dealer'" variant="text" @click="$emit('capture-opportunity', detail.id)">记录附加商机</UiButton>
+        </template>
+      </ProjectDetail>
+    </div>
     <template v-else>
       <UiState v-if="loadError" state="error" title="项目列表暂不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton></UiState>
-      <section v-else class="workspace-section" aria-labelledby="project-list">
+      <section v-else ref="list" class="workspace-section" aria-labelledby="project-list">
         <header class="workspace-section-heading">
-          <h2 id="project-list">协作项目</h2>
+          <div class="live-project-scopes" role="group" aria-label="项目范围">
+            <h2 id="project-list" class="ch-sr">协作项目</h2>
+            <button v-for="(label, key) in scopeLabels" :key="key" type="button"
+              :aria-pressed="scope === key" @click="chooseScope(key)">{{ label }} <span>{{ scopedRows[key].length }}</span></button>
+          </div>
           <div class="live-project-filters">
             <input v-model="keyword" type="search" placeholder="搜索项目或编号" aria-label="搜索项目">
-            <select v-model="stage" aria-label="项目状态">
+            <select v-model="stage" aria-label="项目状态" @change="rememberStageLabel">
               <option value="">全部状态</option>
               <option v-for="[key, label] in stages" :key="key" :value="key">{{ label }}</option>
             </select>
-            <label><input v-model="todo" type="checkbox">待我处理</label>
           </div>
         </header>
-        <div v-if="results.length" class="table-scroll"><table><thead><tr><th>项目</th><th>进度</th><th>下一步</th><th>操作</th></tr></thead><tbody>
-          <tr v-for="item in results" :key="item.id"><td>{{ item.title }}<br><small>{{ item.id }}</small></td><td><UiBadge :tone="statusTone(item.stage)" dot>{{ item.stageLabel }}</UiBadge></td><td>{{ item.nextStep }}</td><td><UiButton compact @click="openProject(item.id)">查看</UiButton></td></tr>
-        </tbody></table></div>
-        <UiState v-else title="暂无符合条件的项目" :description="role === 'vendor' ? '更换筛选条件，或等待代理商向本组织提交询价。' : '更换筛选条件，或建立一笔新的采购需求。'" />
+        <ProjectList v-if="results.length" :projects="results" :show-customer="role === 'dealer'" @open="openProject" />
+        <UiState v-else :title="keyword || stage ? '暂无符合条件的项目' : scope === 'mine' ? '暂无待你处理的项目' : scope === 'partners' ? '暂无等待协作方处理的项目' : '暂无协作项目'">
+          <UiButton v-if="keyword || stage" variant="text" @click="clearFilters">清除筛选</UiButton>
+          <UiButton v-else-if="scope !== 'all'" variant="text" @click="chooseScope('all')">查看全部项目</UiButton>
+        </UiState>
       </section>
     </template>
     <ElDialog :model-value="!!dialog" :title="title" width="min(94vw, 610px)" :close-on-click-modal="false" :close-on-press-escape="!busy && !pending" :show-close="!busy && !pending" @update:model-value="value => { if (!value) closeDialog() }">
@@ -288,13 +392,26 @@ onUnmounted(() => {
 <style scoped>
 .live-project-actions { margin-left: auto; }
 .live-feedback { margin-block: 8px; color: var(--ui-ink-secondary); }
-.live-project-filters {
+.live-project-filters, .live-project-scopes {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
   font-size: 13px;
 }
+.live-project-scopes { gap: 2px 4px; }
+.live-project-scopes button {
+  min-height: var(--ui-control-height);
+  padding: 4px 7px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ui-ink-secondary);
+  white-space: nowrap;
+}
+.live-project-scopes button:hover { background: var(--ui-accent-bg); }
+.live-project-scopes button[aria-pressed="true"] { border-bottom-color: var(--ui-accent); color: var(--ui-link); font-weight: 600; }
+.live-project-scopes button span { margin-left: 2px; font-variant-numeric: tabular-nums; }
 .live-project-filters :is(input[type='search'], select) {
   min-height: var(--ui-control-height);
   min-width: 0;
@@ -306,37 +423,8 @@ onUnmounted(() => {
   color: var(--ui-ink);
   font-size: inherit;
 }
-.live-project-filters label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: var(--ui-control-height);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.live-project-filters input[type='checkbox'] { margin: 0; }
 .workspace-section > .ui-state { border-top: 1px solid var(--ui-border); }
-.live-task-list button {
-  display: flex;
-  align-items: center;
-  gap: 8px 12px;
-  width: 100%;
-  padding: 8px 6px;
-  border: 0;
-  border-top: 1px solid var(--ui-border);
-  background: transparent;
-  color: var(--ui-ink);
-  text-align: left;
-}
-.live-task-list button:hover, .live-task-list button:focus-visible { background: var(--ui-accent-bg); }
-.live-task-list button > span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.live-task-list strong, .live-task-list small { display: block; }
-.live-task-list strong { font-weight: 500; }
-.live-task-list small { color: var(--ui-ink-muted); font-size: 12px; }
-.live-task-action { color: var(--ui-link); font-size: 13px; white-space: nowrap; }
 @media (max-width: 540px) {
   .live-project-actions { margin-left: 0; }
-  .live-task-list button { flex-wrap: wrap; }
-  .live-task-list button > span:first-child { flex-basis: 100%; }
 }
 </style>

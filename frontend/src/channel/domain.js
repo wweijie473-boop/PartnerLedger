@@ -98,6 +98,14 @@ const owners = {
   channel_quoted: 'reseller', channel_revision: 'manufacturer', sales_quoted: 'customer', sales_revision: 'reseller',
   confirmed: 'reseller', ordered: 'manufacturer', supplied: 'reseller', acceptance: 'customer', rectification: 'reseller',
 }
+export function projectHandlerLabel(project, role) {
+  if (project.stage === 'completed') return '协作已完成'
+  const actor = { dealer: 'reseller', vendor: 'manufacturer', customer: 'customer' }[role]
+  if (project.isTodo) return (roles[actor]?.label || '当前组织') + '（本方）'
+  const owner = ['processing', 'channel_wait'].includes(project.stage) ? 'reseller' : owners[project.stage]
+  const label = owner === actor ? '' : roles[owner]?.label
+  return label || '协作方'
+}
 function displayStage(project, role) {
   if (role === 'customer' && ['inquired','vendor_info','channel_quoted','channel_revision'].includes(project.stage)) return 'processing'
   if (role === 'manufacturer') {
