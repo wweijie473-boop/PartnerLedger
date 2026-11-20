@@ -34,13 +34,13 @@ func run(args []string) error {
 		command, args = args[0], args[1:]
 	}
 	if command == "help" || command == "-h" || command == "--help" {
-		fmt.Println("usage: partnerledger [serve | check | migrate | tables-migrate | bootstrap-org | link-customer]")
+		fmt.Println("usage: partnerledger [serve | check | migrate | tables-migrate | bootstrap-org | bootstrap-test-workspaces | link-customer]")
 		return nil
 	}
-	if command != "serve" && command != "check" && command != "migrate" && command != "tables-migrate" && command != "bootstrap-org" && command != "link-customer" {
-		return errors.New("expected serve, check, migrate, tables-migrate, bootstrap-org or link-customer")
+	if command != "serve" && command != "check" && command != "migrate" && command != "tables-migrate" && command != "bootstrap-org" && command != "bootstrap-test-workspaces" && command != "link-customer" {
+		return errors.New("unknown command, run partnerledger help")
 	}
-	if len(args) > 0 && command != "bootstrap-org" && command != "link-customer" {
+	if len(args) > 0 && command != "bootstrap-org" && command != "bootstrap-test-workspaces" && command != "link-customer" {
 		return fmt.Errorf("%s does not accept positional arguments", command)
 	}
 
@@ -61,6 +61,9 @@ func run(args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if command == "bootstrap-test-workspaces" {
+		return bootstrapTestWorkspaces(ctx, sqlDB, args)
+	}
 	if command == "migrate" || command == "tables-migrate" {
 		if err := sqlDB.PingContext(ctx); err != nil {
 			return fmt.Errorf("MySQL connection failed: %w", err)
