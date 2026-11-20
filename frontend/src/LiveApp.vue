@@ -323,7 +323,6 @@ function openOpportunity(id = '', projectId = '') {
 
   <WorkspaceShell v-else :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
-    <template #actions><UiButton compact variant="text" :icon="portal.icon" @click="navigate('account')">{{ kindLabel }}</UiButton></template>
     <template v-if="view === 'overview'">
       <section class="page-heading"><div><p class="access-kicker">{{ organization.name }}</p><h1>{{ kindLabel }}工作台</h1>
         <p class="muted">{{ isManufacturer ? '接收渠道询价，回复资料问题并记录能力缺口。' : isDealer ? '接收客户需求、发起厂商询价并跟进双方回复。' : '提交采购需求，向经办代理商补充资料并查看进度。' }}</p></div></section>

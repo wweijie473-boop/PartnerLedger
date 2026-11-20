@@ -168,7 +168,6 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
 <template>
   <div class="ch-space">
     <WorkspaceShell :nav="nav" :view="view" :organization="org.company" :account-label="names[role] + ' · 演示身份'" environment="本地演示空间" @navigate="navigate" @account="openDialog('roles')">
-      <template #actions><button class="role-pill" @click="openDialog('roles')"><span></span> {{ names[role] }}演示 <UiIcon name="chevron-down" :size="13" /></button><a class="ch-home" href="/">平台首页</a></template>
       <UiState v-if="loading" state="loading" title="正在载入工作台" />
       <UiState v-else-if="loadError" state="error" title="工作台暂时不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton><UiButton @click="openDialog('reset')">恢复演示数据</UiButton></UiState>
       <template v-else-if="selected">

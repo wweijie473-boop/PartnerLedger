@@ -221,7 +221,6 @@ function reset() {
     :account-label="`${roles[role].label}工作台`" environment="本地演示环境" @navigate="go" @account="modal = 'role'">
     <template #actions>
       <form class="top-search" @submit.prevent="go('requests', true)"><UiIcon name="search" :size="16" /><input v-model="query" placeholder="搜索记录" aria-label="搜索记录" /></form>
-      <button class="role-pill" @click="modal = 'role'"><span></span>{{ roles[role].label }}视角<UiIcon name="chevron-down" :size="14" /></button>
     </template>
         <section class="page-heading">
           <div><h1>{{ currentPage.label }}</h1>

@@ -1,6 +1,5 @@
 .ch-space { color:var(--ui-ink); }
-.ch-home { font-size:14px; font-weight:600; color:inherit; text-decoration:none; }
-.ch-home:hover, .ch-record:hover strong { text-decoration:underline; text-underline-offset:3px; }
+.ch-record:hover strong { text-decoration:underline; text-underline-offset:3px; }
 .ch-kicker { margin:0 0 12px; color:var(--ui-ink-muted); font-size:12px; font-weight:650; letter-spacing:.11em; }
 .ch-space .page-heading h1,.ch-project-head h1 { font-size:var(--ui-text-display); }
 .ch-metrics { margin-bottom:24px; }

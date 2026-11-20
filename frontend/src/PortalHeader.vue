@@ -2,8 +2,10 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { UiIcon } from './ui'
 import { portalMenus, searchPortal } from './portal-navigation.js'
+import './portal-header.css'
 
-const header = ref(null)
+const props = defineProps({ homePage: Boolean })
+const primary = ref(null)
 const searchInput = ref(null)
 const query = ref('')
 const active = ref('')
@@ -54,7 +56,11 @@ function escape(event) {
 }
 
 function outside(event) {
-  if (active.value && !header.value?.contains(event.target)) dismiss()
+  if (active.value && !primary.value?.contains(event.target)) dismiss()
+}
+
+function destination(href) {
+  return !props.homePage && href.startsWith('#') ? '/' + href : href
 }
 
 function submitSearch() {
@@ -63,9 +69,9 @@ function submitSearch() {
     open('search')
     return
   }
-  const destination = results.value[0].href
+  const href = destination(results.value[0].href)
   dismiss()
-  window.location.assign(destination)
+  window.location.assign(href)
 }
 
 onMounted(() => document.addEventListener('pointerdown', outside))
@@ -73,8 +79,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
 </script>
 
 <template>
-  <header ref="header" class="pl-header" @keydown.esc="escape">
-    <div class="pl-wrap pl-bar">
+  <header class="pl-header" @keydown.esc="escape">
+    <div ref="primary" class="pl-wrap pl-bar">
       <a class="pl-logo" href="/" aria-label="渠智链首页">
         <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
         <b>渠智链</b><small>PartnerLedger</small>
@@ -90,7 +96,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
           </button>
           <ul v-show="active === menu.id" :id="'portal-panel-' + menu.id" class="pl-popover">
             <li v-for="link in menu.links" :key="link.href">
-              <a :href="link.href" @click="dismiss"><span class="pl-link-icon"><UiIcon :name="link.icon" :size="18" /></span><span><strong>{{ link.label }}</strong><small>{{ link.description }}</small></span></a>
+              <a :href="destination(link.href)" @click="dismiss"><span class="pl-link-icon"><UiIcon :name="link.icon" :size="18" /></span><span><strong>{{ link.label }}</strong><small>{{ link.description }}</small></span></a>
             </li>
           </ul>
         </div>
@@ -106,7 +112,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
           <p class="pl-search-caption" role="status">{{ query.trim() ? (results.length ? '搜索结果' : '没有找到相关功能') : '常用功能' }}</p>
           <ul v-if="results.length">
             <li v-for="link in results" :key="link.href">
-              <a :href="link.href" @click="dismiss"><span class="pl-link-icon"><UiIcon :name="link.icon" :size="18" /></span><span><strong>{{ link.label }}</strong><small>{{ link.description }}</small></span></a>
+              <a :href="destination(link.href)" @click="dismiss"><span class="pl-link-icon"><UiIcon :name="link.icon" :size="18" /></span><span><strong>{{ link.label }}</strong><small>{{ link.description }}</small></span></a>
             </li>
           </ul>
           <p v-else class="pl-search-empty">试试「询价」「拜访」或「表格」。</p>
@@ -114,9 +120,13 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
       </form>
 
       <nav class="pl-utility" aria-label="关于与帮助">
-        <a href="#about" @click="dismiss">了解我们</a><a href="#help" @click="dismiss">帮助</a>
+        <a :href="destination('#about')" @click="dismiss">了解我们</a>
+        <a :href="destination('#help')" @click="dismiss">帮助</a>
       </nav>
-      <a class="pl-login pl-nav-button pl-nav-cta" href="/login">登录</a>
+      <div class="pl-account-slot">
+        <slot name="account"><a class="pl-nav-button pl-nav-cta" href="/login">登录</a></slot>
+      </div>
     </div>
+    <slot name="secondary" />
   </header>
 </template>
