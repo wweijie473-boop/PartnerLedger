@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElDialog } from 'element-plus'
 import { UiBadge, UiButton, UiCard, UiField, UiIconTile, UiState } from '../ui/index.js'
+import ProductKnowledge from './ProductKnowledge.vue'
 
 const props = defineProps({
   request: { type: Function, required: true },
@@ -188,6 +189,7 @@ async function saveProduct() {
           <dt>版本</dt><dd>{{ product.version }}</dd>
           <dt>产品说明</dt><dd>{{ product.description || '暂无' }}</dd>
         </dl>
+        <ProductKnowledge :key="product.id" :product-id="product.id" :request="request" :editable="isManufacturer" />
         <div v-if="isManufacturer" class="modal-actions"><UiButton variant="primary" @click="openEditor(product)">编辑产品</UiButton></div>
       </template>
     </template>

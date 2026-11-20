@@ -191,6 +191,31 @@ paths:
           $ref: '#/components/responses/Product'
         default:
           $ref: '#/components/responses/Error'
+  /api/products/{id}/knowledge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ID' }
+    get:
+      summary: Get the matching profile for a visible product
+      responses:
+        '200':
+          $ref: '#/components/responses/ProductKnowledge'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      summary: Replace the matching profile of a product owned by the manufacturer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductKnowledge' }
+      responses:
+        '200':
+          $ref: '#/components/responses/ProductKnowledge'
+        default:
+          $ref: '#/components/responses/Error'
   /api/ai/parse-requirement:
     post:
       summary: Extract fields from a reseller's ERP requirement
@@ -216,6 +241,33 @@ paths:
                   - properties:
                       data:
                         $ref: '#/components/schemas/Requirement'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/ai/match-products:
+    post:
+      summary: Match confirmed requirements against published product profiles as a reseller
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmedRequirement' }
+      responses:
+        '200':
+          description: Ranked product candidates with checks and manufacturer sources
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            maxItems: 8
+                            items: { $ref: '#/components/schemas/ProductMatch' }
         default:
           $ref: '#/components/responses/Error'
   /api/channel/v1/organization-links:
@@ -307,6 +359,45 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/ChannelProject'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/projects/{id}/inquiry-draft:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ID' }
+    get:
+      summary: Get the current member's latest draft for a project awaiting inquiry
+      responses:
+        '200':
+          $ref: '#/components/responses/InquiryDraft'
+        '404':
+          description: No draft for the current member, project revision and a still-published product
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Prepare an inquiry draft after the reseller confirms the requirement fields
+      description: Retrying the same request ID and body returns the saved draft. Submitting an inquiry uses the separate submitInquiry project action.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, revision, confirmed, productId, requirement]
+              additionalProperties: false
+              properties:
+                requestId: { type: string, format: uuid }
+                revision: { type: integer, minimum: 1 }
+                confirmed: { const: true }
+                productId: { $ref: '#/components/schemas/ID' }
+                requirement: { $ref: '#/components/schemas/ConfirmedRequirement' }
+      responses:
+        '201':
+          $ref: '#/components/responses/InquiryDraft'
+        '409':
+          description: revision_conflict, invalid_transition or idempotency_conflict
         default:
           $ref: '#/components/responses/Error'
   /api/channel/v1/projects/{id}/actions/{action}:
@@ -620,6 +711,24 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ProductInput' }
   responses:
+    ProductKnowledge:
+      description: Product matching and licensing information
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/ProductKnowledge' }
+    InquiryDraft:
+      description: Saved inquiry draft
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/InquiryDraft' }
     Opportunity:
       description: Opportunity visible to its dealer team
       content:
@@ -945,6 +1054,79 @@ components:
           properties:
             id: { $ref: '#/components/schemas/ID' }
             manufacturer_id: { $ref: '#/components/schemas/ID' }
+    KnowledgeSource:
+      type: object
+      required: [title, reference, excerpt]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        reference: { type: string, minLength: 1, maxLength: 300, description: A link, file name or page reference }
+        excerpt: { type: string, minLength: 1, maxLength: 500 }
+    ProductKnowledge:
+      type: object
+      properties:
+        category: { type: string, maxLength: 80 }
+        modules:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 70 }
+        deployment_modes:
+          type: array
+          uniqueItems: true
+          items: { type: string, enum: [private, on_premises, cloud, saas] }
+        license:
+          type: object
+          properties:
+            minimum: { type: [integer, 'null'], minimum: 1, maximum: 1000000 }
+            maximum: { type: [integer, 'null'], minimum: 1, maximum: 1000000 }
+            note: { type: string, maxLength: 500 }
+        sources:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/KnowledgeSource' }
+    ConfirmedRequirement:
+      type: object
+      description: At least one confirmed field with a nonempty value. Employee count and license count are independent.
+      properties:
+        enterprise_type: { type: string, maxLength: 120 }
+        employee_count: { type: [integer, 'null'], minimum: 1, maximum: 1000000 }
+        required_modules:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 70 }
+        deployment_mode: { type: string, maxLength: 80 }
+        license_count: { type: [integer, 'null'], minimum: 1, maximum: 1000000 }
+        version: { type: string, maxLength: 100 }
+    ProductMatch:
+      type: object
+      required: [product, category, status, checks, sources]
+      properties:
+        product: { $ref: '#/components/schemas/Product' }
+        category: { type: string }
+        status: { type: string, enum: [matched, needs_confirmation, mismatch] }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [field, value, status, detail]
+            properties:
+              field: { type: string, enum: [module, deployment, version, license, source] }
+              value: { type: string }
+              status: { type: string, enum: [met, missing, unknown] }
+              detail: { type: string }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/KnowledgeSource' }
+    InquiryDraft:
+      type: object
+      required: [id, projectId, projectRevision, productId, requirement, summary, createdAt]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        projectId: { $ref: '#/components/schemas/ID' }
+        projectRevision: { type: integer, minimum: 1 }
+        productId: { $ref: '#/components/schemas/ID' }
+        requirement: { $ref: '#/components/schemas/ConfirmedRequirement' }
+        summary: { type: string }
+        createdAt: { type: string, format: date-time }
     Requirement:
       type: object
       required: [enterprise_type, employee_count, required_modules, deployment_mode, license_count, missing_fields, follow_up_questions, need_user_confirmation]

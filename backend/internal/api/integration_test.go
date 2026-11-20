@@ -205,6 +205,7 @@ func TestOrganizationIsolation(t *testing.T) {
 	}
 	request(http.MethodPost, base, customer, strings.ReplaceAll(create, "Private project", "Changed"), 409, nil)
 	path := base + "/" + project.ID
+	testProductKnowledge(t, request, path, product.ID, first, second, dealer, otherDealer, customer)
 	for _, token := range []string{first, second, otherCustomer, otherDealer} {
 		request(http.MethodGet, path, token, "", 404, nil)
 	}

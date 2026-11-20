@@ -362,7 +362,8 @@ function openOpportunity(id = '', projectId = '') {
     <LiveVisits v-else-if="view === 'visits' && isDealer" :request="authenticated" :scope="organization.id + ':' + user.id" @project="openProject" @opportunity="id => openOpportunity(id)" />
     <LiveOpportunities v-else-if="view === 'opportunities' && isDealer" :key="navigationRevision" :request="authenticated" :scope="organization.id + ':' + user.id" :project-id="captureProject" :capture="!!captureProject" @project="openProject" />
     <ProductCatalog v-else-if="view === 'catalog' && entry !== 'customer'" :request="authenticated" :is-manufacturer="isManufacturer" />
-    <RequirementParser v-else-if="view === 'requirement' && isDealer" :request="authenticated" />
+    <RequirementParser v-else-if="view === 'requirement' && isDealer" :request="authenticated"
+      @open-inquiry="id => openProject(id)" @open-projects="navigate('projects')" />
     <template v-else>
       <header v-enter class="page-heading"><h1>账号与组织</h1></header>
       <section v-enter="1" class="workspace-section live-account" aria-labelledby="current-account">

@@ -61,6 +61,28 @@ func (s server) actOnChannelProject(c *gin.Context) {
 	channelResult(c, http.StatusOK, view, err)
 }
 
+func (s server) latestInquiryDraft(c *gin.Context) {
+	id, ok := channelResourceID(c)
+	if !ok {
+		return
+	}
+	draft, err := s.channel.LatestInquiryDraft(c.Request.Context(), principal(c), id)
+	channelResult(c, http.StatusOK, draft, err)
+}
+
+func (s server) createInquiryDraft(c *gin.Context) {
+	id, ok := channelResourceID(c)
+	if !ok {
+		return
+	}
+	var input channel.InquiryDraftInput
+	if !decodeWithLimit(c, &input, 40<<10) {
+		return
+	}
+	draft, err := s.channel.CreateInquiryDraft(c.Request.Context(), principal(c), id, input)
+	channelResult(c, http.StatusCreated, draft, err)
+}
+
 func channelResourceID(c *gin.Context) (uint64, bool) {
 	value := c.Param("id")
 	id, err := strconv.ParseUint(value, 10, 64)

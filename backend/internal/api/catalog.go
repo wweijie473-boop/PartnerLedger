@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"github.com/wweijie473-boop/PartnerLedger/backend/internal/catalog"
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/data"
 	"gorm.io/gorm"
 )
@@ -20,16 +21,7 @@ type productInput struct {
 }
 
 func (s server) catalog(c *gin.Context) *gorm.DB {
-	query := s.db.WithContext(c.Request.Context()).Model(&data.Product{})
-	user := principal(c)
-	switch user.Organization.Kind {
-	case data.Manufacturer:
-		return query.Where("manufacturer_id = ?", user.OrganizationID)
-	case data.Reseller:
-		return query.Where("published = ?", true)
-	default:
-		return query.Where("1 = 0")
-	}
+	return catalog.Visible(s.db.WithContext(c.Request.Context()), principal(c))
 }
 
 func (s server) listProducts(c *gin.Context) {

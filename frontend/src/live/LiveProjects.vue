@@ -15,6 +15,7 @@ const repo = createHttpProjectRepository(props.request)
 const rows = ref([])
 const links = ref([])
 const products = ref([])
+const inquiryDraft = ref(null)
 const record = ref(null)
 const projectParams = () => new URLSearchParams(location.search)
 const selected = ref(props.overview ? '' : projectParams().get('project') || '')
@@ -57,8 +58,9 @@ const stages = computed(() => {
   if (stage.value && stageLabel.value && !labels.has(stage.value)) labels.set(stage.value, stageLabel.value)
   return [...labels]
 })
-const allowed = new Set(['submitInquiry','withdrawInquiry','requestInfo','replyInfo','flagGap'])
-const detail = computed(() => record.value ? { ...record.value, actions:record.value.actions.filter(action => allowed.has(action)) } : null)
+const detail = computed(() => record.value ? {
+  ...record.value, actions: record.value.actions.filter(action => Object.hasOwn(actionLabels, action)),
+} : null)
 const title = computed(() => pending.value ? '核对尚未确认的提交' : dialog.value === 'create' ? '建立采购项目' : actionLabels[dialog.value])
 let timer
 let unmounted = false
@@ -194,6 +196,7 @@ async function refreshProgress() {
 }
 async function openAction(action) {
   formError.value = ''; contextError.value = ''; products.value = []; links.value = []
+  inquiryDraft.value = null
   dialog.value = action
   if (!['create','submitInquiry'].includes(action)) return
   contextLoading.value = true
@@ -214,12 +217,20 @@ async function openAction(action) {
         if (after && visited.has(after)) throw new Error('产品分页游标重复，请重新载入。')
         if (after) visited.add(after)
       } while (after)
+      try {
+        const draft = await props.request('/api/channel/v1/projects/' + encodeURIComponent(record.value.id) + '/inquiry-draft')
+        if (draft.projectRevision === record.value?.revision && products.value.some(item => item.id === draft.productId)) {
+          inquiryDraft.value = draft
+        }
+      } catch (error) {
+        if (error.status !== 404) notice.value = '暂时无法带入询价草稿，可以手工填写。'
+      }
     }
   } catch (error) { contextError.value = error.message }
   finally { contextLoading.value = false }
 }
 function closeDialog() {
-  if (busy.value || pending.value) return
+  if (busy.value || pending.value || contextLoading.value) return
   dialog.value = ''; formError.value = ''
 }
 async function submit(payload) {
@@ -365,7 +376,7 @@ onUnmounted(() => {
         </UiState>
       </section>
     </template>
-    <ElDialog :model-value="!!dialog" :title="title" width="min(94vw, 610px)" :close-on-click-modal="false" :close-on-press-escape="!busy && !pending" :show-close="!busy && !pending" @update:model-value="value => { if (!value) closeDialog() }">
+    <ElDialog :model-value="!!dialog" :title="title" width="min(94vw, 610px)" :close-on-click-modal="false" :close-on-press-escape="!busy && !pending && !contextLoading" :show-close="!busy && !pending && !contextLoading" @update:model-value="value => { if (!value) closeDialog() }">
       <div v-if="pending"><p role="status">{{ formError || '已保留本次办理内容，请先核对项目最新状态。' }}</p>
         <p v-if="record">最新进度 {{ record.stageLabel }} · 版本 {{ record.revision }}</p>
         <p v-if="pending.action === 'create'">项目列表已有 {{ rows.length }} 条记录。重放本次请求会取得已保存的结果。</p>
@@ -384,7 +395,7 @@ onUnmounted(() => {
         </form>
       </template>
       <UiState v-else-if="dialog === 'submitInquiry' && !products.length" title="暂无可询价的已发布产品" description="请联系软件厂商发布产品后再发起询价。" />
-      <ChannelAction v-else-if="dialog && record" :key="dialog + record.revision" :action="dialog" :project="record" :role="role" :products="products" :busy="busy" :error="formError" @submit="submit" @cancel="closeDialog" />
+      <ChannelAction v-else-if="dialog && record" :key="dialog + record.revision" :action="dialog" :project="record" :role="role" :products="products" :inquiry-draft="inquiryDraft" :busy="busy" :error="formError" @submit="submit" @cancel="closeDialog" />
     </ElDialog>
   </section>
 </template>

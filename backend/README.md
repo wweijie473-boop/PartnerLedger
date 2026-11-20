@@ -29,7 +29,7 @@
    go run ./cmd/partnerledger link-customer -customer 31 -reseller 24
    ```
 
-5. 启动 API 和检查就绪状态。该版本对应数据库迁移 `000005`。迁移新增报价与订单表，保留既有项目和商机数据。旧版服务检查其对应迁移版本，回退时使用与旧版对应的开发库备份。
+5. 启动 API 和检查就绪状态。该版本对应数据库迁移 `000006`。迁移新增产品资料和询价草稿表，保留既有产品、项目和商机数据。旧版服务检查其对应迁移版本，回退时使用与旧版对应的开发库备份。
 
    ```powershell
    go run ./cmd/partnerledger serve
@@ -38,6 +38,10 @@
    ```
 
 服务默认监听回环地址。前端开发时由 Vite 将 `/api` 代理到 `http://127.0.0.1:8080`。启动后参照 [OpenAPI](openapi.yaml) 调用接口，登录返回的 token 用在 `Authorization: Bearer <token>` 请求头中。AI 解析使用后端的 `DEEPSEEK_API_KEY` 和可配置的 `PARTNERLEDGER_DEEPSEEK_MODEL`。联调请使用脱敏的需求文本。
+
+厂商通过 `/api/products/{id}/knowledge` 为本组织产品维护模块、部署方式、授权席位范围和资料摘录。代理商确认需求字段后，通过 `/api/ai/match-products` 核对已发布产品，查看逐项结论和厂商录入的来源。员工人数与授权席位分别记录。授权数未知或产品规则缺失时，匹配结果提示人工核对。
+
+代理商成员可为待询价项目在 `/api/channel/v1/projects/{id}/inquiry-draft` 保存草稿。同一请求编号和内容可安全重试。草稿仅创建成员可读取，并与项目版本绑定。经办人打开项目核对后，通过 `submitInquiry` 项目操作正式提交。
 
 三端项目通过 `GET /api/channel/v1/organization-links` 查询当前身份的可选关联方，再使用 `/api/channel/v1/projects` 建项和办理。重试同一写入须带回原 `requestId` 和请求体。收到 `revision_conflict` 时先重新加载详情。操作按钮以项目的 `actions` 为准。
 
