@@ -1,4 +1,3 @@
-body:has(.pl-portal) { min-width: 0; }
 .pl-portal {
   --pl-sticky-header-height: 55px;
   --pl-section-bar-height: 53px;

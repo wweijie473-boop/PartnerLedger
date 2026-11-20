@@ -83,7 +83,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
     <div ref="primary" class="pl-wrap pl-bar">
       <a class="pl-logo" href="/" aria-label="渠智链首页">
         <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
-        <b>渠智链</b><small>PartnerLedger</small>
+        <b>渠智链</b><span class="pl-product-name">PartnerLedger</span>
       </a>
 
       <nav class="pl-main-nav" aria-label="主导航">
@@ -92,7 +92,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
           <button :id="'portal-toggle-' + menu.id" class="pl-nav-button" type="button"
             :aria-expanded="active === menu.id" :aria-controls="'portal-panel-' + menu.id"
             @click="toggle(menu.id)" @keydown.down.prevent="focusFirst(menu.id)">
-            {{ menu.label }} <UiIcon name="chevron-down" :size="14" />
+            {{ menu.label }} <UiIcon name="chevron-down" :size="12" />
           </button>
           <ul v-show="active === menu.id" :id="'portal-panel-' + menu.id" class="pl-popover">
             <li v-for="link in menu.links" :key="link.href">
@@ -104,9 +104,9 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
 
       <form class="pl-search" role="search" aria-label="站内搜索" @submit.prevent="submitSearch" @focusout="focusOut($event, 'search')">
         <div class="pl-search-field">
-          <button type="submit" aria-label="搜索"><UiIcon name="search" :size="17" /></button>
           <input ref="searchInput" v-model="query" type="search" placeholder="搜索站内功能" aria-label="搜索站内功能"
             autocomplete="off" @focus="open('search')" @input="open('search')" @keydown.down.prevent="focusFirst('search')">
+          <button type="submit" aria-label="搜索"><UiIcon name="search" :size="17" /></button>
         </div>
         <div v-if="active === 'search'" id="portal-panel-search" class="pl-popover pl-search-panel">
           <p class="pl-search-caption" role="status">{{ query.trim() ? (results.length ? '搜索结果' : '没有找到相关功能') : '常用功能' }}</p>
