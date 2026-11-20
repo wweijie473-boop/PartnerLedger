@@ -64,6 +64,8 @@ body:has(.pl-header) { min-width: 0; }
 }
 .pl-popover a { display: flex; gap: 11px; align-items: center; min-height: 54px; padding: 8px 10px; border-radius: var(--ui-radius-sm); color: var(--ui-ink); text-decoration: none; }
 .pl-popover a:hover, .pl-popover a:focus-visible { background: var(--ui-accent-bg); }
+.pl-popover-text { width: min(176px, calc(100vw - 32px)); }
+.pl-popover-text a { min-height: 36px; padding-block: 5px; }
 .pl-link-icon { display: grid; flex: 0 0 34px; height: 34px; place-items: center; border-radius: 8px; color: var(--ui-link); background: var(--ui-surface-hover); }
 .pl-popover strong, .pl-popover small { display: block; }
 .pl-popover strong { font-size: 13px; font-weight: 500; }
