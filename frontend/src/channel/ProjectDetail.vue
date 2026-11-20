@@ -15,11 +15,11 @@ const stageOwner = computed(() => projectHandlerLabel(props.project, props.role)
     <UiButton compact icon="back" variant="text" @click="$emit('back')">返回项目列表</UiButton>
     <div v-if="$slots.toolbar" class="workspace-actions"><slot name="toolbar" /></div>
   </div>
-  <header class="ch-project-head">
+  <header v-enter class="ch-project-head">
     <h1>{{ project.title }}</h1>
     <div class="ch-project-meta"><span>编号 {{ project.id }}</span><span v-if="project.customerName">{{ project.customerName }}</span><span v-if="project.dueDate">目标日期 {{ project.dueDate }}</span></div>
   </header>
-  <section class="ch-next" aria-label="当前办理">
+  <section v-enter="1" class="ch-next" aria-label="当前办理">
     <dl class="project-current">
       <div><dt>当前阶段</dt><dd><UiBadge :tone="statusTone(project.stage)" dot>{{ project.stageLabel }}</UiBadge></dd></div>
       <div><dt>经办方</dt><dd>{{ stageOwner }}</dd></div>
@@ -32,7 +32,7 @@ const stageOwner = computed(() => projectHandlerLabel(props.project, props.role)
   </section>
   <UiProjectProgress :role="role" :stage="project.stage" :label="project.stageLabel" />
   <div class="ch-detail-grid">
-    <div class="ch-stack">
+    <div v-enter:children="2" class="ch-stack">
       <UiCard v-if="project.requirement" title="采购需求">
         <p class="project-copy">{{ project.requirement }}</p>
       </UiCard>
@@ -61,7 +61,7 @@ const stageOwner = computed(() => projectHandlerLabel(props.project, props.role)
         </dl>
       </UiCard>
     </div>
-    <UiCard title="项目时间线">
+    <UiCard v-enter="2" title="项目时间线">
       <ol v-if="project.timeline.length" class="ch-timeline"><li v-for="(event,index) in [...project.timeline].reverse()" :key="event.at + ':' + index"><time :datetime="event.at">{{ clock(event.at) }}</time><strong>{{ event.label }}</strong><p v-if="event.detail">{{ event.detail }}</p></li></ol>
       <p v-else class="muted">暂无可见的协作记录。</p>
     </UiCard>

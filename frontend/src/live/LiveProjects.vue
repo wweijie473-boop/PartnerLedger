@@ -298,7 +298,7 @@ onUnmounted(() => {
 
 <template>
   <section>
-    <header v-if="overview || !selected" class="page-heading">
+    <header v-if="overview || !selected" v-enter class="page-heading">
       <slot v-if="overview" name="heading" />
       <div v-else-if="!selected">
         <h1>{{ role === 'vendor' ? '渠道询价' : role === 'customer' ? '我的采购项目' : '客户项目' }}</h1>
@@ -314,12 +314,12 @@ onUnmounted(() => {
     <template v-else-if="overview">
       <UiState v-if="loadError" state="error" title="项目待办暂不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton></UiState>
       <template v-else>
-        <section class="metric-grid" aria-label="协作数据">
+        <section v-enter:children="1" class="metric-grid" aria-label="协作数据">
           <UiMetricCard label="可见项目" :value="rows.length" description="当前组织参与的项目" icon="request" interactive @click="$emit('open-list', 'all')" />
           <UiMetricCard label="待我处理" :value="tasks.length" description="下一步由本方办理" icon="activity" tone="brand" interactive @click="$emit('open-list', 'mine')" />
           <UiMetricCard label="协作方处理中" :value="partnerTasks.length" description="等待协作方推进" icon="time" interactive @click="$emit('open-list', 'partners')" />
         </section>
-        <section class="workspace-section" aria-labelledby="project-tasks">
+        <section v-enter="2" class="workspace-section" aria-labelledby="project-tasks">
           <header class="workspace-section-heading">
             <h2 id="project-tasks">项目待办</h2>
             <UiButton v-if="tasks.length" variant="text" end-icon="forward" @click="$emit('open-list', 'mine')">查看全部待办</UiButton>
@@ -343,7 +343,7 @@ onUnmounted(() => {
     </div>
     <template v-else>
       <UiState v-if="loadError" state="error" title="项目列表暂不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton></UiState>
-      <section v-else ref="list" class="workspace-section" aria-labelledby="project-list">
+      <section v-else v-enter="1" ref="list" class="workspace-section" aria-labelledby="project-list">
         <header class="workspace-section-heading">
           <div class="live-project-scopes" role="group" aria-label="项目范围">
             <h2 id="project-list" class="ch-sr">协作项目</h2>
