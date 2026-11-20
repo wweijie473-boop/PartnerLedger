@@ -49,10 +49,15 @@ func (s server) actOnChannelProject(c *gin.Context) {
 		return
 	}
 	var input channel.ActionInput
-	if !decode(c, &input) {
+	action := c.Param("action")
+	limit := int64(16 << 10)
+	if action == "channelQuote" || action == "salesQuote" {
+		limit = 256 << 10
+	}
+	if !decodeWithLimit(c, &input, limit) {
 		return
 	}
-	view, err := s.channel.Act(c.Request.Context(), principal(c), id, c.Param("action"), input)
+	view, err := s.channel.Act(c.Request.Context(), principal(c), id, action, input)
 	channelResult(c, http.StatusOK, view, err)
 }
 
@@ -77,7 +82,7 @@ func channelResult(c *gin.Context, status int, result any, err error) {
 	case errors.Is(err, channel.ErrNotFound):
 		respond(c, http.StatusNotFound, "not_found", nil)
 	case errors.Is(err, channel.ErrTransition), errors.Is(err, channel.ErrRevision), errors.Is(err, channel.ErrIdempotency),
-		errors.Is(err, channel.ErrDuplicateOpportunity):
+		errors.Is(err, channel.ErrDuplicateOpportunity), errors.Is(err, channel.ErrQuoteExpired):
 		respond(c, http.StatusConflict, err.Error(), nil)
 	default:
 		respond(c, http.StatusServiceUnavailable, "dependencies_unavailable", nil)

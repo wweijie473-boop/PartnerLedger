@@ -318,9 +318,9 @@ paths:
       - name: action
         in: path
         required: true
-        schema: { type: string, enum: [submitInquiry, withdrawInquiry, flagGap, requestInfo, replyInfo] }
+        schema: { $ref: '#/components/schemas/ProjectAction' }
     post:
-      summary: Apply an inquiry action at the current revision
+      summary: Apply a project, quote, order or fulfillment action
       requestBody:
         required: true
         content:
@@ -333,7 +333,7 @@ paths:
                 requestId: { type: string, format: uuid }
                 revision: { type: integer, minimum: 1 }
                 payload:
-                  description: Product and summary for submitInquiry, an empty object for withdrawInquiry, or a note for the other actions.
+                  description: Use a quote draft for channelQuote and salesQuote, a quoteId for confirmSales and placeOrder, or a note as described in the channel contract.
                   oneOf:
                     - type: object
                       additionalProperties: false
@@ -347,12 +347,18 @@ paths:
                       additionalProperties: false
                       required: [note]
                       properties:
-                        note: { type: string, minLength: 1, maxLength: 3000 }
+                        note: { type: string, maxLength: 3000 }
+                    - $ref: '#/components/schemas/ProjectQuoteDraft'
+                    - type: object
+                      additionalProperties: false
+                      required: [quoteId]
+                      properties:
+                        quoteId: { $ref: '#/components/schemas/ID' }
       responses:
         '200':
           $ref: '#/components/responses/ChannelProject'
         '409':
-          description: revision_conflict, invalid_transition, or idempotency_conflict
+          description: revision_conflict, invalid_transition, idempotency_conflict, or quote_expired
         default:
           $ref: '#/components/responses/Error'
   /api/channel/v1/opportunities/desk:
@@ -824,6 +830,44 @@ components:
         id: { $ref: '#/components/schemas/ID' }
         name: { type: string }
         kind: { type: string, enum: [MANUFACTURER, RESELLER, CUSTOMER] }
+    ProjectAction:
+      type: string
+      enum: [submitInquiry, withdrawInquiry, flagGap, requestInfo, replyInfo, channelQuote, reviseChannel, salesQuote, reviseSales, confirmSales, placeOrder, supply, implement, rectify, accept]
+    ProjectQuoteLine:
+      type: object
+      additionalProperties: false
+      required: [label, quantity, unitPrice]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 120 }
+        quantity: { type: integer, minimum: 1, maximum: 1000000 }
+        unitPrice: { type: string, pattern: '^[0-9]{1,8}(\.[0-9]{1,2})?$', example: '1500.00' }
+    ProjectQuoteDraft:
+      type: object
+      additionalProperties: false
+      required: [lines, validUntil, deliveryDays]
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/ProjectQuoteLine' }
+        validUntil: { type: string, format: date, description: Inclusive China Standard Time date }
+        deliveryDays: { type: integer, minimum: 1, maximum: 3650 }
+        note: { type: string, maxLength: 3000 }
+    ProjectQuoteVersion:
+      type: object
+      required: [id, version, status, lines, total, validUntil, deliveryDays, note]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        version: { type: integer, minimum: 1 }
+        status: { type: string, enum: [active, superseded, confirmed, expired, ordered] }
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectQuoteLine' }
+        total: { type: string, pattern: '^[0-9]+\.[0-9]{2}$', example: '30000.00' }
+        validUntil: { type: string, format: date }
+        deliveryDays: { type: integer, minimum: 1 }
+        note: { type: string }
     ChannelProject:
       type: object
       required: [id, title, stage, stageLabel, revision, isTodo, nextStep, actions, timeline]
@@ -834,14 +878,16 @@ components:
         requirement: { type: string, description: Visible to the customer and reseller }
         dueDate: { type: string, format: date }
         product: { $ref: '#/components/schemas/ID' }
-        stage: { type: string, enum: [requested, customer_info, inquired, vendor_info, processing] }
+        stage:
+          type: string
+          enum: [requested, customer_info, inquired, vendor_info, processing, channel_quoted, channel_revision, channel_wait, sales_quoted, sales_revision, confirmed, ordered, supplied, shipped, acceptance, rectification, completed]
         stageLabel: { type: string }
         revision: { type: integer, minimum: 1 }
         isTodo: { type: boolean }
         nextStep: { type: string }
         actions:
           type: array
-          items: { type: string, enum: [submitInquiry, withdrawInquiry, flagGap, requestInfo, replyInfo] }
+          items: { $ref: '#/components/schemas/ProjectAction' }
         inquiry:
           type: object
           required: [id, summary, processed]
@@ -850,8 +896,23 @@ components:
             summary: { type: string }
             processed: { type: boolean }
             gapNote: { type: string }
-        channelQuotes: { type: array, maxItems: 0, description: Reserved for channel quote versions }
-        salesQuotes: { type: array, maxItems: 0, description: Reserved for sales quote versions }
+        channelQuotes:
+          type: array
+          description: Available to the manufacturer and the reseller
+          items: { $ref: '#/components/schemas/ProjectQuoteVersion' }
+        salesQuotes:
+          type: array
+          description: Available to the customer and the reseller
+          items: { $ref: '#/components/schemas/ProjectQuoteVersion' }
+        order:
+          type: object
+          required: [id]
+          properties:
+            id: { $ref: '#/components/schemas/ID' }
+            channelQuoteId: { $ref: '#/components/schemas/ID' }
+            salesQuoteId: { $ref: '#/components/schemas/ID' }
+        supplyNote: { type: string }
+        implementationNote: { type: string, description: Available to the customer and reseller }
         timeline:
           type: array
           items:

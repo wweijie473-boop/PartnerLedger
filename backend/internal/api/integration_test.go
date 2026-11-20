@@ -154,6 +154,9 @@ func TestOrganizationIsolation(t *testing.T) {
 		err := db.Transaction(func(tx *gorm.DB) error {
 			for _, statement := range []string{
 				"DELETE FROM pl_channel_requests WHERE project_id IN (SELECT id FROM pl_channel_projects WHERE customer_id = ?)",
+				"DELETE FROM pl_channel_orders WHERE project_id IN (SELECT id FROM pl_channel_projects WHERE customer_id = ?)",
+				"DELETE FROM pl_channel_quotes WHERE kind = 'sales' AND project_id IN (SELECT id FROM pl_channel_projects WHERE customer_id = ?)",
+				"DELETE FROM pl_channel_quotes WHERE kind = 'channel' AND project_id IN (SELECT id FROM pl_channel_projects WHERE customer_id = ?)",
 				"DELETE FROM pl_channel_events WHERE project_id IN (SELECT id FROM pl_channel_projects WHERE customer_id = ?)",
 				"DELETE FROM pl_channel_projects WHERE customer_id = ?",
 				"DELETE FROM pl_channel_links WHERE customer_id = ?",
@@ -255,5 +258,6 @@ func TestOrganizationIsolation(t *testing.T) {
 	if len(outsiderPage.Items) != 0 {
 		t.Fatalf("cross-organization list leaked: %+v", outsiderPage)
 	}
+	testProjectCommercial(t, db, request, send, path, dealer, first, customer, otherDealer, otherCustomer, second)
 	testDealerFieldwork(t, db, cache, request, project.ID, dealerID, dealer, otherDealer, customer, first, password)
 }
