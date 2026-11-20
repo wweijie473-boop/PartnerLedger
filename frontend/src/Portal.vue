@@ -45,11 +45,11 @@ function showPhase(index) {
     <main>
       <section class="pl-hero" aria-labelledby="portal-title">
         <div class="pl-wrap pl-intro">
-          <div class="pl-hero-copy">
-            <p v-enter class="pl-kicker">软件渠道协作平台</p>
-            <h1 v-enter="1" id="portal-title">软件采购，<br />从谈需求到验收</h1>
-            <p v-enter="2" class="pl-subtitle">客户提需求，代理商整理方案，厂商确认供货。三方在同一个项目里查看需求、报价和交付进度。</p>
-            <div v-enter="3" class="pl-hero-actions">
+          <div v-enter class="pl-hero-copy">
+            <p class="pl-kicker">软件渠道协作平台</p>
+            <h1 id="portal-title">软件采购，<br />从谈需求到验收</h1>
+            <p class="pl-subtitle">客户提需求，代理商整理方案，厂商确认供货。三方在同一个项目里查看需求、报价和交付进度。</p>
+            <div class="pl-hero-actions">
               <a class="pl-primary" href="/experience/dealer">体验代理商工作台 <UiIcon name="forward" :size="15" /></a>
               <a class="pl-secondary" href="#journey">了解三方协作</a>
             </div>
@@ -58,7 +58,7 @@ function showPhase(index) {
         </div>
       </section>
       <nav class="pl-section-bar" aria-label="首页栏目">
-        <div v-enter class="pl-wrap pl-section-links">
+        <div class="pl-wrap pl-section-links">
           <a href="#journey">三方协作</a>
           <a href="#roles">角色工作台</a>
           <a href="#opportunity">商机拾遗</a>
@@ -80,8 +80,10 @@ function showPhase(index) {
         </article>
       </div></section>
       <section id="roles" class="pl-wrap pl-role-section" tabindex="-1" aria-labelledby="portal-roles-title">
-        <h2 v-enter id="portal-roles-title">三个工作台，各自从哪里开始？</h2>
-        <p v-enter="1">可以直接打开演示，用示例项目看看每种身份的日常工作。</p>
+        <header v-enter>
+          <h2 id="portal-roles-title">三个工作台，各自从哪里开始？</h2>
+          <p>可以直接打开演示，用示例项目看看每种身份的日常工作。</p>
+        </header>
         <ul v-enter:children class="pl-role-grid">
           <li v-for="entry in entrances" :key="entry.role">
             <span class="pl-role-icon"><UiIcon :name="entry.icon" :size="21" /></span>
