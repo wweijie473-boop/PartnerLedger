@@ -2,6 +2,7 @@
 import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElDialog } from 'element-plus'
 import WorkspaceShell from './WorkspaceShell.vue'
+import { accountPath } from './auth-session.js'
 import { UiBadge, UiButton, UiCard, UiField, UiIcon, UiIconTile, UiMetricCard, UiProgress, UiState } from './ui/index.js'
 import { defaultExpiry, deliverySteps, isValidQuote, money, orderId, productName, products, roles, seedCases, statuses } from './demo'
 
@@ -214,10 +215,10 @@ function reset() {
         <span><strong>{{ item.label }}</strong><small>{{ item.company }}</small></span><UiIcon name="forward" />
       </button>
     </div>
-    <p class="demo-footer"><a class="live-entry" href="/">使用后端账号登录</a></p>
+    <p class="demo-footer"><a class="live-entry" :href="accountPath">进入正式工作台</a></p>
   </div>
 
-  <WorkspaceShell v-else :nav="nav" :view="view" :organization="roles[role].company"
+  <WorkspaceShell v-else demo :nav="nav" :view="view" :organization="roles[role].company"
     :account-label="`${roles[role].label}工作台`" environment="本地演示环境" @navigate="go" @account="modal = 'role'">
     <template #actions>
       <form class="top-search" @submit.prevent="go('requests', true)"><UiIcon name="search" :size="16" /><input v-model="query" placeholder="搜索记录" aria-label="搜索记录" /></form>
@@ -279,7 +280,7 @@ function reset() {
           </table></div>
         </UiCard>
 
-        <footer class="demo-footer"><span>演示数据 · 保存在当前浏览器</span><div class="footer-actions"><label v-if="view !== 'catalog'">界面状态 <select v-model="demoState"><option value="normal">正常</option><option value="loading">加载中</option><option value="empty">空数据</option><option value="denied">无权限</option><option value="error">加载失败</option></select></label><button @click="modal = 'reset'">重置数据</button><a href="/">正式登录</a><a href="/ui">组件库</a></div></footer>
+        <footer class="demo-footer"><span>演示数据 · 保存在当前浏览器</span><div class="footer-actions"><label v-if="view !== 'catalog'">界面状态 <select v-model="demoState"><option value="normal">正常</option><option value="loading">加载中</option><option value="empty">空数据</option><option value="denied">无权限</option><option value="error">加载失败</option></select></label><button @click="modal = 'reset'">重置数据</button><a :href="accountPath">正式工作台</a><a href="/ui">组件库</a></div></footer>
   </WorkspaceShell>
 
   <ElDialog v-model="modalOpen" :title="modalTitle" width="min(584px, calc(100vw - 28px))" align-center destroy-on-close>

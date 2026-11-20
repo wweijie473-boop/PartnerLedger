@@ -1,13 +1,12 @@
 <script setup>
 import { computed, markRaw, onMounted, ref, shallowRef } from 'vue'
 import { requestApi } from '../api.js'
+import { accountPath, currentSession, saveSession, sessionFromCredentials } from '../auth-session.js'
 import { columnName, MAX_COLS, MAX_ROWS } from './cells.js'
 import DataGrid from './DataGrid.vue'
 import { createTableRepository } from './httpSource.js'
 import './studio.css'
 
-const sessionKey = 'partnerledger-api-session'
-const token = ref('')
 const user = ref(null), sheets = shallowRef([]), nextCursor = ref(null)
 const selected = shallowRef(null), source = shallowRef(null), grid = ref(null)
 const username = ref(''), password = ref(''), busy = ref(false), initializing = ref(true)
@@ -21,32 +20,32 @@ const recoveryKey = computed(() => 'partnerledger:table-draft:' + user.value?.or
 const defaultColumns = () => Array.from({ length: 8 }, (_, i) => ({ label: '字段 ' + columnName(i), kind: 'auto' }))
 
 async function authorized(path, options) {
-  const active = token.value
-  if (!active) throw new Error('请使用 PartnerLedger 账号登录。')
+  const active = currentSession()
+  if (!active) {
+    clearSession()
+    throw new Error('登录已失效，请重新登录。')
+  }
   try {
-    const result = await requestApi(path, { ...options, token: active })
-    if (token.value !== active) throw new DOMException('Session changed', 'AbortError')
+    const result = await requestApi(path, { ...options, token: active.token })
+    if (currentSession() !== active) throw new DOMException('Session changed', 'AbortError')
     return result
   } catch (failure) {
-    if (failure.status === 401 && token.value === active) clearSession()
+    if (failure.status === 401 && currentSession() === active) clearSession()
     throw failure
   }
 }
 const repository = createTableRepository(authorized)
 
 function clearSession() {
-  token.value = ''
+  saveSession(null)
   user.value = null; sheets.value = []; selected.value = null; source.value = null
-  try { sessionStorage.removeItem(sessionKey) } catch { /* The session remains cleared in memory. */ }
 }
 async function signin() {
   busy.value = true
   error.value = ''
   try {
     const result = await requestApi('/api/auth/login', { method: 'POST', body: { username: username.value.trim(), password: password.value } })
-    token.value = result.access_token
-    try { sessionStorage.setItem(sessionKey, JSON.stringify({ token: token.value, expiresAt: Date.now() + result.expires_in * 1000 })) }
-    catch { /* The authenticated workspace is still usable in this tab. */ }
+    saveSession(sessionFromCredentials(result))
     password.value = ''
     user.value = result.user
     await loadWorkspace()
@@ -152,16 +151,23 @@ async function exportSheet() {
   error.value = ''
   try {
     if (!await grid.value.flush()) throw new Error('请先保存改动。')
+    const active = currentSession()
+    if (!active) {
+      clearSession()
+      throw new Error('登录已失效，请重新登录。')
+    }
+    const filename = selected.value.name
     const response = await fetch(source.value.exportURL, {
-      headers: { Authorization: 'Bearer ' + token.value, Accept: 'text/csv' },
+      headers: { Authorization: 'Bearer ' + active.token, Accept: 'text/csv' },
       cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(30000),
     })
+    if (currentSession() !== active) return
     if (response.status === 401) { clearSession(); throw new Error('登录已失效，请重新登录。') }
     if (!response.ok) throw new Error('导出失败，导出范围或数据量可能超过限制。')
     const href = URL.createObjectURL(await response.blob())
     const download = document.createElement('a')
     download.href = href
-    download.download = selected.value.name.replace(/[\\/]/g, '-') + '.csv'
+    download.download = filename.replace(/[\\/]/g, '-') + '.csv'
     download.click()
     setTimeout(() => URL.revokeObjectURL(href), 1000)
   } catch (failure) { error.value = failure.message }
@@ -170,10 +176,7 @@ async function exportSheet() {
 
 onMounted(async () => {
   try {
-    let stored
-    try { stored = JSON.parse(sessionStorage.getItem(sessionKey)) } catch { /* Sign in when storage is unavailable. */ }
-    if (typeof stored?.token === 'string' && stored.expiresAt > Date.now()) {
-      token.value = stored.token
+    if (currentSession()) {
       user.value = await authorized('/api/user/profile')
       await loadWorkspace()
     }
@@ -187,7 +190,7 @@ onMounted(async () => {
     <header class="studio-top"><div class="studio-top-inner">
       <a href="/" class="studio-brand">渠智链</a><span class="studio-crumb">表格工作台</span>
       <template v-if="user">
-        <span class="studio-identity">{{ user.organization.name }} · {{ user.username }}</span>
+        <a class="studio-identity" :href="accountPath">{{ user.organization.name }} · {{ user.username }}</a>
         <button type="button" @click="logout">退出</button>
       </template>
     </div></header>

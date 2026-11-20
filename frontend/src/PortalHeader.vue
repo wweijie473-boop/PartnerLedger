@@ -1,10 +1,12 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { UiIcon } from './ui'
+import WorkspaceAccount from './WorkspaceAccount.vue'
+import { accountPath } from './auth-session.js'
 import { portalMenus, searchPortal } from './portal-navigation.js'
 import './portal-header.css'
 
-const props = defineProps({ homePage: Boolean })
+const props = defineProps({ homePage: Boolean, account: Object, signedIn: Boolean })
 const primary = ref(null)
 const searchInput = ref(null)
 const query = ref('')
@@ -131,7 +133,11 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
         <a :href="destination('#help')" @click="dismiss">帮助</a>
       </nav>
       <div class="pl-account-slot">
-        <slot name="account"><a class="pl-nav-button pl-nav-cta" href="/login">登录</a></slot>
+        <slot name="account">
+          <WorkspaceAccount v-if="account" :label="account.username" :organization="account.organization.name" :href="accountPath" />
+          <a v-else-if="signedIn" class="pl-nav-button pl-nav-cta" :href="accountPath">我的账号</a>
+          <a v-else class="pl-nav-button pl-nav-cta" href="/login">登录</a>
+        </slot>
       </div>
     </div>
     <slot name="secondary" />

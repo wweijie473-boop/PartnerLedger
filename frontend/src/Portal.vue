@@ -5,9 +5,12 @@ import PortalHeader from './PortalHeader.vue'
 import { UiIcon } from './ui'
 import { entrances } from './entrances.js'
 import { portalMenus } from './portal-navigation.js'
+import { accountPath } from './auth-session.js'
+import { useSessionAccount } from './useSessionAccount.js'
 import './portal.css'
 
 const phase = ref(0)
+const { account, signedIn } = useSessionAccount()
 const phases = [
   {
     title: '需求与询价', prompt: '先把采购需求说清楚', icon: 'request', role: 'customer',
@@ -31,7 +34,7 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
 
 <template>
   <div id="top" class="pl-portal">
-    <PortalHeader home-page />
+    <PortalHeader home-page :account="account" :signed-in="signedIn" />
     <main>
       <section class="pl-hero" aria-labelledby="portal-title">
         <div class="pl-wrap pl-intro">
@@ -111,8 +114,14 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
           </nav>
           <section id="help" tabindex="-1" aria-labelledby="portal-help-title">
             <h2 id="portal-help-title">帮助</h2>
-            <p>有账号就登录，在页面上选身份。需要为新组织开户，可以从注册开始。</p>
-            <ul><li><a href="/login">登录</a> · <a href="/register">注册</a></li><li><a href="/experience/dealer">免登录体验</a></li><li><a href="/ui">界面组件</a></li></ul>
+            <p v-if="signedIn">在账号与组织里查看当前账号信息。</p>
+            <p v-else>有账号就登录，在页面上选身份。需要为新组织开户，可以从注册开始。</p>
+            <ul>
+              <li v-if="signedIn"><a :href="accountPath">账号与组织</a></li>
+              <li v-else><a href="/login">登录</a> · <a href="/register">注册</a></li>
+              <li><a href="/experience/dealer">免登录体验</a></li>
+              <li><a href="/ui">界面组件</a></li>
+            </ul>
           </section>
         </div>
         <div class="pl-footer-bottom"><span>© {{ new Date().getFullYear() }} 渠智链</span><a href="#top">返回顶部 <span aria-hidden="true">↑</span></a></div>
