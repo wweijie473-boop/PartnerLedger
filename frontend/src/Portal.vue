@@ -47,7 +47,7 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
               <a class="pl-secondary" href="#journey">了解三方协作</a>
             </div>
           </div>
-          <div class="pl-artwork" aria-hidden="true"><PortalArtwork /></div>
+          <div class="pl-artwork"><PortalArtwork /></div>
         </div>
       </section>
       <nav class="pl-section-bar" aria-label="首页栏目">
@@ -63,11 +63,13 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
           <div class="pl-phases" aria-label="选择协作阶段"><button v-for="(item,index) in phases" :key="item.title" :aria-pressed="phase === index" @click="phase = index">{{ item.title }}</button></div>
         </div>
         <article class="pl-case" aria-live="polite">
-          <p class="pl-case-label"><UiIcon :name="currentPhase.icon" :size="20" />{{ currentPhase.title }}</p>
-          <h3>{{ currentPhase.prompt }}</h3>
-          <p>{{ currentPhase.note }}</p>
-          <dl><div v-for="[label,value] in currentPhase.rows" :key="label"><dt>{{ label }}</dt><dd>{{ value }}</dd></div></dl>
-          <a :href="'/experience/' + exampleRole.role">体验{{ exampleRole.label }}工作台</a>
+          <div :key="currentPhase.title" class="pl-case-content">
+            <p class="pl-case-label"><UiIcon :name="currentPhase.icon" :size="20" />{{ currentPhase.title }}</p>
+            <h3>{{ currentPhase.prompt }}</h3>
+            <p>{{ currentPhase.note }}</p>
+            <dl><div v-for="[label,value] in currentPhase.rows" :key="label"><dt>{{ label }}</dt><dd>{{ value }}</dd></div></dl>
+            <a :href="'/experience/' + exampleRole.role">体验{{ exampleRole.label }}工作台</a>
+          </div>
         </article>
       </div></section>
       <section id="roles" class="pl-wrap pl-role-section" tabindex="-1" aria-labelledby="portal-roles-title">

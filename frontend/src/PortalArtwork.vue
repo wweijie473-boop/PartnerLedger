@@ -1,14 +1,21 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { UiIcon } from './ui/index.js'
 
 const width = 430
 const height = 250
-const duration = 3800
+const duration = 14000
 const angles = Array.from({ length: 128 }, (_, index) => index * 2 * Math.PI / 128)
 const surface = ref(null)
+const ready = ref(false)
+const paused = ref(false)
+const reducedMotion = ref(false)
 let frame
 let motionPreference
-let play
+let viewportObserver
+let paint
+let elapsed = 0
+let inView = false
 
 function radialWash(context, x, y, radius, color) {
   const wash = context.createRadialGradient(x, y, 0, x, y, radius)
@@ -79,35 +86,70 @@ function painter(context) {
   }
 }
 
+function updatePlayback() {
+  window.cancelAnimationFrame(frame)
+  if (paused.value || reducedMotion.value || !inView || document.hidden) return
+
+  const offset = elapsed
+  let start
+  let lastPaint = -Infinity
+  function animate(now) {
+    start ??= now
+    if (now - lastPaint >= 1000 / 30) {
+      elapsed = (offset + now - start) % duration
+      paint(elapsed / duration)
+      lastPaint = now
+    }
+    frame = window.requestAnimationFrame(animate)
+  }
+  frame = window.requestAnimationFrame(animate)
+}
+
+function toggleMotion() {
+  paused.value = !paused.value
+  updatePlayback()
+}
+
+function updatePreference() {
+  reducedMotion.value = motionPreference.matches
+  updatePlayback()
+}
+
 onMounted(() => {
   const context = surface.value.getContext('2d')
   if (!context) return
   context.scale(2, 2)
-  const paint = painter(context)
+  paint = painter(context)
+  paint(0)
   motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
-  play = () => {
-    window.cancelAnimationFrame(frame)
-    paint(0)
-    if (motionPreference.matches) return
-    let start
-    const animate = (now) => {
-      start ??= now
-      const progress = Math.min((now - start) / duration, 1)
-      paint(progress)
-      if (progress < 1) frame = window.requestAnimationFrame(animate)
-    }
-    frame = window.requestAnimationFrame(animate)
+  motionPreference.addEventListener('change', updatePreference)
+  document.addEventListener('visibilitychange', updatePlayback)
+  if ('IntersectionObserver' in window) {
+    viewportObserver = new IntersectionObserver(([entry]) => {
+      inView = entry.isIntersecting
+      updatePlayback()
+    })
+    viewportObserver.observe(surface.value)
+  } else {
+    inView = true
   }
-  motionPreference.addEventListener('change', play)
-  play()
+  updatePreference()
+  ready.value = true
 })
 
 onBeforeUnmount(() => {
   window.cancelAnimationFrame(frame)
-  motionPreference?.removeEventListener('change', play)
+  viewportObserver?.disconnect()
+  motionPreference?.removeEventListener('change', updatePreference)
+  document.removeEventListener('visibilitychange', updatePlayback)
 })
 </script>
 
 <template>
   <canvas ref="surface" class="pl-visual" :width="width * 2" :height="height * 2" aria-hidden="true"></canvas>
+  <button v-if="ready && !reducedMotion" class="pl-motion-toggle" type="button"
+    :aria-label="paused ? '播放背景动效' : '暂停背景动效'" :title="paused ? '播放背景动效' : '暂停背景动效'"
+    @click="toggleMotion">
+    <UiIcon :name="paused ? 'play' : 'pause'" :size="16" />
+  </button>
 </template>

@@ -89,7 +89,10 @@ main.workspace-content .ui-metric-card {
   background: var(--ui-surface-muted);
   box-shadow: none;
 }
-main.workspace-content button.ui-metric-card:hover { background: var(--ui-accent-bg); }
+main.workspace-content button.ui-metric-card:active:not(:disabled) { background: var(--ui-accent-bg); }
+@media (hover: hover) and (pointer: fine) {
+  main.workspace-content button.ui-metric-card:hover:not(:disabled) { background: var(--ui-accent-bg); }
+}
 main.workspace-content .ui-metric-card .ui-icon-tile {
   --ui-tile-size: 18px;
   background: transparent;

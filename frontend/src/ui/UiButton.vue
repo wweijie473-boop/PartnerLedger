@@ -38,18 +38,25 @@ defineProps({
   font-size: var(--ui-text-sm);
   font-weight: var(--ui-weight-semibold);
   white-space: nowrap;
-  transition: background-color .16s ease, border-color .16s ease;
+  transition: background-color var(--ui-motion-fast) var(--ui-ease-out),
+    border-color var(--ui-motion-fast) var(--ui-ease-out),
+    translate var(--ui-motion-fast) var(--ui-ease-out);
 }
-.ui-button:hover:not(:disabled) { background: var(--ui-surface-hover); }
 .ui-button[data-variant='primary'] { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent); }
-.ui-button[data-variant='primary']:hover:not(:disabled) { background: var(--ui-accent-hover); border-color: var(--ui-accent-hover); }
 .ui-button[data-variant='text'] { background: transparent; border-color: transparent; color: var(--ui-link); }
 .ui-button[data-variant='danger'] { border-color: var(--ui-danger-ink); color: var(--ui-danger-ink); }
-.ui-button[data-variant='danger']:hover:not(:disabled) { background: var(--ui-danger-bg); }
 .ui-button.is-compact { padding: 4px 10px; min-height: 32px; font-size: var(--ui-text-sm); }
 .ui-button:disabled { cursor: default; opacity: .55; }
 .ui-button-spinner { animation: rotate .85s linear infinite; }
 @keyframes rotate { to { transform: rotate(360deg); } }
+@media (hover: hover) and (pointer: fine) {
+  .ui-button:hover:not(:disabled) { background: var(--ui-surface-hover); }
+  .ui-button[data-variant='primary']:hover:not(:disabled) { background: var(--ui-accent-hover); border-color: var(--ui-accent-hover); }
+  .ui-button[data-variant='danger']:hover:not(:disabled) { background: var(--ui-danger-bg); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ui-button:active:not(:disabled) { translate: 0 1px; }
+}
 @media (max-width: 540px) { .ui-button, .ui-button.is-compact { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .ui-button { transition: none; } .ui-button-spinner { animation: none; } }
 </style>
