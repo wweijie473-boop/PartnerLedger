@@ -8,7 +8,7 @@ import LiveProjects from './live/LiveProjects.vue'
 import LiveVisits from './live/LiveVisits.vue'
 import LiveOpportunities from './live/LiveOpportunities.vue'
 import { entrances, organizationKinds, organizationRole } from './live/entrances.js'
-import { UiBadge, UiButton, UiCard, UiField, UiIcon, UiState } from './ui/index.js'
+import { UiButton, UiCard, UiField, UiIcon, UiState } from './ui/index.js'
 
 const props = defineProps({
   role: { type: String, default: '', validator: (value) => value === '' || Object.hasOwn(entrances, value) },
@@ -61,6 +61,18 @@ const navigation = computed(() => [
   ...(isDealer.value ? [{ id: 'visits', label: '记拜访', icon: 'request' }] : []),
   ...(isDealer.value ? [{ id: 'opportunities', label: '商机拾遗', icon: 'workflow' }] : []),
   { id: 'account', label: '账号与组织', icon: portal.value?.icon || 'customer' },
+])
+const shortcuts = computed(() => [
+  ...(entry.value !== 'customer' ? [{
+    id: 'catalog', label: '产品目录', icon: 'catalog',
+    description: isManufacturer.value ? '新增、编辑与发布本组织的软件产品。' : '查看产品版本、说明与厂商发布信息。',
+  }] : []),
+  ...(isDealer.value ? [
+    { id: 'requirement', label: '需求整理', icon: 'request', description: '核对客户需要的授权数、模块和部署方式。' },
+    { id: 'visits', label: '记拜访', icon: 'activity', description: '记录主采购事项与附加需求，随时继续整理草稿。' },
+    { id: 'opportunities', label: '商机拾遗', icon: 'workflow', description: '跟进团队商机、伙伴引荐和介绍费条件。' },
+  ] : []),
+  { id: 'projects', label: '项目协作', icon: 'request', description: '查看项目进度，处理需求、询价和补充资料。' },
 ])
 
 function accessPath(nextMode, role = entry.value) {
@@ -324,29 +336,27 @@ function openOpportunity(id = '', projectId = '') {
   <WorkspaceShell v-else :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
     <template v-if="view === 'overview'">
-      <section class="page-heading"><div><p class="access-kicker">{{ organization.name }}</p><h1>{{ kindLabel }}工作台</h1>
-        <p class="muted">{{ isManufacturer ? '接收渠道询价，回复资料问题并记录能力缺口。' : isDealer ? '接收客户需求、发起厂商询价并跟进双方回复。' : '提交采购需求，向经办代理商补充资料并查看进度。' }}</p></div></section>
-      <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" @open-project="openProject" />
-      <h2 class="live-tools-heading">常用工作</h2>
-      <div class="live-tiles">
-        <UiCard v-if="entry !== 'customer'" title="产品目录" :description="isManufacturer ? '新增、编辑与发布本组织的软件产品。' : '查看产品版本、说明与厂商发布信息。'">
-          <template #actions><UiIcon name="catalog" :size="20" /></template>
-          <UiButton end-icon="forward" @click="navigate('catalog')">打开目录</UiButton>
-        </UiCard>
-        <UiCard v-if="isDealer" title="需求整理" description="录入客户描述，核对授权数、模块和部署方式。">
-          <template #actions><UiIcon name="request" :size="20" /></template>
-          <UiButton end-icon="forward" @click="navigate('requirement')">整理需求</UiButton>
-        </UiCard>
-        <UiCard v-if="isDealer" title="记拜访" description="留下一句话，核对主采购事项与附加需求，同一账号可继续整理已同步草稿。">
-          <UiButton @click="navigate('visits')">记录本次拜访</UiButton>
-        </UiCard>
-        <UiCard v-if="isDealer" title="商机拾遗" description="查看团队共享的商机和伙伴，跟进引荐结果、介绍费条件和自己的未读候选。">
-          <UiButton @click="navigate('opportunities')">打开商机台账</UiButton>
-        </UiCard>
-        <UiCard title="项目协作" description="在关联项目中查看进度，处理需求、询价、补充资料和能力缺口。">
-          <UiButton @click="navigate('projects')">打开项目</UiButton>
-        </UiCard>
-      </div>
+      <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" @open-project="openProject">
+        <template #heading>
+          <div>
+            <p class="workspace-kicker">{{ organization.name }}</p>
+            <h1>{{ kindLabel }}工作台</h1>
+            <p class="muted">{{ isManufacturer ? '接收渠道询价，回复资料问题并记录能力缺口。' : isDealer ? '接收客户需求、发起厂商询价并跟进双方回复。' : '提交采购需求，向经办代理商补充资料并查看进度。' }}</p>
+          </div>
+        </template>
+      </LiveProjects>
+      <section class="workspace-section" aria-labelledby="workspace-shortcuts">
+        <header class="workspace-section-heading"><h2 id="workspace-shortcuts">常用工作</h2></header>
+        <ul class="live-shortcuts">
+          <li v-for="shortcut in shortcuts" :key="shortcut.id">
+            <button type="button" @click="navigate(shortcut.id)">
+              <UiIcon :name="shortcut.icon" :size="17" />
+              <span><strong>{{ shortcut.label }}</strong><small>{{ shortcut.description }}</small></span>
+              <UiIcon name="chevron-right" :size="14" />
+            </button>
+          </li>
+        </ul>
+      </section>
     </template>
     <LiveProjects v-else-if="view === 'projects'" :key="navigationRevision" :request="authenticated" :role="entry" :organization-id="organization.id" @capture-opportunity="id => openOpportunity('',id)" />
     <LiveVisits v-else-if="view === 'visits' && isDealer" :request="authenticated" :scope="organization.id + ':' + user.id" @project="openProject" @opportunity="id => openOpportunity(id)" />
@@ -354,17 +364,20 @@ function openOpportunity(id = '', projectId = '') {
     <ProductCatalog v-else-if="view === 'catalog' && entry !== 'customer'" :request="authenticated" :is-manufacturer="isManufacturer" />
     <RequirementParser v-else-if="view === 'requirement' && isDealer" :request="authenticated" />
     <template v-else>
-      <section class="page-heading"><div><h1>账号与组织</h1></div></section>
-      <UiCard title="当前账号">
-        <template #actions><UiBadge tone="brand">{{ kindLabel }}</UiBadge></template>
-        <dl class="details">
-          <dt>用户名</dt><dd>{{ user.username }}</dd>
-          <dt>所属组织</dt><dd>{{ organization.name }}</dd>
-          <dt>组织编号</dt><dd>{{ organization.id }}</dd>
+      <header class="page-heading"><h1>账号与组织</h1></header>
+      <section class="workspace-section live-account" aria-labelledby="current-account">
+        <header class="workspace-section-heading">
+          <h2 id="current-account">当前账号</h2>
+          <UiButton icon="sign-out" variant="text" :loading="signingOut" @click="signOut">退出登录</UiButton>
+        </header>
+        <dl class="live-account-facts">
+          <div><dt>用户名</dt><dd>{{ user.username }}</dd></div>
+          <div><dt>账号类型</dt><dd>{{ kindLabel }}</dd></div>
+          <div><dt>所属组织</dt><dd>{{ organization.name }}</dd></div>
+          <div><dt>组织编号</dt><dd>{{ organization.id }}</dd></div>
         </dl>
         <p v-if="logoutError" class="form-error live-feedback" role="alert">{{ logoutError }}</p>
-        <template #footer><UiButton icon="sign-out" :loading="signingOut" @click="signOut">退出登录</UiButton></template>
-      </UiCard>
+      </section>
     </template>
     <footer class="live-links"><a href="/">平台首页</a><a :href="'/experience/' + entry">{{ kindLabel }}演示</a></footer>
   </WorkspaceShell>
@@ -373,7 +386,44 @@ function openOpportunity(id = '', projectId = '') {
 <style scoped src="./live/access.css"></style>
 <style scoped>
 .live-login { max-width: 446px; }
-.live-links { display: flex; flex-wrap: wrap; gap: var(--ui-space-4); margin-top: var(--ui-space-5); font-size: var(--ui-text-sm); }
-.live-links a { color: var(--ui-link); text-underline-offset: 4px; }
-.live-feedback { margin-top: var(--ui-space-3); }
+.live-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; font-size: 13px; }
+.live-links a { text-decoration: none; }
+.live-links a:hover { text-decoration: underline; }
+.live-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: 0 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.live-shortcuts button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 8px 6px;
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  background: transparent;
+  color: var(--ui-link);
+  text-align: left;
+}
+.live-shortcuts button:hover, .live-shortcuts button:focus-visible { background: var(--ui-accent-bg); }
+.live-shortcuts button > span { flex: 1; min-width: 0; }
+.live-shortcuts strong, .live-shortcuts small { display: block; }
+.live-shortcuts strong { font-size: 13px; font-weight: 500; }
+.live-shortcuts small { color: var(--ui-ink-muted); font-size: 12px; }
+.live-account { max-width: 720px; }
+.live-account-facts > div {
+  display: grid;
+  grid-template-columns: minmax(80px, 18ch) minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--ui-border);
+}
+.live-account-facts dt { color: var(--ui-ink-muted); }
+.live-account-facts dd { margin: 0; overflow-wrap: anywhere; }
+.live-feedback { margin-block: 8px; }
 </style>

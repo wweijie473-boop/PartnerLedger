@@ -93,11 +93,7 @@
 .access-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
 .access-links a { color: var(--ui-link); }
 .access-notice { color: var(--ui-success-ink); font-size: 13px; }
-.access-kicker { font-size: 12px; color: var(--ui-link); margin-bottom: 16px; font-weight: 600; }
 .access-inline-link { font-size: 14px; font-weight: 600; }
-.live-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 20px; }
-.live-tiles .ui-card { display: flex; flex-direction: column; border-top: 3px solid var(--ui-accent-border); }
-.live-tiles :deep(.ui-card-body) { margin-top: auto; }
 .identity-notice { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--ui-info-bg); color: var(--ui-info-ink); border-radius: 6px; margin-bottom: 20px; }
 @keyframes access-panel-in {
   from { opacity: 0; transform: translateY(5px); }

@@ -1,15 +1,12 @@
-.op-banner,.op-count,.op-tabs,.op-tools,.op-records button,.op-metrics { display:flex; align-items:center; gap:12px; }
-.op-banner { justify-content:space-between; flex-wrap:wrap; margin:20px 0; background:var(--ui-surface-muted); border:1px solid var(--ui-border); padding:22px; border-left:3px solid var(--ui-teal); border-radius:var(--ui-radius-lg); }
-.op-banner h2 { margin:7px 0; }
+.op-banner,.op-count,.op-tabs,.op-tools,.op-records button { display:flex; align-items:center; gap:12px; }
+.op-banner { justify-content:space-between; flex-wrap:wrap; margin:16px 0; background:var(--ui-surface-muted); padding:10px 12px; border-left:2px solid var(--ui-teal); }
+.op-banner h2 { margin:4px 0; font-size:16px; font-weight:500; }
 .op-banner p,.op-muted,.op-line p,.op-form p,.op-desk .ui-card p { line-height:1.7; overflow-wrap:anywhere; }
 .op-muted,.op-line p,.op-banner p { color:var(--ui-ink-muted); }
-.op-metrics { margin-bottom:22px; }
-.op-metrics button { flex:1; text-align:left; background:var(--ui-surface); border:1px solid var(--ui-border); border-radius:var(--ui-radius-md); padding:18px; }
-.op-metrics span { display:block; color:var(--ui-ink-muted); font-size:14px; }
-.op-metrics strong { font-size:36px; font-variant-numeric:tabular-nums; display:block; margin-top:8px; }
-.op-tabs { gap:4px; margin-bottom:18px; flex-wrap:wrap; }
-.op-tabs button { border:0; background:transparent; border-radius:8px; color:var(--ui-ink-secondary); padding:9px 15px; }
-.op-tabs button[aria-pressed=true] { color:var(--ui-on-accent); background:var(--ui-accent); }
+.op-tabs { gap:4px; margin-bottom:12px; flex-wrap:wrap; border-bottom:1px solid var(--ui-border); }
+.op-tabs button { min-height:var(--ui-control-height); border:0; border-bottom:2px solid transparent; background:transparent; color:var(--ui-ink-secondary); padding:4px 10px; font-size:13px; }
+.op-tabs button:hover { background:var(--ui-accent-bg); }
+.op-tabs button[aria-pressed=true] { color:var(--ui-link); border-bottom-color:var(--ui-accent); }
 .op-tools { flex-wrap:wrap; margin-block:10px; }
 .op-tools input,.op-tools select,.op-form :is(input:not([type=checkbox]),select,textarea) { border:1px solid var(--ui-border-strong); background:var(--ui-surface); color:var(--ui-ink); border-radius:8px; padding:9px; min-width:0; }
 .op-form { display:grid; gap:16px; }
@@ -17,8 +14,7 @@
 .op-form textarea { resize:vertical; }
 .op-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:12px; }
 .op-form .op-check { display:flex; gap:8px; align-items:baseline; font-weight:400; }
-.op-records button { width:100%; justify-content:space-between; text-align:left; padding:15px 4px; color:inherit; background:none; border:0; border-top:1px solid var(--ui-border); }
-.op-records button:hover,.op-metrics button:hover { background:var(--ui-surface-muted); }
+.op-records button { width:100%; justify-content:space-between; text-align:left; padding:8px 4px; color:inherit; background:none; border:0; border-top:1px solid var(--ui-border); }
 .op-records button > span:first-child { min-width:0; overflow-wrap:anywhere; }
 .op-records small,.op-records b { display:block; }
 .op-records small,.op-inset { color:var(--ui-ink-secondary); font-size:14px; }
@@ -32,15 +28,10 @@
 .op-project-list { margin:10px 0; overflow-wrap:anywhere; }
 @media(max-width:760px) {
   .op-columns { grid-template-columns:1fr; }
-  .op-metrics { gap:6px; align-items:stretch; }
-  .op-metrics button { padding:10px; }
-  .op-metrics span { font-size:12px; }
   .op-tools input { max-width:100%; }
 }
-.op-desk > .ui-card { margin-bottom: 20px; }
-.op-records button { border-radius: 6px; padding-inline: 12px; }
+.op-desk > .ui-card { margin-bottom: 12px; }
 .op-records button:hover { background: var(--ui-accent-bg); }
 .op-records button > span:last-child:not(:first-child):not(.ui-badge) { flex-shrink: 0; color: var(--ui-link); font-size: 14px; }
-.op-metrics button { box-shadow: var(--ui-shadow-card); border-top: 3px solid var(--ui-accent-border); }
 .op-line h3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 @media(max-width:540px) { .op-records button { align-items: start; flex-direction: column; } .op-form input:not([type=checkbox]), .op-form select, .op-form textarea { font-size:16px; min-height:44px; } }
