@@ -82,7 +82,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
 
 <template>
   <header class="pl-header" @keydown.esc="escape">
-    <div v-enter ref="primary" class="pl-wrap pl-bar">
+    <div ref="primary" class="pl-wrap pl-bar">
       <a class="pl-logo" href="/" aria-label="渠智链首页">
         <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
         <b>渠智链</b><span class="pl-product-name">PartnerLedger</span>

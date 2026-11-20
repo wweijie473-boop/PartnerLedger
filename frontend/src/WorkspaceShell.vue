@@ -41,7 +41,7 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
       </template>
       <template #secondary>
         <div class="workspace-subbar">
-          <div v-enter="1" class="pl-wrap workspace-subbar-inner" :class="{ 'with-actions': $slots.actions || (demo && signedIn) }">
+          <div class="pl-wrap workspace-subbar-inner" :class="{ 'with-actions': $slots.actions || (demo && signedIn) }">
             <nav ref="tabs" class="workspace-tabs" aria-label="工作台栏目">
               <button v-for="item in nav" :key="item.id" type="button"
                 :aria-current="view === item.id ? 'page' : undefined" @click="emit('navigate', item.id)">

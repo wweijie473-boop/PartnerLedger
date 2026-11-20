@@ -8,26 +8,52 @@ function observe(element, enter) {
     enter()
     return
   }
-  viewport ??= new IntersectionObserver(entries => {
-    for (const entry of entries) {
-      if (entry.isIntersecting) active.get(entry.target)?.enter()
-    }
-  })
+  if (!viewport) {
+    const desktop = window.matchMedia('(min-width: 1084px)')
+    viewport = new IntersectionObserver(entries => {
+      const threshold = desktop.matches ? 0.3 : 0.1
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        // A tall form or table can exceed the viewport several times over.
+        const tallerThanViewport = entry.rootBounds && entry.boundingClientRect.height > entry.rootBounds.height
+        if (entry.intersectionRatio >= threshold || tallerThanViewport) active.get(entry.target)?.enter()
+      }
+    }, { threshold: [0, 0.1, 0.3] })
+    desktop.addEventListener('change', () => {
+      for (const pending of document.querySelectorAll('[data-ui-entrance-pending]')) {
+        viewport.unobserve(pending)
+        viewport.observe(pending)
+      }
+    })
+  }
   viewport.observe(element)
 }
 
-function enqueue(element, position = 0) {
+// Read the laid-out row at playback time so wrapped and mobile cards start a new sequence.
+function columnInRow(element) {
+  const top = element.offsetTop
+  let previous = element.previousElementSibling
+  if (previous?.offsetTop !== top && element.nextElementSibling?.offsetTop !== top) return null
+  let column = 0
+  while (previous?.offsetTop === top && column < 5) {
+    column++
+    previous = previous.previousElementSibling
+  }
+  return column
+}
+
+function enqueue(element, position = 0, kind = 'module') {
   if (queued.has(element)) return
   queued.add(element)
   const preference = window.matchMedia('(prefers-reduced-motion: no-preference)')
   if (!preference.matches || !element.animate || element.matches(':focus-within')) return
 
-  const index = Number.isFinite(position) ? Math.max(0, Math.min(position, 4)) : 0
   let animation
 
   function finish() {
     viewport?.unobserve(element)
     element.removeAttribute('data-ui-entrance-pending')
+    element.removeAttribute('data-ui-entrance-card')
     element.removeEventListener('focusin', cancel)
     preference.removeEventListener('change', cancel)
     active.delete(element)
@@ -46,22 +72,25 @@ function enqueue(element, position = 0) {
       finish()
       return
     }
-    const style = getComputedStyle(element)
-    const duration = style.getPropertyValue('--ui-motion-emphasized').trim()
-    animation = element.animate(
-      [{ opacity: 0.35, translate: '0 14px' }, { opacity: 1, translate: '0 0' }],
-      {
-        delay: index * 55,
-        duration: Number.parseFloat(duration) * (duration.endsWith('ms') ? 1 : 1000) || 480,
-        easing: style.getPropertyValue('--ui-ease-out').trim() || 'ease-out',
-        fill: 'backwards',
-      },
-    )
+    const isRow = kind === 'row'
+    if (isRow && (element.childElementCount < 2 || element.firstElementChild.offsetTop !== element.lastElementChild.offsetTop)) {
+      finish()
+      return
+    }
+    const column = kind === 'child' ? columnInRow(element) : null
+    const index = Number.isFinite(position) ? Math.max(0, Math.min(position, 5)) : 0
+    const distance = column === null ? 100 : 75 + 150 * column
+    if (column !== null) element.setAttribute('data-ui-entrance-card', '')
+    const frames = isRow
+      ? [{ opacity: 0 }, { opacity: 1 }]
+      : [{ opacity: 0, translate: `0 ${distance}px` }, { opacity: 1, translate: '0 0' }]
+    const delay = isRow ? 50 : (column === null ? index : column + 1) * 25
+    animation = element.animate(frames, { delay, duration: 1200, easing: 'ease-in-out', fill: 'backwards' })
     animation.finished.then(finish, finish)
   }
 
   active.set(element, { enter, cancel })
-  element.setAttribute('data-ui-entrance-pending', '')
+  element.setAttribute('data-ui-entrance-pending', kind)
   element.addEventListener('focusin', cancel)
   preference.addEventListener('change', cancel)
   observe(element, enter)
@@ -74,7 +103,8 @@ function updateGroup(element, start) {
   }
   groups.set(element, children)
   let position = Number.isFinite(start) ? start : 0
-  for (const child of children) enqueue(child, position++)
+  if (children.size > 1) enqueue(element, 0, 'row')
+  for (const child of children) enqueue(child, position++, 'child')
 }
 
 export const entrance = {
