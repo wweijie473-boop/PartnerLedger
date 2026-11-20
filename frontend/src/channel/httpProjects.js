@@ -16,12 +16,12 @@ export function createHttpProjectRepository(request) {
     }
   }
   return {
-    async list() {
+    async list({ signal } = {}) {
       const projects = new Map()
       const cursors = new Set()
       const params = new URLSearchParams({ limit: '50' })
       while (true) {
-        const page = await request(base + '?' + params)
+        const page = await request(base + '?' + params, signal ? { signal } : undefined)
         if (!Array.isArray(page?.items) || !Object.hasOwn(page, 'next_cursor')) throw new Error('项目列表响应无效。')
         for (const project of page.items) projects.set(project.id, project)
         if (page.next_cursor === null) return Array.from(projects.values())

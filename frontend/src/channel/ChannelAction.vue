@@ -8,6 +8,7 @@ const props = defineProps({
   action: { type: String, required: true },
   project: Object,
   products: { type: Array, default: () => [] },
+  inquiryDraft: Object,
   role: String,
   busy: Boolean,
   error: String,
@@ -19,9 +20,10 @@ const lastQuote = [...(quotes ?? [])].sort((left, right) => right.version - left
 const future = new Date()
 future.setDate(future.getDate() + 30)
 const toDate = date => date.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
+const prepared = props.action === 'submitInquiry' ? props.inquiryDraft : null
 const form = reactive({
-  title: '', requirement: '', customerName: props.role === 'dealer' ? roles.customer.company : '', dueDate: '', summary: props.project?.inquiry?.summary ?? '',
-  product: props.project?.product || '', note: '', validUntil: toDate(future),
+  title: '', requirement: '', customerName: props.role === 'dealer' ? roles.customer.company : '', dueDate: '', summary: prepared?.summary ?? props.project?.inquiry?.summary ?? '',
+  product: prepared?.productId || props.project?.product || '', note: '', validUntil: toDate(future),
   deliveryDays: quoteAction && lastQuote ? lastQuote.deliveryDays : 15,
   lines: quoteAction && lastQuote ? lastQuote.lines.map(line => ({ ...line })) : [{ label: '软件用户授权', quantity: 1, unitPrice: '' }],
 })
@@ -86,6 +88,7 @@ function submit() {
       <UiField label="目标日期（选填）" v-slot="{ control }"><input v-bind="control" v-model="form.dueDate" type="date" /></UiField>
     </template>
     <template v-else-if="action === 'submitInquiry'">
+      <p v-if="prepared" class="ch-callout">已带入询价草稿，请核对产品和可发给厂商的摘要。</p>
       <UiField label="询价产品" required v-slot="{ control }"><select v-bind="control" v-model="form.product" required><option value="" disabled>选择已发布产品</option><option v-for="item in products.filter(item => item.published)" :key="item.id" :value="item.id">{{ item.name }}</option></select></UiField>
       <div class="ch-assist"><p>仅发送询价所需字段，请勿包含客户联系人或内部预算。</p><UiButton v-if="!helpers" compact icon="request" @click="suggestFields">从原始需求整理字段</UiButton>
         <template v-else><p>本地规则仅摘取明确提及的字段。核对后可生成摘要，未知信息请留空。</p>
@@ -96,7 +99,7 @@ function submit() {
           </div><UiButton compact @click="applyFields">用已核对字段填写摘要</UiButton>
         </template>
       </div>
-      <UiField label="对厂商的询价摘要" required v-slot="{ control }"><textarea v-bind="control" v-model="form.summary" required rows="4" maxlength="2000" @input="approved = false" /></UiField>
+      <UiField label="对厂商的询价摘要" required v-slot="{ control }"><textarea v-bind="control" v-model="form.summary" required rows="4" maxlength="3000" @input="approved = false" /></UiField>
       <label class="ch-checkbox"><input v-model="approved" type="checkbox" required /> 已核对产品与摘要，确认发送给厂商。</label>
     </template>
     <template v-else-if="quoteAction">
