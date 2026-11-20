@@ -33,14 +33,27 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
   <div id="top" class="pl-portal">
     <PortalHeader />
     <main>
-      <section class="pl-hero" aria-labelledby="portal-title"><div class="pl-wrap pl-intro">
-        <div class="pl-hero-copy"><p class="pl-kicker">软件渠道协作平台</p>
-          <h1 id="portal-title">软件采购，从谈需求到验收</h1>
-          <p class="pl-subtitle">客户提出采购需求，代理商整理方案，厂商确认供货。需求、报价和交付记录都留在同一个项目里，三方随时能查看进度。</p>
-          <div class="pl-hero-actions"><a class="pl-primary" href="#journey">看看三方怎么配合</a><a class="pl-secondary" href="/experience/dealer">体验代理商工作台</a></div>
+      <section class="pl-hero" aria-labelledby="portal-title">
+        <div class="pl-wrap pl-intro">
+          <div class="pl-hero-copy">
+            <p class="pl-kicker">软件渠道协作平台</p>
+            <h1 id="portal-title">软件采购，<br />从谈需求到验收</h1>
+            <p class="pl-subtitle">客户提需求，代理商整理方案，厂商确认供货。三方在同一个项目里查看需求、报价和交付进度。</p>
+            <div class="pl-hero-actions">
+              <a class="pl-primary" href="/experience/dealer">体验代理商工作台 <UiIcon name="forward" :size="15" /></a>
+              <a class="pl-secondary" href="#journey">了解三方协作</a>
+            </div>
+          </div>
+          <div class="pl-artwork" aria-hidden="true"><PortalArtwork /></div>
         </div>
-        <div class="pl-artwork" aria-hidden="true"><PortalArtwork /></div>
-      </div></section>
+      </section>
+      <nav class="pl-section-bar" aria-label="首页栏目">
+        <div class="pl-wrap pl-section-links">
+          <a href="#journey">三方协作</a>
+          <a href="#roles">角色工作台</a>
+          <a href="#opportunity">商机拾遗</a>
+        </div>
+      </nav>
       <section id="journey" class="pl-flow-section" tabindex="-1"><div class="pl-wrap pl-journey">
         <div><h2>一套 ERP 是怎么采购的？</h2>
           <p class="pl-section-note">以一家企业的 ERP 采购为例，看看需求怎么交给厂商、采购方案怎么确认，以及上线后由谁验收。</p>
@@ -54,7 +67,7 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
           <a :href="'/experience/' + exampleRole.role">体验{{ exampleRole.label }}工作台</a>
         </article>
       </div></section>
-      <section class="pl-wrap pl-role-section" aria-labelledby="portal-roles-title">
+      <section id="roles" class="pl-wrap pl-role-section" tabindex="-1" aria-labelledby="portal-roles-title">
         <h2 id="portal-roles-title">三个工作台，各自从哪里开始？</h2>
         <p>可以直接打开演示，用示例项目看看每种身份的日常工作。</p>
         <ul class="pl-role-grid">
@@ -66,7 +79,7 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
           </li>
         </ul>
       </section>
-      <section class="pl-wrap pl-opportunity" aria-labelledby="portal-opportunity-title">
+      <section id="opportunity" class="pl-wrap pl-opportunity" tabindex="-1" aria-labelledby="portal-opportunity-title">
         <div class="pl-op-illustration" aria-hidden="true">
           <span class="pl-op-path"></span>
           <div><UiIcon name="request" :size="28" /><span>客户还想接入仓储系统</span></div>

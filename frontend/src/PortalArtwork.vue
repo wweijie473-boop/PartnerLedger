@@ -24,12 +24,12 @@ function inkGradient(context, colors) {
 }
 
 function painter(context) {
-  const violetWash = radialWash(context, 173, 134, 130, '#a79bef32')
-  const coralWash = radialWash(context, 312, 100, 97, '#f2ad8c2e')
+  const blueWash = radialWash(context, 173, 134, 130, '#317ed640')
+  const violetWash = radialWash(context, 312, 100, 97, '#a889ee30')
   const inks = [
-    inkGradient(context, ['#23365c', '#4748a5', '#6c5ec7', '#c66f72']),
-    inkGradient(context, ['#3e72a0', '#5558bd', '#9e7aca', '#dc8975']),
-    inkGradient(context, ['#657cba', '#7770c9', '#a89de2', '#dca9a0']),
+    inkGradient(context, ['#3278d2', '#54b7ff', '#8b9dfc', '#d4abf3']),
+    inkGradient(context, ['#46a6f5', '#78ddf1', '#99a8ff', '#eec6ff']),
+    inkGradient(context, ['#3a75d1', '#59b3f2', '#b2b1ff', '#dcb4ee']),
   ]
 
   return (progress) => {
@@ -54,9 +54,9 @@ function painter(context) {
 
     context.clearRect(0, 0, width, height)
     context.globalAlpha = 1
-    context.fillStyle = violetWash
+    context.fillStyle = blueWash
     context.fillRect(0, 0, width, height)
-    context.fillStyle = coralWash
+    context.fillStyle = violetWash
     context.fillRect(0, 0, width, height)
 
     const strands = 54
