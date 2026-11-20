@@ -147,8 +147,7 @@ func actionsFor(p channelProject, role string, state commercialState, today stri
 	return commercialActions(p, role, state, today)
 }
 
-func projectView(p channelProject, role string, events []channelEvent, state commercialState, today string) View {
-	stage := p.Stage
+func visibleStage(stage, role string) string {
 	switch role {
 	case data.Customer:
 		switch stage {
@@ -165,20 +164,18 @@ func projectView(p channelProject, role string, events []channelEvent, state com
 			stage = "shipped"
 		}
 	}
-	actions := actionsFor(p, role, state, today)
+	return stage
+}
+
+func projectView(p channelProject, role string, events []channelEvent, state commercialState, today string) View {
+	item, actions := projectListItem(p, role, state, today)
 	v := View{
-		ID: strconv.FormatUint(p.ID, 10), Title: p.Title, Stage: stage, StageLabel: stageLabels[stage],
-		Revision: p.Revision, Actions: actions, NextStep: stageLabels[stage], Timeline: []eventView{},
+		ID: item.ID, Title: item.Title, CustomerName: item.CustomerName, DueDate: item.DueDate,
+		Stage: item.Stage, StageLabel: item.StageLabel, IsTodo: item.IsTodo, NextStep: item.NextStep,
+		Revision: p.Revision, Actions: actions, Timeline: []eventView{},
 	}
-	if len(actions) > 0 && (stageOwners[p.Stage] == role ||
-		role == data.Manufacturer && actions[0] == "channelQuote" && currentQuote(state.channelQuotes).statusOn(today) == expiredQuote) {
-		v.IsTodo = true
-		v.NextStep = actionLabels[actions[0]]
-	}
-	if role == data.Manufacturer {
-		v.Title = p.ProductName + " · 渠道采购项目"
-	} else {
-		v.CustomerName, v.Requirement, v.DueDate = &p.Customer.Name, &p.Requirement, p.DueDate
+	if role != data.Manufacturer {
+		v.Requirement = &p.Requirement
 	}
 	applyCommercialView(&v, role, state, today)
 	if p.ProductID != nil && (role != data.Customer || len(state.salesQuotes) != 0) {
@@ -196,4 +193,24 @@ func projectView(p channelProject, role string, events []channelEvent, state com
 		}
 	}
 	return v
+}
+
+func projectListItem(p channelProject, role string, state commercialState, today string) (ProjectListItem, []string) {
+	stage := visibleStage(p.Stage, role)
+	actions := actionsFor(p, role, state, today)
+	item := ProjectListItem{
+		ID: strconv.FormatUint(p.ID, 10), Title: p.Title, Stage: stage, StageLabel: stageLabels[stage],
+		NextStep: stageLabels[stage],
+	}
+	if len(actions) > 0 && (stageOwners[p.Stage] == role ||
+		role == data.Manufacturer && actions[0] == "channelQuote" && currentQuote(state.channelQuotes).statusOn(today) == expiredQuote) {
+		item.IsTodo = true
+		item.NextStep = actionLabels[actions[0]]
+	}
+	if role == data.Manufacturer {
+		item.Title = p.ProductName + " · 渠道采购项目"
+	} else {
+		item.CustomerName, item.DueDate = &p.Customer.Name, p.DueDate
+	}
+	return item, actions
 }

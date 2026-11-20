@@ -22,6 +22,7 @@ const loading = ref(true)
 let alive = true
 let timer
 let sequence = 0
+let pendingReads = 0
 const journal = createWriteJournal('partnerledger-opportunity-write:' + props.scope, job => {
   const { input, requestId } = job
   if (job.kind === 'capture') return raw.captureOpportunity(input.projectId, input.payload, requestId)
@@ -34,14 +35,23 @@ const repo = {
   addPartner: payload => journal.run('partner', { payload }),
   actOpportunity: (id, action, payload, revision) => journal.run('action', { id, action, payload, revision }),
 }
-async function refresh() {
+async function refresh({ background = false } = {}) {
+  if (background && pendingReads) return
   const current = ++sequence
+  pendingReads++
   try {
-    const [snapshot, records] = await Promise.all([raw.opportunityDesk(), projectsRepo.list()])
-    if (alive && current === sequence) { desk.value = snapshot; projects.value = records; error.value = '' }
+    const [snapshot, records] = await Promise.all([raw.opportunityDesk(), background ? null : projectsRepo.list()])
+    if (alive && current === sequence) {
+      desk.value = snapshot
+      if (records) projects.value = records
+      error.value = ''
+    }
   } catch (cause) {
     if (alive && current === sequence) error.value = cause.message
-  } finally { if (alive && current === sequence) loading.value = false }
+  } finally {
+    pendingReads--
+    if (alive && current === sequence) loading.value = false
+  }
 }
 function select(id) {
   selected.value = id
@@ -66,7 +76,7 @@ async function retry() {
 }
 function visibilityRefresh() {
   const dialogVisible = [...document.querySelectorAll('.el-dialog')].some(dialog => dialog.getClientRects().length > 0)
-  if (!document.hidden && !state.busy && !dialogVisible) refresh()
+  if (!loading.value && !document.hidden && !state.busy && !dialogVisible) refresh({ background: true })
 }
 onMounted(() => {
   refresh()

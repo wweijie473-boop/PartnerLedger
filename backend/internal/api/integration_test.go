@@ -260,5 +260,6 @@ func TestOrganizationIsolation(t *testing.T) {
 		t.Fatalf("cross-organization list leaked: %+v", outsiderPage)
 	}
 	testProjectCommercial(t, db, request, send, path, dealer, first, customer, otherDealer, otherCustomer, second)
+	testProjectWorkspace(t, request, project.ID, dealer, customer, first, otherDealer)
 	testDealerFieldwork(t, db, cache, request, project.ID, dealerID, dealer, otherDealer, customer, first, password)
 }

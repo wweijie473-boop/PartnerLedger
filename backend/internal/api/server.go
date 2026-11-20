@@ -62,6 +62,7 @@ func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementPars
 	projects := secured.Group("/channel/v1")
 	projects.GET("/organization-links", s.channelLinks)
 	projects.GET("/projects", s.listChannelProjects)
+	projects.GET("/projects/workspace", s.projectWorkspace)
 	projects.POST("/projects", s.createChannelProject)
 	projects.GET("/projects/:id", s.getChannelProject)
 	projects.POST("/projects/:id/actions/:action", s.actOnChannelProject)

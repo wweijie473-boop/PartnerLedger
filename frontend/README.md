@@ -45,3 +45,5 @@ npm run dev
 4. 厂家依次更新授权、部署、迁移和交接，经销商切回后可查看进度。用页面底部的「界面状态」预览加载、空数据、无权限和失败重试。
 
 运行 `npm test` 验证三端业务规则与接口适配，`npm run build` 验证生产构建。后续接入见 [项目接口契约](../docs/channel-contract.md)，其中列出了动作、可见字段、版本冲突及幂等规则。
+
+首次运行浏览器回归时执行 `npx playwright install chromium`，再运行 `npm run test:e2e`。测试使用独立的前端开发端口和模拟账号，覆盖三方项目办理、翻页与返回、断线重试和同组织换号。GitHub Actions 同时运行 Go 集成测试，使用临时 MySQL 和 Redis 验证正式接口。

@@ -1,8 +1,9 @@
 import { shallowReactive } from 'vue'
 
-export function createWriteJournal(key, execute, storage = window.sessionStorage) {
+export function createWriteJournal(key, execute, storage) {
   const state = shallowReactive({ job: null, busy: false, error: '' })
   try {
+    storage ??= window.sessionStorage
     const saved = JSON.parse(storage.getItem(key))
     if (saved?.requestId && saved?.kind && saved?.input) state.job = saved
   } catch {
@@ -18,7 +19,7 @@ export function createWriteJournal(key, execute, storage = window.sessionStorage
       state.job = null
       return result
     } catch (error) {
-      if (error.status >= 400 && error.status < 500) {
+      if (error.status >= 400 && error.status < 500 && error.status !== 401) {
         storage.removeItem(key)
         state.job = null
         state.error = error.message
