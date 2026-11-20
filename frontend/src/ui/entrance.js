@@ -80,13 +80,20 @@ function enqueue(element, position = 0, kind = 'module', after) {
     }
     const column = kind === 'child' ? columnInRow(element) : null
     const index = Number.isFinite(position) ? Math.max(0, Math.min(position, 5)) : 0
-    const distance = column === null ? 100 : 75 + 150 * column
+    let distance = column === null ? 100 : 75 + 150 * column
+    let delay = isRow ? 50 : (column === null ? index : column + 1) * 25
+    let target = element
+    if (kind === 'link') {
+      // Move the label while the anchor keeps its full click and focus area.
+      target = element.firstElementChild ?? element
+      distance = 14
+      delay = index * 220
+    }
     if (column !== null) element.setAttribute('data-ui-entrance-card', '')
     const frames = isRow
       ? [{ opacity: 0 }, { opacity: 1 }]
       : [{ opacity: 0, translate: `0 ${distance}px` }, { opacity: 1, translate: '0 0' }]
-    const delay = isRow ? 50 : (column === null ? index : column + 1) * 25
-    animation = element.animate(frames, { delay, duration: 1200, easing: 'ease-in-out', fill: 'backwards' })
+    animation = target.animate(frames, { delay, duration: 1200, easing: 'ease-in-out', fill: 'backwards' })
     finished = animation.finished.then(finish, finish)
     return finished
   }
@@ -132,6 +139,7 @@ function updateGroup(element, start) {
 export const entrance = {
   mounted(element, { arg, value }) {
     if (arg === 'children') updateGroup(element, value)
+    else if (arg === 'link') enqueue(element, value, 'link')
     else if (arg === 'after') enqueue(element, 0, 'module', value)
     else enqueue(element, value)
   },
