@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import PortalHeader from './PortalHeader.vue'
 import WorkspaceAccount from './WorkspaceAccount.vue'
 import { useSessionAccount } from './useSessionAccount.js'
@@ -17,8 +17,6 @@ const props = defineProps({
 const emit = defineEmits(['navigate', 'account'])
 const { account, signedIn } = props.demo ? useSessionAccount() : { account: null, signedIn: false }
 const tabs = ref(null)
-const content = ref(null)
-let headingAnimation
 
 function revealActiveTab() {
   const nav = tabs.value
@@ -31,23 +29,7 @@ function revealActiveTab() {
 }
 
 onMounted(revealActiveTab)
-onBeforeUnmount(() => headingAnimation?.cancel())
-watch(() => props.view, () => {
-  revealActiveTab()
-  headingAnimation?.cancel()
-  const heading = content.value?.querySelector('h1')
-  if (!heading?.animate || !window.matchMedia('(prefers-reduced-motion: no-preference)').matches) return
-
-  const styles = getComputedStyle(heading)
-  const duration = styles.getPropertyValue('--ui-motion-standard').trim()
-  headingAnimation = heading.animate(
-    [{ opacity: 0.65, translate: '0 4px' }, { opacity: 1, translate: '0 0' }],
-    {
-      duration: Number.parseFloat(duration) * (duration.endsWith('ms') ? 1 : 1000) || 240,
-      easing: styles.getPropertyValue('--ui-ease-out').trim() || 'ease-out',
-    },
-  )
-}, { flush: 'post' })
+watch(() => props.view, revealActiveTab, { flush: 'post' })
 </script>
 
 <template>
@@ -59,7 +41,7 @@ watch(() => props.view, () => {
       </template>
       <template #secondary>
         <div class="workspace-subbar">
-          <div class="pl-wrap workspace-subbar-inner" :class="{ 'with-actions': $slots.actions || (demo && signedIn) }">
+          <div v-enter="1" class="pl-wrap workspace-subbar-inner" :class="{ 'with-actions': $slots.actions || (demo && signedIn) }">
             <nav ref="tabs" class="workspace-tabs" aria-label="工作台栏目">
               <button v-for="item in nav" :key="item.id" type="button"
                 :aria-current="view === item.id ? 'page' : undefined" @click="emit('navigate', item.id)">
@@ -76,7 +58,7 @@ watch(() => props.view, () => {
         </div>
       </template>
     </PortalHeader>
-    <main id="workspace-content" ref="content" class="pl-wrap workspace-content" tabindex="-1">
+    <main id="workspace-content" class="pl-wrap workspace-content" tabindex="-1">
       <slot />
     </main>
   </div>

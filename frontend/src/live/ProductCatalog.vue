@@ -134,39 +134,41 @@ async function saveProduct() {
 </script>
 
 <template>
-  <section class="page-heading">
+  <section v-enter="0" class="page-heading">
     <div><h1>产品目录</h1><p class="muted">{{ isManufacturer ? '维护本组织产品及其发布状态。' : '查看厂商已发布的软件和版本。' }}</p></div>
     <UiButton v-if="isManufacturer" variant="primary" icon="add" :disabled="loading" @click="openEditor()">新增产品</UiButton>
   </section>
 
   <p v-if="notice" class="catalog-feedback" role="status">{{ notice }}</p>
-  <div v-if="products.length" class="catalog-filters">
-    <label>查找已加载产品 <input v-model="searchText" type="search" placeholder="名称、版本或说明" /></label>
-    <label v-if="isManufacturer">发布状态 <select v-model="publication"><option value="all">全部</option><option value="published">已发布</option><option value="draft">未发布</option></select></label>
-  </div>
-  <UiCard v-if="!loaded && (loading || !listError)" flush><UiState state="loading" title="正在加载产品目录" /></UiCard>
-  <UiCard v-else-if="listError && !loaded" flush>
-    <UiState :state="listError.status === 403 ? 'denied' : 'error'" title="无法加载产品目录" :description="listError.message">
-      <UiButton compact @click="loadProducts()">重试</UiButton>
-    </UiState>
-  </UiCard>
-  <UiCard v-else-if="!products.length" flush>
-    <UiState title="暂无可见产品" :description="isManufacturer ? '创建本组织的第一个软件产品。' : '厂商发布产品后会显示在这里。'" />
-  </UiCard>
-  <UiCard v-else-if="!matches.length" flush><UiState title="已加载产品中没有匹配项" :description="cursor !== null ? '可加载更多产品，或调整筛选条件。' : '请调整搜索词或筛选条件。'" /></UiCard>
-  <section v-else class="catalog-grid" aria-label="产品目录">
-    <UiCard v-for="item in matches" :key="item.id" as="article" :title="item.name" :description="`版本 ${item.version}`">
-      <template #actions><UiIconTile name="product" /></template>
-      <p class="catalog-description muted">{{ item.description || '暂无产品说明' }}</p>
-      <UiBadge v-if="isManufacturer" class="catalog-status" :tone="item.published ? 'success' : 'neutral'" dot>
-        {{ item.published ? '已发布' : '未发布' }}
-      </UiBadge>
-      <template #footer><UiButton variant="text" end-icon="forward" @click="openDetail(item.id)">查看产品</UiButton></template>
+  <div v-enter="1">
+    <div v-if="products.length" class="catalog-filters">
+      <label>查找已加载产品 <input v-model="searchText" type="search" placeholder="名称、版本或说明" /></label>
+      <label v-if="isManufacturer">发布状态 <select v-model="publication"><option value="all">全部</option><option value="published">已发布</option><option value="draft">未发布</option></select></label>
+    </div>
+    <UiCard v-if="!loaded && (loading || !listError)" flush><UiState state="loading" title="正在加载产品目录" /></UiCard>
+    <UiCard v-else-if="listError && !loaded" flush>
+      <UiState :state="listError.status === 403 ? 'denied' : 'error'" title="无法加载产品目录" :description="listError.message">
+        <UiButton compact @click="loadProducts()">重试</UiButton>
+      </UiState>
     </UiCard>
-  </section>
-  <div v-if="loaded && cursor !== null" class="catalog-more">
-    <UiButton :loading="loading" @click="loadProducts(true)">{{ listError ? '重试加载' : '加载更多' }}</UiButton>
-    <p v-if="listError" class="form-error" role="alert">{{ listError.message }}</p>
+    <UiCard v-else-if="!products.length" flush>
+      <UiState title="暂无可见产品" :description="isManufacturer ? '创建本组织的第一个软件产品。' : '厂商发布产品后会显示在这里。'" />
+    </UiCard>
+    <UiCard v-else-if="!matches.length" flush><UiState title="已加载产品中没有匹配项" :description="cursor !== null ? '可加载更多产品，或调整筛选条件。' : '请调整搜索词或筛选条件。'" /></UiCard>
+    <section v-else class="catalog-grid" aria-label="产品目录">
+      <UiCard v-for="item in matches" :key="item.id" as="article" :title="item.name" :description="`版本 ${item.version}`">
+        <template #actions><UiIconTile name="product" /></template>
+        <p class="catalog-description muted">{{ item.description || '暂无产品说明' }}</p>
+        <UiBadge v-if="isManufacturer" class="catalog-status" :tone="item.published ? 'success' : 'neutral'" dot>
+          {{ item.published ? '已发布' : '未发布' }}
+        </UiBadge>
+        <template #footer><UiButton variant="text" end-icon="forward" @click="openDetail(item.id)">查看产品</UiButton></template>
+      </UiCard>
+    </section>
+    <div v-if="loaded && cursor !== null" class="catalog-more">
+      <UiButton :loading="loading" @click="loadProducts(true)">{{ listError ? '重试加载' : '加载更多' }}</UiButton>
+      <p v-if="listError" class="form-error" role="alert">{{ listError.message }}</p>
+    </div>
   </div>
 
   <ElDialog v-model="dialogOpen" :title="title" width="min(584px, calc(100vw - 28px))" align-center destroy-on-close

@@ -10,6 +10,7 @@ import { useSessionAccount } from './useSessionAccount.js'
 import './portal.css'
 
 const phase = ref(0)
+const changedPhase = ref(false)
 const { account, signedIn } = useSessionAccount()
 const phases = [
   {
@@ -30,6 +31,12 @@ const phases = [
 ]
 const currentPhase = computed(() => phases[phase.value])
 const exampleRole = computed(() => entrances.find(entry => entry.role === currentPhase.value.role))
+
+function showPhase(index) {
+  if (phase.value === index) return
+  changedPhase.value = true
+  phase.value = index
+}
 </script>
 
 <template>
@@ -39,31 +46,31 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
       <section class="pl-hero" aria-labelledby="portal-title">
         <div class="pl-wrap pl-intro">
           <div class="pl-hero-copy">
-            <p class="pl-kicker">软件渠道协作平台</p>
-            <h1 id="portal-title">软件采购，<br />从谈需求到验收</h1>
-            <p class="pl-subtitle">客户提需求，代理商整理方案，厂商确认供货。三方在同一个项目里查看需求、报价和交付进度。</p>
-            <div class="pl-hero-actions">
+            <p v-enter class="pl-kicker">软件渠道协作平台</p>
+            <h1 v-enter="1" id="portal-title">软件采购，<br />从谈需求到验收</h1>
+            <p v-enter="2" class="pl-subtitle">客户提需求，代理商整理方案，厂商确认供货。三方在同一个项目里查看需求、报价和交付进度。</p>
+            <div v-enter="3" class="pl-hero-actions">
               <a class="pl-primary" href="/experience/dealer">体验代理商工作台 <UiIcon name="forward" :size="15" /></a>
               <a class="pl-secondary" href="#journey">了解三方协作</a>
             </div>
           </div>
-          <div class="pl-artwork"><PortalArtwork /></div>
+          <div v-enter="1" class="pl-artwork"><PortalArtwork /></div>
         </div>
       </section>
       <nav class="pl-section-bar" aria-label="首页栏目">
-        <div class="pl-wrap pl-section-links">
+        <div v-enter class="pl-wrap pl-section-links">
           <a href="#journey">三方协作</a>
           <a href="#roles">角色工作台</a>
           <a href="#opportunity">商机拾遗</a>
         </div>
       </nav>
       <section id="journey" class="pl-flow-section" tabindex="-1"><div class="pl-wrap pl-journey">
-        <div><h2>一套 ERP 是怎么采购的？</h2>
+        <div v-enter><h2>一套 ERP 是怎么采购的？</h2>
           <p class="pl-section-note">以一家企业的 ERP 采购为例，看看需求怎么交给厂商、采购方案怎么确认，以及上线后由谁验收。</p>
-          <div class="pl-phases" aria-label="选择协作阶段"><button v-for="(item,index) in phases" :key="item.title" :aria-pressed="phase === index" @click="phase = index">{{ item.title }}</button></div>
+          <div class="pl-phases" aria-label="选择协作阶段"><button v-for="(item,index) in phases" :key="item.title" :aria-pressed="phase === index" @click="showPhase(index)">{{ item.title }}</button></div>
         </div>
-        <article class="pl-case" aria-live="polite">
-          <div :key="currentPhase.title" class="pl-case-content">
+        <article v-enter="1" class="pl-case" aria-live="polite">
+          <div :key="currentPhase.title" class="pl-case-content" :class="{ 'pl-case-change': changedPhase }">
             <p class="pl-case-label"><UiIcon :name="currentPhase.icon" :size="20" />{{ currentPhase.title }}</p>
             <h3>{{ currentPhase.prompt }}</h3>
             <p>{{ currentPhase.note }}</p>
@@ -73,9 +80,9 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
         </article>
       </div></section>
       <section id="roles" class="pl-wrap pl-role-section" tabindex="-1" aria-labelledby="portal-roles-title">
-        <h2 id="portal-roles-title">三个工作台，各自从哪里开始？</h2>
-        <p>可以直接打开演示，用示例项目看看每种身份的日常工作。</p>
-        <ul class="pl-role-grid">
+        <h2 v-enter id="portal-roles-title">三个工作台，各自从哪里开始？</h2>
+        <p v-enter="1">可以直接打开演示，用示例项目看看每种身份的日常工作。</p>
+        <ul v-enter:children class="pl-role-grid">
           <li v-for="entry in entrances" :key="entry.role">
             <span class="pl-role-icon"><UiIcon :name="entry.icon" :size="21" /></span>
             <h3>{{ entry.label }}</h3>
@@ -85,12 +92,12 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
         </ul>
       </section>
       <section id="opportunity" class="pl-wrap pl-opportunity" tabindex="-1" aria-labelledby="portal-opportunity-title">
-        <div class="pl-op-illustration" aria-hidden="true">
+        <div v-enter class="pl-op-illustration" aria-hidden="true">
           <span class="pl-op-path"></span>
           <div><UiIcon name="request" :size="28" /><span>客户还想接入仓储系统</span></div>
           <div class="pl-op-match"><UiIcon name="workflow" :size="28" /><span>同事合作过类似的项目</span></div>
         </div>
-        <div>
+        <div v-enter="1">
           <p class="pl-kicker">商机拾遗</p>
           <h2 id="portal-opportunity-title">客户多问了一句，也值得跟进</h2>
           <p>比如客户买 ERP 时，还想接入现有的仓储系统，原厂暂时做不了。把需求记进商机拾遗，就能翻看团队以往的合作记录，找做过类似项目的同事帮忙引荐，再记录后续进展。</p>
@@ -101,7 +108,7 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
     </main>
     <footer class="pl-footer">
       <div class="pl-wrap">
-        <div class="pl-footer-grid">
+        <div v-enter:children class="pl-footer-grid">
           <section id="about" class="pl-footer-about" tabindex="-1" aria-labelledby="portal-about-title">
             <a class="pl-logo" href="#top" aria-label="返回渠智链首页顶部">
               <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
@@ -126,7 +133,7 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
             </ul>
           </section>
         </div>
-        <div class="pl-footer-bottom"><span>© {{ new Date().getFullYear() }} 渠智链</span><a href="#top">返回顶部 <span aria-hidden="true">↑</span></a></div>
+        <div v-enter class="pl-footer-bottom"><span>© {{ new Date().getFullYear() }} 渠智链</span><a href="#top">返回顶部 <span aria-hidden="true">↑</span></a></div>
       </div>
     </footer>
   </div>

@@ -1,4 +1,4 @@
-import { createApp, h } from 'vue'
+import { createApp, h, withDirectives } from 'vue'
 import 'element-plus/theme-chalk/base.css'
 import 'element-plus/theme-chalk/el-dialog.css'
 import 'element-plus/theme-chalk/el-overlay.css'
@@ -6,6 +6,7 @@ import './ui/theme.css'
 import './style.css'
 import { entrances } from './entrances.js'
 import { reloadOnSessionChange } from './auth-session.js'
+import { entrance } from './ui/entrance.js'
 
 window.addEventListener('pageshow', reloadOnSessionChange)
 
@@ -24,13 +25,22 @@ for (const { role, label } of entrances) {
   pages['/experience/' + role] = [label + '工作台 · 本地演示', () => import('./channel/Workspace.vue'), { role }]
 }
 const route = pages[path]
+function mount(component, props) {
+  createApp(component, props).directive('enter', entrance).mount('#app')
+}
+
 if (route) {
   const [title, load, props] = route
   document.title = title + ' · 渠智链'
-  load().then(({ default: component }) => createApp(component, props).mount('#app')).catch(() => {
+  load().then(({ default: component }) => mount(component, props)).catch(() => {
     document.getElementById('app').textContent = '页面加载失败，请刷新重试。'
   })
 } else {
   document.title = '页面不存在 · 渠智链'
-  createApp({ render: () => h('main', { class: 'content' }, [h('h1', '页面不存在'), h('p', '请从平台首页选择工作台入口。'), h('a', { href: '/' }, '返回首页')]) }).mount('#app')
+  mount({
+    render: () => withDirectives(
+      h('main', { class: 'content' }, [h('h1', '页面不存在'), h('p', '请从平台首页选择工作台入口。'), h('a', { href: '/' }, '返回首页')]),
+      [[entrance]],
+    ),
+  })
 }

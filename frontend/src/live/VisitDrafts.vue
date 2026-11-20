@@ -71,9 +71,9 @@ onMounted(async () => {
 
 <template>
   <div class="visit-page">
-    <header class="page-heading"><div><h1>记拜访</h1><p class="muted">先记一句话，回去再核对客户的主需求和附加需求。</p></div></header>
-    <p class="visit-hint">草稿保存在此设备。<template v-if="!capture">附加商机同步接口待开放，核对结果可继续留在草稿中。</template></p>
-    <div class="visit-layout"><UiCard title="这次客户提了什么">
+    <header v-enter="0" class="page-heading"><div><h1>记拜访</h1><p class="muted">先记一句话，回去再核对客户的主需求和附加需求。</p></div></header>
+    <p v-enter="1" class="visit-hint">草稿保存在此设备。<template v-if="!capture">附加商机同步接口待开放，核对结果可继续留在草稿中。</template></p>
+    <div class="visit-layout"><UiCard v-enter="2" title="这次客户提了什么">
       <form class="form-grid" @submit.prevent="finish">
         <UiField label="拜访记录" required v-slot="{control}"><textarea v-bind="control" v-model="form.text" rows="4" maxlength="2000" placeholder="例如：ERP 已定，客户还需要 IDE 接口，原厂暂不支持。" :readonly="!!form.opportunityId" @input="review=false; confirmed=false"></textarea></UiField>
         <UiField label="关联客户 / 项目" v-slot="{control}"><select v-bind="control" v-model="form.projectId" :disabled="loading || !!form.opportunityId" @change="confirmed=false"><option value="">稍后选择客户项目</option><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.customerName }} · {{ project.title }}</option></select></UiField>
@@ -88,7 +88,7 @@ onMounted(async () => {
         <UiButton v-if="form.projectId && projects.some(project => project.id === form.projectId)" @click="$emit('project',form.projectId)">打开关联项目</UiButton>
         <p v-if="error" role="alert">{{ error }}</p><p v-if="message" role="status">{{ message }}</p>
       </form>
-    </UiCard><UiCard title="接着整理">
+    </UiCard><UiCard v-enter="3" title="接着整理">
       <template #actions><UiButton compact @click="open()">新记一条</UiButton></template>
       <p v-if="!drafts.length" class="muted">保存后，草稿会出现在这里。</p>
       <article v-for="draft in drafts" :key="draft.id" class="visit-draft"><button @click="open(draft)">{{ draft.text }}</button><small>{{ new Date(draft.updatedAt).toLocaleDateString('zh-CN') }} · {{ draft.opportunityId ? '已记录商机' : draft.reviewed ? '已核对' : '待核对' }}</small><UiButton compact variant="text" @click="remove(draft.id)">删除草稿</UiButton></article>

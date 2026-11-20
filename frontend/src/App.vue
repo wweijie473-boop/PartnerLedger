@@ -204,7 +204,7 @@ function reset() {
 </script>
 
 <template>
-  <div v-if="!role" class="login-screen">
+  <div v-if="!role" v-enter class="login-screen">
     <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
     <p class="eyebrow">PARTNERLEDGER</p>
     <h1>进入渠道协作工作台</h1>
@@ -223,20 +223,20 @@ function reset() {
     <template #actions>
       <form class="top-search" @submit.prevent="go('requests', true)"><UiIcon name="search" :size="16" /><input v-model="query" placeholder="搜索记录" aria-label="搜索记录" /></form>
     </template>
-        <section class="page-heading">
+        <section v-enter class="page-heading">
           <div><h1>{{ currentPage.label }}</h1>
             <p class="muted">{{ { home: '跟进从客户需求到订单交付的每一步。', catalog: '查看可供询价的 ERP 产品、模块和授权方式。', requests: '跟进需求、提交询价并补充资料。', quotes: '查看报价明细、有效期和历史版本。', orders: '从订单查看授权、部署和上线交接进度。' }[view] }}</p></div>
           <UiButton v-if="isDealer && ['home', 'requests'].includes(view)" variant="primary" icon="add" @click="openRequest()">新建需求</UiButton>
         </section>
 
         <template v-if="view === 'home'">
-          <section class="metric-grid" aria-label="协作数据">
+          <section v-enter:children="1" class="metric-grid" aria-label="协作数据">
             <UiMetricCard label="询价记录" :value="submittedRequests" description="已提交的业务需求" icon="request" tone="brand" interactive @click="go('requests')" />
             <UiMetricCard label="待确认报价" :value="activeQuotes" description="等待经销商确认" icon="quote" tone="warning" interactive @click="go('quotes')" />
             <UiMetricCard label="交付中订单" :value="activeOrders" description="已下单并进入交付" icon="order" tone="info" interactive @click="go('orders')" />
           </section>
 
-          <section class="insight-grid">
+          <section v-enter:children="2" class="insight-grid">
             <UiCard title="协作流程">
               <div class="journey-steps">
                 <div v-for="(step, index) in steps" :key="step.label" class="journey-step">
@@ -253,7 +253,7 @@ function reset() {
           </section>
         </template>
 
-        <section v-if="view === 'catalog'" class="catalog-grid" aria-label="产品目录">
+        <section v-if="view === 'catalog'" v-enter:children class="catalog-grid" aria-label="产品目录">
           <UiCard v-for="item in products" :key="item.id" as="article" :title="item.name" :description="item.modules">
             <template #actions><UiIconTile name="product" /></template>
             <dl class="details"><dt>部署方式</dt><dd>{{ item.deployment }}</dd><dt>授权模式</dt><dd>{{ item.license }}</dd></dl>
@@ -261,7 +261,7 @@ function reset() {
           </UiCard>
         </section>
 
-        <UiCard v-else class="records" :title="view === 'home' ? '最近协作记录' : '记录列表'" :description="view === 'home' ? '' : `${rows.length} 条记录`" flush>
+        <UiCard v-else v-enter="view === 'home' ? 3 : 1" class="records" :title="view === 'home' ? '最近协作记录' : '记录列表'" :description="view === 'home' ? '' : `${rows.length} 条记录`" flush>
           <template #actions>
             <UiButton v-if="view === 'home'" variant="text" end-icon="forward" @click="go('requests')">查看全部</UiButton>
             <label v-else class="filter"><span>状态</span><select v-model="filter"><option value="all">全部状态</option><option v-for="(data, key) in statuses" :key="key" :value="key">{{ data[0] }}</option></select></label>
