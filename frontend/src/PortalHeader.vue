@@ -96,16 +96,9 @@ onUnmounted(() => document.removeEventListener('pointerdown', outside))
             @click="toggle(menu.id)" @keydown.down.prevent="focusFirst(menu.id)">
             {{ menu.label }} <UiIcon name="chevron-down" :size="12" />
           </button>
-          <ul v-show="active === menu.id" :id="'portal-panel-' + menu.id" class="pl-popover"
-            :class="{ 'pl-popover-text': menu.id === 'solutions' }">
+          <ul v-show="active === menu.id" :id="'portal-panel-' + menu.id" class="pl-popover pl-popover-text">
             <li v-for="link in menu.links" :key="link.href">
-              <a :href="destination(link.href)" @click="dismiss">
-                <template v-if="menu.id === 'solutions'">{{ link.label }}</template>
-                <template v-else>
-                  <span class="pl-link-icon"><UiIcon :name="link.icon" :size="18" /></span>
-                  <span><strong>{{ link.label }}</strong><small>{{ link.description }}</small></span>
-                </template>
-              </a>
+              <a :href="destination(link.href)" @click="dismiss">{{ link.label }}</a>
             </li>
           </ul>
         </div>
