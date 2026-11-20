@@ -60,9 +60,9 @@ function showPhase(index) {
       </section>
       <nav class="pl-section-bar" aria-label="首页栏目">
         <div class="pl-wrap pl-section-links">
-          <a href="#journey">三方协作</a>
-          <a href="#roles">角色工作台</a>
-          <a href="#opportunity">商机拾遗</a>
+          <a v-enter:link="0" href="#journey"><span>三方协作</span></a>
+          <a v-enter:link="1" href="#roles"><span>角色工作台</span></a>
+          <a v-enter:link="2" href="#opportunity"><span>商机拾遗</span></a>
         </div>
       </nav>
       <section id="journey" v-enter:after="() => hero" class="pl-flow-section" tabindex="-1"><div class="pl-wrap pl-journey">
