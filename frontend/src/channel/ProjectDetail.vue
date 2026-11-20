@@ -1,25 +1,43 @@
 <script setup>
-import { UiBadge, UiButton, UiCard, UiIcon } from '../ui/index.js'
-import { actionLabels } from './domain.js'
+import { computed } from 'vue'
+import { UiBadge, UiButton, UiCard } from '../ui/index.js'
+import { actionLabels, projectHandlerLabel } from './domain.js'
 import QuoteBook from './QuoteBook.vue'
 import UiProjectProgress from '../ui/UiProjectProgress.vue'
 import { statusTone } from '../ui/statusTone.js'
-defineProps({ project: { type: Object, required: true }, role: String, products: { type: Array, default: () => [] }, opportunities: { type: Array, default: () => [] }, live: Boolean })
+const props = defineProps({ project: { type: Object, required: true }, role: String, products: { type: Array, default: () => [] }, opportunities: { type: Array, default: () => [] }, live: Boolean })
 defineEmits(['action', 'back', 'capture', 'opportunity'])
 const clock = date => new Date(date).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})
+const stageOwner = computed(() => projectHandlerLabel(props.project, props.role))
 </script>
 <template>
-  <UiButton compact icon="back" variant="text" @click="$emit('back')">返回工作列表</UiButton>
-  <header class="ch-project-head"><p class="ch-kicker">PROJECT FILE &nbsp; / &nbsp; {{ project.id }}</p><h1>{{ project.title }}</h1>
-    <div class="ch-project-meta"><UiBadge :tone="statusTone(project.stage)" dot>{{ project.stageLabel }}</UiBadge><span v-if="project.customerName">{{ project.customerName }}</span><span v-if="project.dueDate">目标日期 {{ project.dueDate }}</span></div>
+  <div class="project-detail-toolbar">
+    <UiButton compact icon="back" variant="text" @click="$emit('back')">返回项目列表</UiButton>
+    <div v-if="$slots.toolbar" class="workspace-actions"><slot name="toolbar" /></div>
+  </div>
+  <header class="ch-project-head">
+    <h1>{{ project.title }}</h1>
+    <div class="ch-project-meta"><span>编号 {{ project.id }}</span><span v-if="project.customerName">{{ project.customerName }}</span><span v-if="project.dueDate">目标日期 {{ project.dueDate }}</span></div>
   </header>
+  <section class="ch-next" aria-label="当前办理">
+    <dl class="project-current">
+      <div><dt>当前阶段</dt><dd><UiBadge :tone="statusTone(project.stage)" dot>{{ project.stageLabel }}</UiBadge></dd></div>
+      <div><dt>经办方</dt><dd>{{ stageOwner }}</dd></div>
+      <div v-if="!project.isTodo || !project.actions.length"><dt>下一步</dt><dd>{{ project.nextStep }}</dd></div>
+    </dl>
+    <div v-if="project.actions.length" class="ch-buttons" aria-label="可办理操作" role="group">
+      <UiButton v-for="(action, index) in project.actions" :key="action"
+        :variant="project.isTodo && index === 0 ? 'primary' : 'secondary'" @click="$emit('action', action)">{{ actionLabels[action] }}</UiButton>
+    </div>
+  </section>
   <UiProjectProgress :role="role" :stage="project.stage" :label="project.stageLabel" />
-  <section class="ch-next"><div><p class="ch-kicker">下一步</p><h2>{{ project.nextStep }}</h2></div><div class="ch-buttons"><UiButton v-for="(action,index) in project.actions" :key="action" :variant="index ? 'secondary' : 'primary'" @click="$emit('action', action)">{{ actionLabels[action] }}</UiButton></div></section>
   <div class="ch-detail-grid">
     <div class="ch-stack">
-      <UiCard title="业务与需求">
+      <UiCard v-if="project.requirement" title="采购需求">
+        <p class="project-copy">{{ project.requirement }}</p>
+      </UiCard>
+      <UiCard v-if="project.product || project.inquiry" title="产品与询价">
         <dl class="ch-facts">
-          <template v-if="project.requirement"><dt>原始需求</dt><dd>{{ project.requirement }}</dd></template>
           <template v-if="project.product"><dt>选用产品</dt><dd>{{ project.productName || products.find(item => item.id === project.product)?.name || project.product }}</dd></template>
           <template v-if="project.inquiry"><dt>询价摘要</dt><dd>{{ project.inquiry.summary }}</dd></template>
         </dl>
@@ -43,8 +61,24 @@ const clock = date => new Date(date).toLocaleString('zh-CN', {month:'2-digit',da
         </dl>
       </UiCard>
     </div>
-    <UiCard title="项目时间线" description="当前身份可见的协作记录">
-      <ol class="ch-timeline"><li v-for="(event,index) in [...project.timeline].reverse()" :key="event.at + ':' + index"><time>{{ clock(event.at) }}</time><strong>{{ event.label }}</strong><p v-if="event.detail">{{ event.detail }}</p></li></ol>
+    <UiCard title="项目时间线">
+      <ol v-if="project.timeline.length" class="ch-timeline"><li v-for="(event,index) in [...project.timeline].reverse()" :key="event.at + ':' + index"><time :datetime="event.at">{{ clock(event.at) }}</time><strong>{{ event.label }}</strong><p v-if="event.detail">{{ event.detail }}</p></li></ol>
+      <p v-else class="muted">暂无可见的协作记录。</p>
     </UiCard>
   </div>
 </template>
+
+<style scoped>
+.project-detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.project-detail-toolbar > .ui-button { margin-left: -10px; }
+.project-current { display: flex; flex-wrap: wrap; align-items: start; gap: 8px 24px; min-width: 0; }
+.project-current dt { color: var(--ui-ink-muted); font-size: 12px; margin-bottom: 2px; }
+.project-current dd { margin: 0; overflow-wrap: anywhere; }
+.project-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { requestApi } from './api.js'
 import { currentSession, saveSession, sessionFromCredentials } from './auth-session.js'
 import WorkspaceShell from './WorkspaceShell.vue'
@@ -159,7 +159,11 @@ async function loadIdentity() {
   }
 }
 
-onMounted(loadIdentity)
+onMounted(() => {
+  loadIdentity()
+  window.addEventListener('popstate', restoreWorkspaceView)
+})
+onUnmounted(() => window.removeEventListener('popstate', restoreWorkspaceView))
 
 async function signIn() {
   if (signingIn.value) return
@@ -239,20 +243,27 @@ async function signOut() {
     signingOut.value = false
   }
 }
-function navigate(target) {
+function restoreWorkspaceView() {
+  const params = new URLSearchParams(location.search)
+  const target = params.get('view') || (params.has('project') ? 'projects' : 'overview')
+  const next = navigation.value.some(item => item.id === target) ? target : 'overview'
+  if (next !== view.value) {
+    navigationRevision.value += 1
+    view.value = next
+    captureProject.value = params.get('captureProject') || ''
+  }
+}
+function navigate(target, params = {}) {
   navigationRevision.value += 1
   view.value = target
   captureProject.value = ''
   const url = new URL(location.href)
-  url.search = ''
-  url.searchParams.set('view',target)
-  history.replaceState(null,'',url)
+  url.search = new URLSearchParams({ view: target, ...params })
+  history.replaceState(null, '', url)
+  window.scrollTo(0, 0)
 }
-function openProject(id) {
-  navigate('projects')
-  const url = new URL(location.href)
-  url.searchParams.set('project',id)
-  history.replaceState(null,'',url)
+function openProject(id, scope = 'all') {
+  navigate('projects', { project: id, scope })
 }
 function openOpportunity(id = '', projectId = '') {
   navigate('opportunities')
@@ -324,7 +335,8 @@ function openOpportunity(id = '', projectId = '') {
   <WorkspaceShell v-else :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
     <template v-if="view === 'overview'">
-      <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" @open-project="openProject">
+      <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id"
+        @open-project="openProject" @open-list="scope => navigate('projects', { scope })">
         <template #heading>
           <div>
             <p class="workspace-kicker">{{ organization.name }}</p>
