@@ -1,5 +1,6 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import PortalHeader from './PortalHeader.vue'
 import { UiIcon } from './ui/index.js'
 
 const props = defineProps({
@@ -10,100 +11,174 @@ const props = defineProps({
   environment: { type: String, required: true },
 })
 const emit = defineEmits(['navigate', 'account'])
-const currentPage = computed(() => props.nav.find(item => item.id === props.view))
 const initial = computed(() => [...props.organization][0] ?? '渠')
-const mobile = ref(false)
-const drawerOpen = ref(false)
-const sidebar = ref(null)
-const trigger = ref(null)
-let breakpoint
-let originalOverflow = ''
+const tabs = ref(null)
 
-function closeDrawer() { drawerOpen.value = false }
-function navigate(id) { closeDrawer(); emit('navigate', id) }
-function account() { closeDrawer(); emit('account') }
-function updateViewport() {
-  mobile.value = breakpoint.matches
-  if (!mobile.value) closeDrawer()
+function revealActiveTab() {
+  const nav = tabs.value
+  const active = nav?.querySelector('[aria-current="page"]')
+  if (!active) return
+  const viewport = nav.getBoundingClientRect()
+  const item = active.getBoundingClientRect()
+  if (item.left < viewport.left) nav.scrollLeft += item.left - viewport.left
+  else if (item.right > viewport.right) nav.scrollLeft += item.right - viewport.right
 }
-function trapFocus(event) {
-  if (!drawerOpen.value) return
-  if (event.key === 'Escape') { event.preventDefault(); closeDrawer(); return }
-  if (event.key !== 'Tab') return
-  const controls = [...sidebar.value.querySelectorAll('button, a[href]')].filter(item => item.getClientRects().length)
-  const first = controls[0], last = controls[controls.length - 1]
-  if (event.shiftKey && (document.activeElement === first || document.activeElement === sidebar.value)) {
-    event.preventDefault(); last?.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault(); first?.focus()
-  }
-}
-watch(drawerOpen, async open => {
-  if (open) {
-    originalOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    await nextTick()
-    sidebar.value?.querySelector('button')?.focus()
-  } else {
-    document.body.style.overflow = originalOverflow
-    await nextTick()
-    if (mobile.value) trigger.value?.focus()
-  }
-})
-onMounted(() => {
-  breakpoint = window.matchMedia('(max-width: 859px)')
-  updateViewport()
-  breakpoint.addEventListener('change', updateViewport)
-  document.addEventListener('keydown', trapFocus)
-})
-onUnmounted(() => {
-  breakpoint?.removeEventListener('change', updateViewport)
-  document.removeEventListener('keydown', trapFocus)
-  if (drawerOpen.value) document.body.style.overflow = originalOverflow
-})
+
+onMounted(revealActiveTab)
+watch(() => props.view, revealActiveTab, { flush: 'post' })
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="workspace-shell">
     <a href="#workspace-content" class="skip-link">跳转到主要内容</a>
-    <button v-if="mobile && drawerOpen" class="nav-backdrop" aria-label="关闭工作台导航" tabindex="-1" @click="closeDrawer"></button>
-    <aside ref="sidebar" class="sidebar" :class="{ 'drawer-open': drawerOpen }" :role="mobile ? 'dialog' : undefined"
-      :aria-modal="mobile && drawerOpen ? 'true' : undefined" aria-label="工作台导航" :inert="mobile && !drawerOpen" tabindex="-1">
-      <div class="sidebar-brand-row">
-        <button v-if="mobile" class="nav-close" aria-label="关闭导航" @click="closeDrawer"><UiIcon name="close" /></button>
-        <button type="button" class="brand" aria-label="渠智链工作总览" @click="navigate(nav[0].id)">
-          <img class="brand-mark" src="/brand/partnerledger-logo.png" width="38" height="38" alt="" />
-          <span><strong>渠智链</strong><small>PartnerLedger</small></span>
+    <PortalHeader>
+      <template #account>
+        <button type="button" class="workspace-account"
+          :aria-label="'账号：' + accountLabel + '，' + organization"
+          :title="accountLabel + ' · ' + organization" @click="emit('account')">
+          <span class="workspace-avatar" aria-hidden="true">{{ initial }}</span>
+          <span class="workspace-account-text">
+            <strong>{{ accountLabel }}</strong>
+            <small>{{ organization }}</small>
+          </span>
+          <UiIcon name="chevron-right" :size="14" />
         </button>
-      </div>
-      <div class="sidebar-content">
-        <span class="nav-label">工作空间</span>
-        <nav aria-label="业务导航">
-          <button v-for="item in nav" :key="item.id" :class="{ active: view === item.id }"
-            :aria-current="view === item.id ? 'page' : undefined" @click="navigate(item.id)">
-            <UiIcon :name="item.icon" :size="19" /><span>{{ item.label }}</span>
-          </button>
-        </nav>
-      </div>
-      <div class="sidebar-bottom">
-        <div class="environment"><UiIcon name="permission" :size="14" /> {{ environment }}</div>
-        <button class="account" @click="account">
-          <span class="avatar" aria-hidden="true">{{ initial }}</span>
-          <span class="account-summary"><strong :title="organization">{{ organization }}</strong><small>{{ accountLabel }}</small></span>
-          <UiIcon name="chevron-down" :size="15" />
-        </button>
-        <a class="workspace-home" href="/">返回平台首页</a>
-      </div>
-    </aside>
-    <main class="main" :inert="mobile && drawerOpen">
-      <header class="topbar">
-        <div class="workspace-context">
-          <button ref="trigger" class="nav-trigger" :aria-expanded="drawerOpen" aria-label="打开工作台导航" @click="drawerOpen = true"><UiIcon name="menu" :size="21" /></button>
-          <div class="breadcrumbs"><span>工作台</span><UiIcon name="chevron-right" :size="14" /><strong>{{ currentPage?.label }}</strong></div>
+      </template>
+      <template #secondary>
+        <div class="workspace-subbar">
+          <div class="pl-wrap workspace-subbar-inner" :class="{ 'with-actions': $slots.actions }">
+            <nav ref="tabs" class="workspace-tabs" aria-label="工作台栏目">
+              <button v-for="item in nav" :key="item.id" type="button"
+                :aria-current="view === item.id ? 'page' : undefined" @click="emit('navigate', item.id)">
+                <UiIcon :name="item.icon" :size="17" />
+                <span>{{ item.label }}</span>
+              </button>
+            </nav>
+            <div class="workspace-context">
+              <slot name="actions" />
+              <span class="workspace-environment"><UiIcon name="permission" :size="14" />{{ environment }}</span>
+            </div>
+          </div>
         </div>
-        <div class="topbar-actions"><span class="workspace-org" :title="organization">{{ organization }}</span><slot name="actions" /></div>
-      </header>
-      <div id="workspace-content" class="content" tabindex="-1"><slot /></div>
+      </template>
+    </PortalHeader>
+    <main id="workspace-content" class="pl-wrap workspace-content" tabindex="-1">
+      <slot />
     </main>
   </div>
 </template>
+
+<style scoped>
+.workspace-shell {
+  min-height: 100vh;
+  background: var(--ui-canvas);
+}
+.workspace-account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  text-align: left;
+}
+.workspace-account:hover { background: var(--ui-surface-hover); }
+.workspace-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ui-accent-bg);
+  color: var(--ui-link);
+  font-size: 13px;
+  font-weight: 600;
+}
+.workspace-account-text { min-width: 0; max-width: clamp(84px, 13vw, 136px); }
+.workspace-account-text > * {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+.workspace-account-text strong { font-size: 13px; font-weight: 600; }
+.workspace-account-text small { font-size: 11px; color: var(--ui-ink-muted); }
+.workspace-account > svg { color: var(--ui-ink-muted); }
+.workspace-subbar {
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-surface-muted);
+}
+.workspace-subbar-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+.workspace-tabs {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-strong) transparent;
+}
+.workspace-tabs button {
+  position: relative;
+  display: inline-flex;
+  min-height: 46px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 clamp(10px, 1.2vw, 17px);
+  border: 0;
+  border-radius: var(--ui-radius-sm) var(--ui-radius-sm) 0 0;
+  background: transparent;
+  color: var(--ui-ink-secondary);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.workspace-tabs button:hover { background: var(--ui-surface-hover); color: var(--ui-link); }
+.workspace-tabs button:focus-visible { outline-offset: -3px; }
+.workspace-tabs button[aria-current="page"] {
+  background: var(--ui-accent-bg);
+  color: var(--ui-link);
+  font-weight: 600;
+}
+.workspace-tabs button[aria-current="page"]::after {
+  content: '';
+  position: absolute;
+  inset: auto 10px 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ui-accent);
+}
+.workspace-context, .workspace-environment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workspace-environment {
+  color: var(--ui-ink-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.workspace-content {
+  padding-block: clamp(24px, 3vw, 40px) 32px;
+  scroll-margin-top: 112px;
+}
+@media (max-width: 760px) {
+  .workspace-account { min-height: 44px; }
+  .workspace-account-text { max-width: min(125px, 29vw); }
+  .workspace-subbar-inner { gap: 8px; }
+  .workspace-subbar-inner.with-actions { grid-template-columns: minmax(0, 1fr); }
+  .with-actions .workspace-context { justify-content: space-between; padding-bottom: 8px; }
+  .workspace-content { scroll-margin-top: 16px; }
+}
+@media (max-width: 540px) {
+  .workspace-content { width: calc(100% - 32px); }
+}
+</style>

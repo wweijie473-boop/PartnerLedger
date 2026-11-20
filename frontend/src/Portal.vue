@@ -31,7 +31,7 @@ const exampleRole = computed(() => entrances.find(entry => entry.role === curren
 
 <template>
   <div id="top" class="pl-portal">
-    <PortalHeader />
+    <PortalHeader home-page />
     <main>
       <section class="pl-hero" aria-labelledby="portal-title">
         <div class="pl-wrap pl-intro">
