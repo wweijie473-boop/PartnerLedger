@@ -181,7 +181,7 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
         <section class="page-heading ch-head"><div><p class="ch-kicker">{{ copy.en }} &nbsp; / &nbsp; {{ org.company }}</p><h1>{{ view === 'overview' ? copy.title : navTitle }}</h1><p class="muted">{{ view === 'overview' ? copy.intro : view === 'delivery' ? '从订单追溯报价，跟进供货、实施及客户验收。' : '按编号、项目名称和状态查找协作记录。' }}</p></div>
           <UiButton v-if="copy.add && view !== 'delivery'" icon="add" variant="primary" @click="openDialog('create')">{{ copy.add }}</UiButton>
         </section>
-        <div v-if="view === 'overview'" class="metric-grid ch-metrics">
+        <div v-if="view === 'overview'" class="metric-grid">
           <UiMetricCard v-for="metric in metrics" :key="metric.id" :icon="metric.icon" :label="metric.label" :value="projects.filter(item => metric.stages.includes(item.stage)).length" :description="metric.description" interactive @click="navigate('ledger'); group = metric.id" />
         </div>
         <section v-if="role === 'dealer' && view === 'overview'" class="op-banner">

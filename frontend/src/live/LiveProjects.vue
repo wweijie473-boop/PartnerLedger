@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElDialog } from 'element-plus'
-import { UiButton, UiCard, UiField, UiState, UiBadge, UiMetricCard } from '../ui/index.js'
+import { UiButton, UiField, UiState, UiBadge, UiMetricCard } from '../ui/index.js'
 import ProjectDetail from '../channel/ProjectDetail.vue'
 import ChannelAction from '../channel/ChannelAction.vue'
 import { actionLabels } from '../channel/domain.js'
@@ -36,6 +36,7 @@ const storageKey = 'partnerledger-project-request-' + props.role + '-' + props.o
 const results = computed(() => rows.value.filter(item => (!todo.value || item.isTodo) &&
   (!stage.value || item.stage === stage.value) &&
   [item.id,item.title,item.customerName].filter(Boolean).join(' ').toLowerCase().includes(keyword.value.toLowerCase())))
+const tasks = computed(() => rows.value.filter(item => item.isTodo))
 const stages = computed(() => [...new Map(rows.value.map(item => [item.stage,item.stageLabel])).entries()])
 const allowed = new Set(['submitInquiry','withdrawInquiry','requestInfo','replyInfo','flagGap'])
 const detail = computed(() => record.value ? { ...record.value, actions:record.value.actions.filter(action => allowed.has(action)) } : null)
@@ -199,26 +200,37 @@ onUnmounted(() => {
 
 <template>
   <section>
+    <header class="page-heading">
+      <slot v-if="overview" name="heading" />
+      <div v-else-if="!selected">
+        <h1>{{ role === 'vendor' ? '渠道询价' : role === 'customer' ? '我的采购项目' : '客户项目' }}</h1>
+        <p class="muted">需求、询价和补充资料按同一项目流转。</p>
+      </div>
+      <div class="workspace-actions live-project-actions">
+        <UiButton variant="text" :disabled="busy" @click="refreshProgress">刷新协作进度</UiButton>
+        <UiButton v-if="!overview && !selected && !loading && role !== 'vendor'" icon="add" variant="primary" @click="openAction('create')">建立项目</UiButton>
+      </div>
+    </header>
     <p v-if="notice" class="live-feedback" role="status">{{ notice }}</p>
-    <div class="modal-actions live-project-toolbar"><UiButton compact :disabled="busy" @click="refreshProgress">刷新协作进度</UiButton></div>
     <UiState v-if="loading" state="loading" title="正在读取项目" />
     <template v-else-if="overview">
       <UiState v-if="loadError" state="error" title="项目待办暂不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton></UiState>
       <template v-else>
-        <div class="metric-grid ch-metrics live-project-metrics">
+        <section class="metric-grid" aria-label="协作数据">
           <UiMetricCard label="可见项目" :value="rows.length" description="当前组织参与的项目" icon="request" />
-          <UiMetricCard label="待我处理" :value="rows.filter(item => item.isTodo).length" description="下一步由本方办理" icon="activity" tone="brand" />
+          <UiMetricCard label="待我处理" :value="tasks.length" description="下一步由本方办理" icon="activity" tone="brand" />
           <UiMetricCard label="协作方处理中" :value="rows.filter(item => !item.isTodo && item.stage !== 'completed').length" description="可打开项目查看最新进度" icon="time" />
-        </div>
-        <UiCard title="今天的项目待办" description="按项目中的下一步操作继续办理。">
-          <div v-if="rows.some(item => item.isTodo)" class="live-task-list">
-            <button v-for="item in rows.filter(row => row.isTodo)" :key="item.id" @click="$emit('open-project', item.id)">
+        </section>
+        <section class="workspace-section" aria-labelledby="project-tasks">
+          <header class="workspace-section-heading"><h2 id="project-tasks">今天的项目待办</h2></header>
+          <div v-if="tasks.length" class="live-task-list">
+            <button v-for="item in tasks" :key="item.id" type="button" @click="$emit('open-project', item.id)">
               <span><strong>{{ item.title }}</strong><small>{{ item.nextStep }}</small></span>
               <UiBadge :tone="statusTone(item.stage)" dot>{{ item.stageLabel }}</UiBadge><span class="live-task-action">去处理 →</span>
             </button>
           </div>
           <UiState v-else title="当前没有待办理项目" description="新的需求或协作方回复到达后，会出现在这里。可从项目台账查看全部进度。" />
-        </UiCard>
+        </section>
       </template>
     </template>
     <template v-else-if="selected">
@@ -230,18 +242,24 @@ onUnmounted(() => {
       <div v-if="detail && !detailError && role === 'dealer'" class="modal-actions"><UiButton @click="$emit('capture-opportunity',detail.id)">记录附加商机</UiButton></div>
     </template>
     <template v-else>
-      <section class="page-heading"><div><h1>{{ role === 'vendor' ? '渠道询价' : role === 'customer' ? '我的采购项目' : '客户项目' }}</h1><p class="muted">需求、询价和补充资料按同一项目流转。</p></div>
-        <UiButton v-if="role !== 'vendor'" variant="primary" @click="openAction('create')">建立项目</UiButton></section>
       <UiState v-if="loadError" state="error" title="项目列表暂不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton></UiState>
-      <UiCard v-else title="协作项目" flush>
-        <div class="ch-tools"><input v-model="keyword" type="search" placeholder="搜索项目或编号" aria-label="搜索项目">
-          <select v-model="stage" aria-label="项目状态"><option value="">全部状态</option><option v-for="[key,label] in stages" :key="key" :value="key">{{ label }}</option></select>
-          <label><input v-model="todo" type="checkbox"> 待我处理</label></div>
+      <section v-else class="workspace-section" aria-labelledby="project-list">
+        <header class="workspace-section-heading">
+          <h2 id="project-list">协作项目</h2>
+          <div class="live-project-filters">
+            <input v-model="keyword" type="search" placeholder="搜索项目或编号" aria-label="搜索项目">
+            <select v-model="stage" aria-label="项目状态">
+              <option value="">全部状态</option>
+              <option v-for="[key, label] in stages" :key="key" :value="key">{{ label }}</option>
+            </select>
+            <label><input v-model="todo" type="checkbox">待我处理</label>
+          </div>
+        </header>
         <div v-if="results.length" class="table-scroll"><table><thead><tr><th>项目</th><th>进度</th><th>下一步</th><th>操作</th></tr></thead><tbody>
           <tr v-for="item in results" :key="item.id"><td>{{ item.title }}<br><small>{{ item.id }}</small></td><td><UiBadge :tone="statusTone(item.stage)" dot>{{ item.stageLabel }}</UiBadge></td><td>{{ item.nextStep }}</td><td><UiButton compact @click="openProject(item.id)">查看</UiButton></td></tr>
         </tbody></table></div>
         <UiState v-else title="暂无符合条件的项目" :description="role === 'vendor' ? '更换筛选条件，或等待代理商向本组织提交询价。' : '更换筛选条件，或建立一笔新的采购需求。'" />
-      </UiCard>
+      </section>
     </template>
     <ElDialog :model-value="!!dialog" :title="title" width="min(94vw, 610px)" :close-on-click-modal="false" :close-on-press-escape="!busy && !pending" :show-close="!busy && !pending" @update:model-value="value => { if (!value) closeDialog() }">
       <div v-if="pending"><p role="status">{{ formError || '已保留本次办理内容，请先核对项目最新状态。' }}</p>
@@ -266,3 +284,59 @@ onUnmounted(() => {
     </ElDialog>
   </section>
 </template>
+
+<style scoped>
+.live-project-actions { margin-left: auto; }
+.live-feedback { margin-block: 8px; color: var(--ui-ink-secondary); }
+.live-project-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+.live-project-filters :is(input[type='search'], select) {
+  min-height: var(--ui-control-height);
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  font-size: inherit;
+}
+.live-project-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: var(--ui-control-height);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.live-project-filters input[type='checkbox'] { margin: 0; }
+.workspace-section > .ui-state { border-top: 1px solid var(--ui-border); }
+.live-task-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  padding: 8px 6px;
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  background: transparent;
+  color: var(--ui-ink);
+  text-align: left;
+}
+.live-task-list button:hover, .live-task-list button:focus-visible { background: var(--ui-accent-bg); }
+.live-task-list button > span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.live-task-list strong, .live-task-list small { display: block; }
+.live-task-list strong { font-weight: 500; }
+.live-task-list small { color: var(--ui-ink-muted); font-size: 12px; }
+.live-task-action { color: var(--ui-link); font-size: 13px; white-space: nowrap; }
+@media (max-width: 540px) {
+  .live-project-actions { margin-left: 0; }
+  .live-task-list button { flex-wrap: wrap; }
+  .live-task-list button > span:first-child { flex-basis: 100%; }
+}
+</style>

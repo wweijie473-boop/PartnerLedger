@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import PortalHeader from './PortalHeader.vue'
 import { UiIcon } from './ui/index.js'
+import './workspace.css'
 
 const props = defineProps({
   nav: { type: Array, required: true },
@@ -50,7 +51,7 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
             <nav ref="tabs" class="workspace-tabs" aria-label="工作台栏目">
               <button v-for="item in nav" :key="item.id" type="button"
                 :aria-current="view === item.id ? 'page' : undefined" @click="emit('navigate', item.id)">
-                <UiIcon :name="item.icon" :size="17" />
+                <UiIcon :name="item.icon" :size="16" />
                 <span>{{ item.label }}</span>
               </button>
             </nav>
@@ -71,24 +72,28 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
 <style scoped>
 .workspace-shell {
   min-height: 100vh;
-  background: var(--ui-canvas);
+  background: var(--ui-surface);
 }
 .workspace-account {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px 4px 4px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--ui-surface);
+  gap: 7px;
+  min-height: 34px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
   color: var(--ui-ink);
   text-align: left;
 }
-.workspace-account:hover { background: var(--ui-surface-hover); }
+.workspace-account:hover, .workspace-account:focus-visible {
+  background: var(--ui-accent-bg);
+  color: var(--ui-link);
+}
 .workspace-avatar {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   flex: none;
   place-items: center;
   border-radius: 50%;
@@ -105,12 +110,12 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
   white-space: nowrap;
   line-height: 1.25;
 }
-.workspace-account-text strong { font-size: 13px; font-weight: 600; }
+.workspace-account-text strong { font-size: 13px; font-weight: 500; }
 .workspace-account-text small { font-size: 11px; color: var(--ui-ink-muted); }
 .workspace-account > svg { color: var(--ui-ink-muted); }
 .workspace-subbar {
   border-top: 1px solid var(--ui-border);
-  background: var(--ui-surface-muted);
+  background: var(--ui-surface);
 }
 .workspace-subbar-inner {
   display: grid;
@@ -129,22 +134,21 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
 .workspace-tabs button {
   position: relative;
   display: inline-flex;
-  min-height: 46px;
+  min-height: 40px;
   flex: none;
   align-items: center;
-  gap: 8px;
-  padding: 0 clamp(10px, 1.2vw, 17px);
+  gap: 6px;
+  padding: 0 clamp(9px, 1vw, 14px);
   border: 0;
-  border-radius: var(--ui-radius-sm) var(--ui-radius-sm) 0 0;
+  border-radius: 0;
   background: transparent;
   color: var(--ui-ink-secondary);
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
 }
 .workspace-tabs button:hover { background: var(--ui-surface-hover); color: var(--ui-link); }
 .workspace-tabs button:focus-visible { outline-offset: -3px; }
 .workspace-tabs button[aria-current="page"] {
-  background: var(--ui-accent-bg);
   color: var(--ui-link);
   font-weight: 600;
 }
@@ -167,11 +171,11 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
   white-space: nowrap;
 }
 .workspace-content {
-  padding-block: clamp(24px, 3vw, 40px) 32px;
-  scroll-margin-top: 112px;
+  padding-block: clamp(18px, 2vw, 28px) 24px;
+  scroll-margin-top: 108px;
 }
 @media (max-width: 760px) {
-  .workspace-account { min-height: 44px; }
+  .workspace-account { min-height: 38px; }
   .workspace-account-text { max-width: min(125px, 29vw); }
   .workspace-subbar-inner { gap: 8px; }
   .workspace-subbar-inner.with-actions { grid-template-columns: minmax(0, 1fr); }

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ElDialog } from 'element-plus'
-import { UiBadge, UiButton, UiCard, UiState } from '../ui/index.js'
+import { UiBadge, UiButton, UiCard, UiMetricCard, UiState } from '../ui/index.js'
 import OpportunityForm from './OpportunityForm.vue'
 import { categoryLabels, contactFields, opportunityStages, systemLabels } from './opportunities.js'
 import { statusTone } from '../ui/statusTone.js'
@@ -84,11 +84,11 @@ async function copyBrief() {
       <header class="page-heading ch-head"><div><p class="ch-kicker">代理商团队 · {{ live ? '正式商机' : '本地演示' }}</p><h1>商机拾遗</h1><p class="muted">客户额外提的需求，团队里谁能接？从一条走访记录找到有合作依据的伙伴。</p></div>
         <UiButton variant="primary" icon="add" @click="open('capture')">记录附加需求</UiButton>
       </header>
-      <div class="op-metrics">
-        <button @click="choose('ledger','open')"><span>待承接需求</span><strong>{{ stats.open }}</strong></button>
-        <button @click="choose('ledger','due')"><span>今天需跟进（含逾期）</span><strong>{{ stats.due }}</strong></button>
-        <button @click="choose('ledger','successful')"><span>已促成合作</span><strong>{{ stats.won }}</strong></button>
-      </div>
+      <section class="metric-grid" aria-label="商机概况">
+        <UiMetricCard label="待承接需求" :value="stats.open" icon="request" interactive @click="choose('ledger', 'open')" />
+        <UiMetricCard label="今天需跟进" :value="stats.due" description="含逾期" icon="time" interactive @click="choose('ledger', 'due')" />
+        <UiMetricCard label="已促成合作" :value="stats.won" icon="check" interactive @click="choose('ledger', 'successful')" />
+      </section>
       <UiCard v-if="desk.tasks?.length" title="今天从这里接着办">
         <div class="op-records"><button v-for="task in desk.tasks" :key="task.opportunityId" @click="$emit('select',task.opportunityId)"><span><b>{{ task.reason }}</b><small>{{ task.projectTitle }}</small></span><span>{{ task.action }}</span></button></div>
       </UiCard>
