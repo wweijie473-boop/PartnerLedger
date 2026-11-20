@@ -10,6 +10,7 @@ import { useSessionAccount } from './useSessionAccount.js'
 import './portal.css'
 
 const phase = ref(0)
+const hero = ref(null)
 const changedPhase = ref(false)
 const { account, signedIn } = useSessionAccount()
 const phases = [
@@ -44,8 +45,8 @@ function showPhase(index) {
     <PortalHeader home-page :account="account" :signed-in="signedIn" />
     <main>
       <section class="pl-hero" aria-labelledby="portal-title">
-        <div class="pl-wrap pl-intro">
-          <div v-enter class="pl-hero-copy">
+        <div ref="hero" v-enter class="pl-wrap pl-intro">
+          <div class="pl-hero-copy">
             <p class="pl-kicker">软件渠道协作平台</p>
             <h1 id="portal-title">软件采购，<br />从谈需求到验收</h1>
             <p class="pl-subtitle">客户提需求，代理商整理方案，厂商确认供货。三方在同一个项目里查看需求、报价和交付进度。</p>
@@ -54,7 +55,7 @@ function showPhase(index) {
               <a class="pl-secondary" href="#journey">了解三方协作</a>
             </div>
           </div>
-          <div v-enter="1" class="pl-artwork"><PortalArtwork /></div>
+          <div class="pl-artwork"><PortalArtwork /></div>
         </div>
       </section>
       <nav class="pl-section-bar" aria-label="首页栏目">
@@ -64,12 +65,12 @@ function showPhase(index) {
           <a href="#opportunity">商机拾遗</a>
         </div>
       </nav>
-      <section id="journey" class="pl-flow-section" tabindex="-1"><div class="pl-wrap pl-journey">
-        <div v-enter><h2>一套 ERP 是怎么采购的？</h2>
+      <section id="journey" v-enter:after="() => hero" class="pl-flow-section" tabindex="-1"><div class="pl-wrap pl-journey">
+        <div><h2>一套 ERP 是怎么采购的？</h2>
           <p class="pl-section-note">以一家企业的 ERP 采购为例，看看需求怎么交给厂商、采购方案怎么确认，以及上线后由谁验收。</p>
           <div class="pl-phases" aria-label="选择协作阶段"><button v-for="(item,index) in phases" :key="item.title" :aria-pressed="phase === index" @click="showPhase(index)">{{ item.title }}</button></div>
         </div>
-        <article v-enter="1" class="pl-case" aria-live="polite">
+        <article class="pl-case" aria-live="polite">
           <div :key="currentPhase.title" class="pl-case-content" :class="{ 'pl-case-change': changedPhase }">
             <p class="pl-case-label"><UiIcon :name="currentPhase.icon" :size="20" />{{ currentPhase.title }}</p>
             <h3>{{ currentPhase.prompt }}</h3>

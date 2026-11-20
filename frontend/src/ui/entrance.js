@@ -42,13 +42,14 @@ function columnInRow(element) {
   return column
 }
 
-function enqueue(element, position = 0, kind = 'module') {
+function enqueue(element, position = 0, kind = 'module', after) {
   if (queued.has(element)) return
   queued.add(element)
   const preference = window.matchMedia('(prefers-reduced-motion: no-preference)')
   if (!preference.matches || !element.animate || element.matches(':focus-within')) return
 
   let animation
+  let finished
 
   function finish() {
     viewport?.unobserve(element)
@@ -65,7 +66,7 @@ function enqueue(element, position = 0, kind = 'module') {
   }
 
   function enter() {
-    if (!element.hasAttribute('data-ui-entrance-pending')) return
+    if (!element.hasAttribute('data-ui-entrance-pending')) return finished
     viewport?.unobserve(element)
     element.removeAttribute('data-ui-entrance-pending')
     if (!preference.matches || element.matches(':focus-within')) {
@@ -86,14 +87,35 @@ function enqueue(element, position = 0, kind = 'module') {
       : [{ opacity: 0, translate: `0 ${distance}px` }, { opacity: 1, translate: '0 0' }]
     const delay = isRow ? 50 : (column === null ? index : column + 1) * 25
     animation = element.animate(frames, { delay, duration: 1200, easing: 'ease-in-out', fill: 'backwards' })
-    animation.finished.then(finish, finish)
+    finished = animation.finished.then(finish, finish)
+    return finished
   }
 
-  active.set(element, { enter, cancel })
+  function enterInOrder() {
+    const previous = after()
+    const previousEntry = active.get(previous)
+    if (previousEntry && !element.matches(':target')) {
+      const bounds = previous.getBoundingClientRect()
+      if (bounds.bottom > 0 && bounds.top < window.innerHeight) {
+        const done = previousEntry.enter()
+        if (done) {
+          viewport?.unobserve(element)
+          done.then(() => {
+            if (active.has(element)) observe(element, enter)
+          })
+          return
+        }
+      }
+    }
+    enter()
+  }
+
+  const onVisible = after ? enterInOrder : enter
+  active.set(element, { enter: onVisible, cancel })
   element.setAttribute('data-ui-entrance-pending', kind)
   element.addEventListener('focusin', cancel)
   preference.addEventListener('change', cancel)
-  observe(element, enter)
+  observe(element, onVisible)
 }
 
 function updateGroup(element, start) {
@@ -110,6 +132,7 @@ function updateGroup(element, start) {
 export const entrance = {
   mounted(element, { arg, value }) {
     if (arg === 'children') updateGroup(element, value)
+    else if (arg === 'after') enqueue(element, 0, 'module', value)
     else enqueue(element, value)
   },
   updated(element, { arg, value }) {
