@@ -39,8 +39,22 @@
 .pl-hero-actions .pl-primary { color: #0b213b; background: #c2e4fa; }
 .pl-hero-actions .pl-primary:hover { background: #d8effc; }
 .pl-hero-actions a:focus-visible { outline-color: #c2e4fa; }
-.pl-artwork { width: 100%; max-width: 640px; justify-self: end; }
+.pl-artwork { position: relative; width: 100%; max-width: 640px; justify-self: end; }
 .pl-visual { display: block; width: 100%; height: auto; pointer-events: none; }
+.pl-motion-toggle {
+  position: absolute;
+  inset: auto 0 0 auto;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid #bdd7eb80;
+  border-radius: var(--ui-radius-sm);
+  background: #102a4380;
+  color: var(--ui-on-navy);
+}
+.pl-motion-toggle:hover { background: #284866; }
+.pl-motion-toggle:focus-visible { outline-color: var(--ui-on-navy-muted); }
 .pl-section-bar {
   position: sticky;
   top: var(--pl-sticky-header-height);
@@ -71,7 +85,7 @@
 .pl-case { border: 1px solid var(--ui-border); padding: 32px; background: var(--ui-surface); border-radius: 20px; box-shadow: var(--ui-shadow-card); }
 .pl-case-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ui-link); }
 .pl-case h3 { font-size: 23px; font-weight: 500; line-height: 1.4; margin-block: 20px 12px; }
-.pl-case > p:not(.pl-case-label) { font-size: 16px; color: var(--ui-ink-secondary); }
+.pl-case-content > p:not(.pl-case-label) { font-size: 16px; color: var(--ui-ink-secondary); }
 .pl-case dl { margin-block: 24px; }
 .pl-case dl > div { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; padding-block: 12px; border-bottom: 1px solid var(--ui-border); font-size: 14px; }
 .pl-case dt { color: var(--ui-ink-muted); }
@@ -107,6 +121,36 @@
 .pl-footer-about h2 { margin-bottom: 6px; }
 .pl-footer-bottom { display: flex; justify-content: space-between; gap: 14px; padding-block: 16px 20px; border-top: 1px solid #bdd7eb38; font-size: 13px; }
 .pl-footer-bottom a span { margin-left: 4px; }
+@keyframes pl-enter {
+  from { opacity: .25; transform: translateY(var(--pl-enter-offset, 10px)); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.pl-portal) { scroll-behavior: smooth; }
+  .pl-hero-copy > *, .pl-artwork { animation: pl-enter var(--ui-motion-emphasized) var(--ui-ease-out) both; }
+  .pl-hero-copy > :nth-child(2) { animation-delay: 55ms; }
+  .pl-hero-copy > :nth-child(3) { animation-delay: 110ms; }
+  .pl-hero-actions { animation-delay: 165ms; }
+  .pl-artwork { --pl-enter-offset: 6px; animation-delay: 70ms; }
+  .pl-case-content { --pl-enter-offset: 5px; animation: pl-enter var(--ui-motion-standard) var(--ui-ease-out); }
+  .pl-section-links a { transition: border-color var(--ui-motion-fast) ease; }
+  .pl-phases button, .pl-motion-toggle {
+    transition: background-color var(--ui-motion-fast) ease, border-color var(--ui-motion-fast) ease, color var(--ui-motion-fast) ease;
+  }
+  .pl-hero-actions a svg, .pl-role-grid a svg { transition: transform var(--ui-motion-standard) var(--ui-ease-out); }
+  @media (hover: hover) and (pointer: fine) {
+    .pl-hero-actions a:hover svg, .pl-role-grid a:hover svg { transform: translateX(3px); }
+  }
+  @supports (animation-timeline: view()) {
+    .pl-role-grid li, .pl-op-illustration {
+      --pl-enter-offset: 12px;
+      animation: pl-enter linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 65%;
+    }
+    .pl-role-grid li:focus-within { animation: none; }
+  }
+}
 @media(max-width:1100px) {
   .pl-journey, .pl-opportunity { gap: 32px; }
 }

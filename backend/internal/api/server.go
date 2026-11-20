@@ -156,7 +156,11 @@ func principal(c *gin.Context) data.User {
 }
 
 func decode(c *gin.Context, target any) bool {
-	decoder := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10))
+	return decodeWithLimit(c, target, 16<<10)
+}
+
+func decodeWithLimit(c *gin.Context, target any, limit int64) bool {
+	decoder := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, limit))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(target) != nil || decoder.Decode(new(any)) != io.EOF {
 		respond(c, http.StatusBadRequest, "invalid_request", nil)

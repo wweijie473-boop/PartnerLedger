@@ -47,7 +47,7 @@ func positiveFee(value string) bool {
 	return strings.Trim(value, "0.") != ""
 }
 
-func normalizedFee(value string) (string, bool) {
+func normalizeCurrency(value string) (string, bool) {
 	if value == "" {
 		return "", true
 	}
@@ -104,7 +104,7 @@ func parseOpportunityAction(action string, raw []byte) (any, error) {
 		if err := actionPayload(raw, &p); err != nil {
 			return nil, err
 		}
-		fee, ok := normalizedFee(p.FeeAmount)
+		fee, ok := normalizeCurrency(p.FeeAmount)
 		p.FeeAmount, p.FeeTerms = fee, strings.TrimSpace(p.FeeTerms)
 		if _, err := parseID(p.PartnerID); err != nil || !p.Consent || p.FollowUp == "" || !validDate(p.FollowUp) ||
 			!ok || (p.FeeTerms != "" || positiveFee(fee)) && !fits(p.FeeTerms, 300) {

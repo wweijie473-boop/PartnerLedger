@@ -1,8 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHttpProjectRepository } from '../src/channel/httpProjects.js'
+import { formatCents, lineCents, quoteCents } from '../src/channel/quoteMoney.js'
 
 const base = '/api/channel/v1/projects'
+
+test('formats stored quote totals and multiplies unit prices without fractional drift', () => {
+  assert.equal(formatCents(lineCents({ quantity: 3, unitPrice: '125.05' })), '¥375.15')
+  assert.equal(formatCents(quoteCents('90071992547409.91')), '¥90,071,992,547,409.91')
+  assert.equal(quoteCents('150.02') - quoteCents('150.01'), 1n)
+})
 
 test('collects cursor pages and returns the organization-scoped detail unchanged', async () => {
   const seen = []

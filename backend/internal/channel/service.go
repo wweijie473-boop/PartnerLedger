@@ -129,8 +129,13 @@ func (s Service) List(ctx context.Context, actor data.User, after uint64, limit 
 		for _, event := range events {
 			byProject[event.ProjectID] = append(byProject[event.ProjectID], event)
 		}
+		commercial, err := loadCommercial(tx, ids)
+		if err != nil {
+			return err
+		}
+		today := time.Now().In(chinaTime).Format(time.DateOnly)
 		for _, project := range projects {
-			page.Items = append(page.Items, projectView(project, actor.Organization.Kind, byProject[project.ID]))
+			page.Items = append(page.Items, projectView(project, actor.Organization.Kind, byProject[project.ID], commercial[project.ID], today))
 		}
 		return nil
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
@@ -218,7 +223,7 @@ func (s Service) Create(ctx context.Context, actor data.User, input CreateInput)
 		if err := tx.Create(&event).Error; err != nil {
 			return err
 		}
-		result = projectView(p, role, []channelEvent{event})
+		result = projectView(p, role, []channelEvent{event}, commercialState{}, "")
 		return saveResult(tx, request, &p.ID, result)
 	})
 	return result, err
@@ -262,11 +267,19 @@ func saveResult(tx *gorm.DB, request channelRequest, projectID *uint64, result a
 }
 
 func loadView(tx *gorm.DB, project channelProject, role string) (View, error) {
+	commercial, err := loadCommercial(tx, []uint64{project.ID})
+	if err != nil {
+		return View{}, err
+	}
+	return viewWithState(tx, project, role, commercial[project.ID], time.Now().In(chinaTime).Format(time.DateOnly))
+}
+
+func viewWithState(tx *gorm.DB, project channelProject, role string, commercial commercialState, today string) (View, error) {
 	var events []channelEvent
 	if err := tx.Where("project_id = ?", project.ID).Order("id").Find(&events).Error; err != nil {
 		return View{}, err
 	}
-	return projectView(project, role, events), nil
+	return projectView(project, role, events, commercial, today), nil
 }
 
 func eventFor(actor data.User, project channelProject, scope, label, detail string) channelEvent {

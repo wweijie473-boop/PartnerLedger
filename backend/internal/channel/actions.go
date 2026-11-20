@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/data"
 	"gorm.io/gorm"
@@ -16,6 +17,8 @@ type actionFields struct {
 	Product string
 	Summary string
 	Note    string
+	Quote   *quoteDraft
+	QuoteID string
 }
 
 func (s Service) Act(ctx context.Context, actor data.User, id uint64, action string, input ActionInput) (View, error) {
@@ -51,13 +54,30 @@ func (s Service) Act(ctx context.Context, actor data.User, id uint64, action str
 		if replay {
 			return json.Unmarshal(entry.Result, &result)
 		}
+		allCommercial, err := loadCommercial(tx, []uint64{p.ID})
+		if err != nil {
+			return err
+		}
+		state := allCommercial[p.ID]
+		today := time.Now().In(chinaTime).Format(time.DateOnly)
+		// A new request key for the same confirmed version still refers to the existing order.
+		if action == "placeOrder" && state.order != nil && fields.QuoteID == idString(state.order.SalesQuoteID) {
+			result, err = viewWithState(tx, p, role, state, today)
+			if err != nil {
+				return err
+			}
+			return saveResult(tx, entry, &p.ID, result)
+		}
 		if p.Revision != input.Revision {
 			return ErrRevision
 		}
-		if !slices.Contains(actionsFor(p, role), action) {
+		if !slices.Contains(actionsFor(p, role, state, today), action) {
+			if expiredForAction(p, state, action, today) {
+				return ErrQuoteExpired
+			}
 			return ErrTransition
 		}
-		event, err := applyAction(tx, actor, &p, action, fields)
+		events, err := projectActionEvents(tx, actor, &p, action, fields, state, today)
 		if err != nil {
 			return err
 		}
@@ -69,10 +89,14 @@ func (s Service) Act(ctx context.Context, actor data.User, id uint64, action str
 		}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&event).Error; err != nil {
+		if err := tx.Create(&events).Error; err != nil {
 			return err
 		}
-		result, err = loadView(tx, p, role)
+		allCommercial, err = loadCommercial(tx, []uint64{p.ID})
+		if err != nil {
+			return err
+		}
+		result, err = viewWithState(tx, p, role, allCommercial[p.ID], today)
 		if err != nil {
 			return err
 		}
@@ -83,10 +107,12 @@ func (s Service) Act(ctx context.Context, actor data.User, id uint64, action str
 
 func canAct(role, action string) (bool, bool) {
 	switch action {
-	case "submitInquiry", "withdrawInquiry":
+	case "submitInquiry", "withdrawInquiry", "reviseChannel", "salesQuote", "placeOrder", "implement":
 		return role == data.Reseller, true
-	case "flagGap":
+	case "flagGap", "channelQuote", "supply":
 		return role == data.Manufacturer, true
+	case "reviseSales", "confirmSales", "rectify", "accept":
+		return role == data.Customer, true
 	case "requestInfo":
 		return role == data.Manufacturer || role == data.Reseller, true
 	case "replyInfo":
@@ -113,6 +139,26 @@ func parseAction(action string, raw []byte) (actionFields, error) {
 		return actionFields{Product: payload.Product, Summary: payload.Summary}, nil
 	case "withdrawInquiry":
 		return actionFields{}, actionPayload(raw, &struct{}{})
+	case "channelQuote", "salesQuote":
+		var quote quoteDraft
+		if err := actionPayload(raw, &quote); err != nil {
+			return actionFields{}, err
+		}
+		if err := normalizeQuote(&quote); err != nil {
+			return actionFields{}, err
+		}
+		return actionFields{Quote: &quote}, nil
+	case "confirmSales", "placeOrder":
+		var payload struct {
+			QuoteID string `json:"quoteId"`
+		}
+		if err := actionPayload(raw, &payload); err != nil {
+			return actionFields{}, err
+		}
+		if _, err := parseID(payload.QuoteID); err != nil {
+			return actionFields{}, err
+		}
+		return actionFields{QuoteID: payload.QuoteID}, nil
 	default:
 		var payload struct {
 			Note string `json:"note"`
@@ -121,10 +167,21 @@ func parseAction(action string, raw []byte) (actionFields, error) {
 			return actionFields{}, err
 		}
 		payload.Note = strings.TrimSpace(payload.Note)
-		if !fits(payload.Note, 3000) {
+		if !(action == "accept" && payload.Note == "") && !fits(payload.Note, 3000) {
 			return actionFields{}, ErrInvalid
 		}
 		return actionFields{Note: payload.Note}, nil
+	}
+}
+
+func projectActionEvents(tx *gorm.DB, actor data.User, p *channelProject, action string, fields actionFields,
+	state commercialState, today string) ([]channelEvent, error) {
+	switch action {
+	case "submitInquiry", "withdrawInquiry", "flagGap", "requestInfo", "replyInfo":
+		event, err := applyAction(tx, actor, p, action, fields)
+		return []channelEvent{event}, err
+	default:
+		return applyCommercialAction(tx, actor, p, action, fields, state, today)
 	}
 }
 

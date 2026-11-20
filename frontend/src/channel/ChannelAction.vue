@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { UiButton, UiField } from '../ui/index.js'
 import { actionLabels, roles } from './domain.js'
+import { formatCents, lineCents, quoteCents } from './quoteMoney.js'
 
 const props = defineProps({
   action: { type: String, required: true },
@@ -17,7 +18,7 @@ const quotes = props.action === 'channelQuote' ? props.project?.channelQuotes : 
 const lastQuote = [...(quotes ?? [])].sort((left, right) => right.version - left.version)[0]
 const future = new Date()
 future.setDate(future.getDate() + 30)
-const toDate = date => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-')
+const toDate = date => date.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
 const form = reactive({
   title: '', requirement: '', customerName: props.role === 'dealer' ? roles.customer.company : '', dueDate: '', summary: props.project?.inquiry?.summary ?? '',
   product: props.project?.product || '', note: '', validUntil: toDate(future),
@@ -39,8 +40,7 @@ const notes = {
   accept: ['验收意见（选填）', '记录验收结果或补充说明。'],
 }
 const noteSpec = computed(() => notes[props.action])
-const amount = computed(() => form.lines.reduce((sum, line) => sum + Math.round(Number(line.unitPrice || 0) * 100) * Number(line.quantity || 0), 0) / 100)
-const currency = value => new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(value)
+const amount = computed(() => form.lines.reduce((sum, line) => sum + lineCents(line), 0n))
 const submitText = computed(() => ({
   create: props.role === 'customer' ? '提交需求' : '建立客户项目', submitInquiry: '确认并提交询价',
   channelQuote: '发布渠道报价', salesQuote: '发送对客报价', confirmSales: '确认此版本报价',
@@ -108,7 +108,7 @@ function submit() {
           <label>单价（元）<input v-model="line.unitPrice" required type="number" min="0" max="99999999.99" step="0.01" /></label>
           <UiButton compact :disabled="form.lines.length < 2" :aria-label="'移除明细 ' + (index + 1)" @click="form.lines.splice(index, 1)">移除</UiButton>
         </div>
-        <div class="ch-line-foot"><UiButton compact icon="add" @click="form.lines.push({label:'', quantity:1, unitPrice:''})">添加明细</UiButton><strong>合计 {{ currency(amount) }}</strong></div>
+        <div class="ch-line-foot"><UiButton compact icon="add" @click="form.lines.push({label:'', quantity:1, unitPrice:''})">添加明细</UiButton><strong>合计 {{ formatCents(amount) }}</strong></div>
       </fieldset>
       <div class="form-row">
         <UiField label="有效至" required v-slot="{ control }"><input v-bind="control" v-model="form.validUntil" type="date" :min="today" required /></UiField>
@@ -118,7 +118,7 @@ function submit() {
     </template>
     <template v-else-if="action === 'confirmSales' || action === 'placeOrder'">
       <p class="ch-callout">{{ action === 'confirmSales' ? '确认后由代理商单独下单。' : '将按已确认的对客报价生成唯一订单。' }}</p>
-      <dl v-if="lastQuote" class="details"><dt>报价版本</dt><dd>{{ lastQuote.id }} · V{{ lastQuote.version }}</dd><dt>总金额</dt><dd>{{ currency(lastQuote.total) }}</dd><dt>有效至</dt><dd>{{ lastQuote.validUntil }}</dd></dl>
+      <dl v-if="lastQuote" class="details"><dt>报价版本</dt><dd>{{ lastQuote.id }} · V{{ lastQuote.version }}</dd><dt>总金额</dt><dd>{{ formatCents(quoteCents(lastQuote.total)) }}</dd><dt>有效至</dt><dd>{{ lastQuote.validUntil }}</dd></dl>
     </template>
     <UiField v-else-if="noteSpec" :label="noteSpec[0]" :required="action !== 'accept'" v-slot="{ control }"><textarea v-bind="control" v-model="form.note" :required="action !== 'accept'" :placeholder="noteSpec[1]" maxlength="2000" rows="4" /></UiField>
     <p v-else-if="action === 'withdrawInquiry'" class="ch-callout">撤回后厂商不能继续处理这笔询价。你可以核对内容并重新提交。</p>

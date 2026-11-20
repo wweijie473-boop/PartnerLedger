@@ -12,6 +12,7 @@ const apiMessages = {
   revision_conflict: '项目已被协作方更新，请重新核对后办理。',
   idempotency_conflict: '此请求的内容已变更，请重新核对后提交。',
   invalid_transition: '项目状态已变化，当前操作暂不可办理。',
+  quote_expired: '关联报价已过期，请查看最新报价后再办理。',
   organization_link_required: '请选择已关联的组织，或联系维护者建立代理关系。',
   opportunity_exists: '此项目已记录相同的附加需求，请刷新商机台账查看。',
   dependencies_unavailable: '服务依赖暂不可用，请稍后重试。',

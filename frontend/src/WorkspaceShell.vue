@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PortalHeader from './PortalHeader.vue'
 import WorkspaceAccount from './WorkspaceAccount.vue'
 import { useSessionAccount } from './useSessionAccount.js'
@@ -17,6 +17,8 @@ const props = defineProps({
 const emit = defineEmits(['navigate', 'account'])
 const { account, signedIn } = props.demo ? useSessionAccount() : { account: null, signedIn: false }
 const tabs = ref(null)
+const content = ref(null)
+let headingAnimation
 
 function revealActiveTab() {
   const nav = tabs.value
@@ -29,7 +31,23 @@ function revealActiveTab() {
 }
 
 onMounted(revealActiveTab)
-watch(() => props.view, revealActiveTab, { flush: 'post' })
+onBeforeUnmount(() => headingAnimation?.cancel())
+watch(() => props.view, () => {
+  revealActiveTab()
+  headingAnimation?.cancel()
+  const heading = content.value?.querySelector('h1')
+  if (!heading?.animate || !window.matchMedia('(prefers-reduced-motion: no-preference)').matches) return
+
+  const styles = getComputedStyle(heading)
+  const duration = styles.getPropertyValue('--ui-motion-standard').trim()
+  headingAnimation = heading.animate(
+    [{ opacity: 0.65, translate: '0 4px' }, { opacity: 1, translate: '0 0' }],
+    {
+      duration: Number.parseFloat(duration) * (duration.endsWith('ms') ? 1 : 1000) || 240,
+      easing: styles.getPropertyValue('--ui-ease-out').trim() || 'ease-out',
+    },
+  )
+}, { flush: 'post' })
 </script>
 
 <template>
@@ -58,7 +76,7 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
         </div>
       </template>
     </PortalHeader>
-    <main id="workspace-content" class="pl-wrap workspace-content" tabindex="-1">
+    <main id="workspace-content" ref="content" class="pl-wrap workspace-content" tabindex="-1">
       <slot />
     </main>
   </div>
@@ -100,21 +118,30 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
   background: transparent;
   color: var(--ui-ink-secondary);
   font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
+  transition: background-color var(--ui-motion-fast) var(--ui-ease-out),
+    color var(--ui-motion-fast) var(--ui-ease-out);
 }
-.workspace-tabs button:hover { background: var(--ui-surface-hover); color: var(--ui-link); }
+.workspace-tabs button:active { background: var(--ui-accent-bg); color: var(--ui-link); }
 .workspace-tabs button:focus-visible { outline-offset: -3px; }
-.workspace-tabs button[aria-current="page"] {
-  color: var(--ui-link);
-  font-weight: 600;
-}
-.workspace-tabs button[aria-current="page"]::after {
+.workspace-tabs button[aria-current="page"] { color: var(--ui-link); }
+.workspace-tabs button::after {
   content: '';
   position: absolute;
   inset: auto 10px 0;
   height: 2px;
   border-radius: 2px;
   background: var(--ui-accent);
+  pointer-events: none;
+  opacity: 0;
+  scale: 0.4 1;
+  transition: opacity var(--ui-motion-fast) var(--ui-ease-out),
+    scale var(--ui-motion-standard) var(--ui-ease-out);
+}
+.workspace-tabs button[aria-current="page"]::after { opacity: 1; scale: 1; }
+@media (hover: hover) and (pointer: fine) {
+  .workspace-tabs button:hover { background: var(--ui-surface-hover); color: var(--ui-link); }
 }
 .workspace-context, .workspace-environment {
   display: flex;
