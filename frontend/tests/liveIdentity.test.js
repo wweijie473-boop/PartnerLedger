@@ -6,10 +6,11 @@ import { ApiError } from '../src/api.js'
 test('正式身份支持三种组织，同时拒绝会话资料与组织响应不一致', () => {
   for (const [kind, role] of [['CUSTOMER','customer'],['RESELLER','dealer'],['MANUFACTURER','vendor']]) {
     const organization = { id:'12', kind, name:'示例组织' }
-    const profile = { username:'member', organization:{...organization} }
+    const profile = { id:'42', username:'member', organization:{...organization} }
     assert.equal(organizationRole(profile,organization),role)
     assert.equal(organizationRole(profile,{...organization,id:'13'}),null)
     assert.equal(organizationRole(profile,{...organization,kind:'UNSUPPORTED'}),null)
+    assert.equal(organizationRole({ ...profile, id: undefined }, organization),null)
   }
 })
 

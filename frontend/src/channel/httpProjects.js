@@ -16,6 +16,22 @@ export function createHttpProjectRepository(request) {
     }
   }
   return {
+    async workspace({ scope, stage, keyword, after, limit, signal }) {
+      const params = new URLSearchParams({ scope, limit: String(limit) })
+      if (stage) params.set('stage', stage)
+      if (keyword) params.set('q', keyword.trim())
+      if (after) params.set('after', after)
+      const page = await request(base + '/workspace?' + params, { signal })
+      if (!Array.isArray(page?.items) || !Array.isArray(page.stages) ||
+          !page.items.every(item => typeof item?.isTodo === 'boolean' &&
+            ['id', 'title', 'stage', 'stageLabel', 'nextStep'].every(key => typeof item[key] === 'string')) ||
+          !page.stages.every(option => typeof option?.id === 'string' && typeof option.label === 'string') ||
+          !['all', 'mine', 'partners'].every(key => Number.isSafeInteger(page.counts?.[key]) && page.counts[key] >= 0) ||
+          (page.next_cursor !== null && (typeof page.next_cursor !== 'string' || !page.next_cursor || page.next_cursor === after))) {
+        throw new Error('项目工作台响应无效。')
+      }
+      return page
+    },
     async list({ signal } = {}) {
       const projects = new Map()
       const cursors = new Set()
@@ -31,7 +47,7 @@ export function createHttpProjectRepository(request) {
         params.set('after', cursor)
       }
     },
-    get: id => request(base + '/' + encodeURIComponent(id)),
+    get: (id, { signal } = {}) => request(base + '/' + encodeURIComponent(id), signal ? { signal } : undefined),
     create(payload, requestId = crypto.randomUUID()) {
       return post(base, payload, requestId)
     },

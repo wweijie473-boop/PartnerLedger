@@ -7,26 +7,27 @@ import ProjectList from '../channel/ProjectList.vue'
 import ChannelAction from '../channel/ChannelAction.vue'
 import { actionLabels } from '../channel/domain.js'
 import { createHttpProjectRepository } from '../channel/httpProjects.js'
+import { createProjectWriteJournal } from './projectWrites.js'
+import { useProjectWorkspace } from './useProjectWorkspace.js'
 import '../channel/workspace.css'
 
-const props = defineProps({ request: Function, role: String, organizationId: String, overview: Boolean })
+const props = defineProps({ request: Function, role: String, organizationId: String, userId: String, overview: Boolean })
 defineEmits(['capture-opportunity', 'open-project', 'open-list'])
 const repo = createHttpProjectRepository(props.request)
-const rows = ref([])
+const journal = createProjectWriteJournal(repo, props.organizationId, props.userId)
+const pending = computed(() => journal.state.job)
+const busy = computed(() => journal.state.busy)
 const links = ref([])
 const products = ref([])
 const inquiryDraft = ref(null)
 const record = ref(null)
 const projectParams = () => new URLSearchParams(location.search)
 const selected = ref(props.overview ? '' : projectParams().get('project') || '')
-const loading = ref(true)
-const loadError = ref('')
 const detailError = ref(null)
 const detailLoading = ref(false)
 const dialog = ref('')
-const busy = ref(false)
 const formError = ref('')
-const notice = ref('')
+const notice = ref(journal.state.error)
 const scopeLabels = { all: '全部项目', mine: '待我处理', partners: '协作方处理中' }
 const listScope = () => {
   const value = projectParams().get('scope')
@@ -35,46 +36,29 @@ const listScope = () => {
 const scope = ref(listScope())
 const savedList = () => {
   const state = history.state?.projectList
-  return state?.organizationId === props.organizationId ? state : null
+  return state?.organizationId === props.organizationId && state.userId === props.userId ? state : null
 }
-const keyword = ref(savedList()?.keyword || '')
-const stage = ref(savedList()?.stage || '')
-const stageLabel = ref(savedList()?.stageLabel || '')
+const {
+  page, rows, counts, loading, loadError, keyword, stage, stageLabel, cursors, stages,
+  loadWorkspace, loadPage, restoreWorkspaceFilters, changeStage, changeKeyword, cancelWorkspaceLoad,
+} = useProjectWorkspace(repo, { overview: props.overview, scope, selected, saved: savedList() })
 const list = ref(null)
 const detailTop = ref(null)
 const contextLoading = ref(false)
 const contextError = ref('')
-const pending = ref(null)
+const pendingProject = ref(null)
+const pendingStatus = computed(() => pending.value?.input.id === record.value?.id ? record.value : pendingProject.value)
 const form = reactive({ title: '', requirement: '', dueDate: '', organization: '' })
-const storageKey = 'partnerledger-project-request-' + props.role + '-' + props.organizationId
-const tasks = computed(() => rows.value.filter(item => item.isTodo)
-  .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999')))
-const partnerTasks = computed(() => rows.value.filter(item => !item.isTodo && item.stage !== 'completed'))
-const scopedRows = computed(() => ({ all: rows.value, mine: tasks.value, partners: partnerTasks.value }))
-const results = computed(() => scopedRows.value[scope.value].filter(item => (!stage.value || item.stage === stage.value) &&
-  [item.id, item.title, item.customerName].filter(Boolean).join(' ').toLowerCase().includes(keyword.value.trim().toLowerCase())))
-const stages = computed(() => {
-  const labels = new Map(rows.value.map(item => [item.stage, item.stageLabel]))
-  if (stage.value && stageLabel.value && !labels.has(stage.value)) labels.set(stage.value, stageLabel.value)
-  return [...labels]
-})
 const detail = computed(() => record.value ? {
   ...record.value, actions: record.value.actions.filter(action => Object.hasOwn(actionLabels, action)),
 } : null)
 const title = computed(() => pending.value ? '核对尚未确认的提交' : dialog.value === 'create' ? '建立采购项目' : actionLabels[dialog.value])
 let timer
 let unmounted = false
-let refreshing = false
-let listSequence = 0
-let detailSequence = 0
+let detailRequest
+let actionRequest
+let actionProject
 
-function storePending(value) {
-  pending.value = value
-  try {
-    if (value) sessionStorage.setItem(storageKey,JSON.stringify(value))
-    else sessionStorage.removeItem(storageKey)
-  } catch { notice.value = '浏览器无法保留待核对提交，关闭页面前请先确认办理结果。' }
-}
 function setSelected(id, listState) {
   const url = new URL(location.href)
   if (id) url.searchParams.set('project', id)
@@ -88,19 +72,16 @@ function setSelected(id, listState) {
   selected.value = id
 }
 function chooseScope(value) {
+  if (scope.value === value) return
   scope.value = value
   const url = new URL(location.href)
   if (value === 'all') url.searchParams.delete('scope')
   else url.searchParams.set('scope', value)
   history.replaceState(null, '', url)
+  loadPage([''])
 }
 function clearFilters() {
-  keyword.value = ''
-  stage.value = ''
-  stageLabel.value = ''
-}
-function rememberStageLabel(event) {
-  stageLabel.value = event.target.selectedOptions[0]?.textContent || ''
+  restoreWorkspaceFilters(null)
 }
 async function restoreListPosition(state) {
   await nextTick()
@@ -114,21 +95,22 @@ async function restoreListPosition(state) {
 }
 function syncProjectFromHistory() {
   const id = projectParams().get('project') || ''
+  const scopeChanged = scope.value !== listScope()
   scope.value = listScope()
-  if (id === selected.value) return
+  if (id === selected.value && !scopeChanged) return
+  if (!pending.value) {
+    actionRequest?.abort()
+    dialog.value = ''
+  }
   selected.value = id
-  detailSequence += 1
-  detailLoading.value = false
-  detailError.value = null
   record.value = null
   if (id) {
+    cancelWorkspaceLoad()
     loadDetail()
   } else {
+    detailRequest?.abort()
     const state = savedList()
-    keyword.value = state?.keyword || ''
-    stage.value = state?.stage || ''
-    stageLabel.value = state?.stageLabel || ''
-    restoreListPosition(state)
+    restoreWorkspaceFilters(state).then(loaded => { if (loaded) restoreListPosition(state) })
   }
 }
 function returnToList() {
@@ -143,43 +125,37 @@ function returnToList() {
 }
 function projectListState(id) {
   return {
-    organizationId: props.organizationId, keyword: keyword.value, stage: stage.value, stageLabel: stageLabel.value,
-    top: window.scrollY, id, index: results.value.findIndex(item => item.id === id),
+    organizationId: props.organizationId, userId: props.userId, keyword: keyword.value, stage: stage.value,
+    stageLabel: stageLabel.value, cursors: [...cursors.value],
+    top: window.scrollY, id, index: rows.value.findIndex(item => item.id === id),
   }
 }
 async function loadDetail() {
-  if (!selected.value) return
-  const sequence = ++detailSequence
-  detailLoading.value = record.value?.id !== selected.value
+  const id = selected.value
+  if (!id || unmounted) return
+  detailRequest?.abort()
+  const controller = new AbortController()
+  detailRequest = controller
+  detailLoading.value = record.value?.id !== id
   detailError.value = null
   try {
-    const item = await repo.get(selected.value)
-    if (!unmounted && sequence === detailSequence) record.value = item
+    const item = await repo.get(id, { signal: controller.signal })
+    if (!controller.signal.aborted) record.value = item
   } catch (error) {
-    if (!unmounted && sequence === detailSequence) {
+    if (!controller.signal.aborted && error.name !== 'AbortError') {
       detailError.value = error
       record.value = null
     }
-  } finally { if (!unmounted && sequence === detailSequence) detailLoading.value = false }
-}
-async function refresh({ force = false } = {}) {
-  if (unmounted || (refreshing && !force)) return
-  const sequence = ++listSequence
-  refreshing = true
-  try {
-    const items = await repo.list()
-    if (!unmounted && sequence === listSequence) { rows.value = items; loadError.value = '' }
-  } catch (error) {
-    if (!unmounted && sequence === listSequence && error.name !== 'AbortError') loadError.value = error.message
   } finally {
-    if (sequence === listSequence) {
-      refreshing = false
-      if (!unmounted) loading.value = false
+    if (detailRequest === controller) {
+      detailRequest = null
+      detailLoading.value = false
     }
   }
 }
 async function openProject(item) {
   setSelected(item.id, projectListState(item.id))
+  cancelWorkspaceLoad()
   record.value = null
   window.scrollTo(0, 0)
   loadDetail()
@@ -187,22 +163,30 @@ async function openProject(item) {
   detailTop.value?.focus({ preventScroll: true })
 }
 async function backgroundRefresh() {
-  if (document.hidden || dialog.value || busy.value) return
-  await refreshProgress()
-}
-async function refreshProgress() {
-  await refresh()
+  if (document.hidden || dialog.value || pending.value || detailRequest || loading.value) return
   if (selected.value) await loadDetail()
+  else await loadWorkspace()
+}
+function refreshProgress() {
+  if (selected.value) return loadDetail()
+  return loadWorkspace({ foreground: true })
 }
 async function openAction(action) {
+  detailRequest?.abort()
+  actionRequest?.abort()
   formError.value = ''; contextError.value = ''; products.value = []; links.value = []
   inquiryDraft.value = null
+  actionProject = record.value
   dialog.value = action
   if (!['create','submitInquiry'].includes(action)) return
+  const controller = new AbortController()
+  const options = { signal: controller.signal }
+  actionRequest = controller
   contextLoading.value = true
   try {
     if (action === 'create') {
-      const page = await props.request('/api/channel/v1/organization-links')
+      const page = await props.request('/api/channel/v1/organization-links', options)
+      if (controller.signal.aborted) return
       links.value = page.items
       form.organization = links.value.length === 1 ? links.value[0].id : ''
     } else {
@@ -211,35 +195,32 @@ async function openAction(action) {
       do {
         const params = new URLSearchParams({limit:'100'})
         if (after) params.set('after',after)
-        const page = await props.request('/api/products?' + params)
+        const page = await props.request('/api/products?' + params, options)
+        if (controller.signal.aborted) return
         products.value.push(...page.items.filter(item => item.published))
         after = page.next_cursor
         if (after && visited.has(after)) throw new Error('产品分页游标重复，请重新载入。')
         if (after) visited.add(after)
       } while (after)
       try {
-        const draft = await props.request('/api/channel/v1/projects/' + encodeURIComponent(record.value.id) + '/inquiry-draft')
-        if (draft.projectRevision === record.value?.revision && products.value.some(item => item.id === draft.productId)) {
+        const draft = await props.request('/api/channel/v1/projects/' + encodeURIComponent(actionProject.id) + '/inquiry-draft', options)
+        if (!controller.signal.aborted && draft.projectRevision === actionProject.revision && products.value.some(item => item.id === draft.productId)) {
           inquiryDraft.value = draft
         }
       } catch (error) {
-        if (error.status !== 404) notice.value = '暂时无法带入询价草稿，可以手工填写。'
+        if (!controller.signal.aborted && error.status !== 404) notice.value = '暂时无法带入询价草稿，可以手工填写。'
       }
     }
-  } catch (error) { contextError.value = error.message }
-  finally { contextLoading.value = false }
+  } catch (error) { if (!controller.signal.aborted) contextError.value = error.message }
+  finally { if (actionRequest === controller) { actionRequest = null; contextLoading.value = false } }
 }
 function closeDialog() {
   if (busy.value || pending.value || contextLoading.value) return
   dialog.value = ''; formError.value = ''
 }
 async function submit(payload) {
-  if (busy.value) return
-  if (!pending.value) {
-    storePending({ requestId:crypto.randomUUID(), action:dialog.value, id:record.value?.id || '',
-      revision:record.value?.revision, payload:structuredClone(payload) })
-  }
-  await sendPending()
+  if (busy.value || pending.value) return
+  await save(() => journal.run(dialog.value, { id: actionProject?.id, revision: actionProject?.revision, payload }))
 }
 async function create() {
   if (!links.value.some(item => item.id === form.organization)) {
@@ -250,48 +231,60 @@ async function create() {
     ...(form.dueDate ? {dueDate:form.dueDate} : {}),
     [props.role === 'dealer' ? 'customerId' : 'resellerId']:form.organization })
 }
-async function sendPending() {
-  if (busy.value || !pending.value) return
-  busy.value = true; formError.value = ''
+async function checkPending() {
   const job = pending.value
+  if (!job) return
+  const id = job.input.id
+  if (!id) { await refreshProgress(); return }
+  if (id === selected.value) { await loadDetail(); return }
+  try {
+    const item = await repo.get(id)
+    if (pending.value === job && !unmounted) pendingProject.value = item
+  } catch (error) {
+    if (pending.value === job && !unmounted) {
+      pendingProject.value = null
+      formError.value = error.message
+    }
+  }
+}
+function retryPending() {
+  if (busy.value || !pending.value) return
+  return save(journal.retry)
+}
+async function save(execute) {
+  formError.value = ''
   const projectAtSubmit = selected.value
   try {
-    const updated = job.action === 'create' ? await repo.create(job.payload,job.requestId) :
-      await repo.act(job.id,job.action,job.payload,job.revision,job.requestId)
-    storePending(null)
-    if (unmounted) return
+    const updated = await execute()
+    if (unmounted || !updated) return
     dialog.value = ''
-    if (selected.value === projectAtSubmit) {
+    pendingProject.value = null
+    if (!props.overview && selected.value === projectAtSubmit) {
+      cancelWorkspaceLoad()
+      detailRequest?.abort()
       record.value = updated
       setSelected(updated.id, projectAtSubmit ? undefined : projectListState(updated.id))
-      if (!projectAtSubmit) window.scrollTo(0, 0)
+      if (updated.id !== projectAtSubmit) window.scrollTo(0, 0)
     }
     notice.value = '办理结果已保存，协作方可在关联项目中查看。'
-    await Promise.all([refresh({ force: true }), loadDetail()])
+    if (selected.value === updated.id) await loadDetail()
+    else if (!selected.value) await loadWorkspace({ foreground: true })
   } catch (error) {
-    if (error.status >= 400 && error.status < 500) {
-      storePending(null)
+    if (unmounted) return
+    if (pending.value) {
+      formError.value = journal.state.error || error.message
+    } else if (error.status >= 400 && error.status < 500) {
       dialog.value = ''
       notice.value = error.message
-      await refresh()
-      await loadDetail()
+    await refreshProgress()
     } else {
-      formError.value = '提交结果尚待确认。已保留本次请求，请先检查最新记录。'
-      await refresh()
-      if (!unmounted && job.id && selected.value === projectAtSubmit) { setSelected(job.id); await loadDetail() }
+      formError.value = '浏览器无法保留待核对提交，本次未发出。请检查浏览器存储后重试。'
     }
-  } finally { busy.value = false }
+  }
 }
 onMounted(async () => {
   if (!props.overview) window.addEventListener('popstate', syncProjectFromHistory)
-  try {
-    const job = JSON.parse(sessionStorage.getItem(storageKey))
-    if (job?.requestId && job.payload && job.action) {
-      pending.value = job
-      dialog.value = job.action
-    }
-  } catch { notice.value = '上次请求记录无法读取，请先检查项目台账再办理。' }
-  await Promise.all([refresh(), loadDetail()])
+  await refreshProgress()
   if (unmounted) return
   if (!props.overview && !selected.value && savedList()) restoreListPosition(savedList())
   timer = setInterval(backgroundRefresh,20000)
@@ -301,6 +294,9 @@ onMounted(async () => {
 onUnmounted(() => {
   unmounted = true
   clearInterval(timer)
+  cancelWorkspaceLoad()
+  detailRequest?.abort()
+  actionRequest?.abort()
   window.removeEventListener('popstate', syncProjectFromHistory)
   window.removeEventListener('focus',backgroundRefresh)
   document.removeEventListener('visibilitychange',backgroundRefresh)
@@ -321,21 +317,21 @@ onUnmounted(() => {
       </div>
     </header>
     <p v-if="notice" class="live-feedback" role="status">{{ notice }}</p>
-    <UiState v-if="loading" state="loading" title="正在读取项目" />
-    <template v-else-if="overview">
-      <UiState v-if="loadError" state="error" title="项目待办暂不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton></UiState>
+    <template v-if="overview">
+      <UiState v-if="loading" state="loading" title="正在读取项目待办" />
+      <UiState v-else-if="loadError" state="error" title="项目待办暂不可用" :description="loadError"><UiButton @click="refreshProgress">重新载入</UiButton></UiState>
       <template v-else>
         <section v-enter:children="1" class="metric-grid" aria-label="协作数据">
-          <UiMetricCard label="可见项目" :value="rows.length" description="当前组织参与的项目" icon="request" interactive @click="$emit('open-list', 'all')" />
-          <UiMetricCard label="待我处理" :value="tasks.length" description="下一步由本方办理" icon="activity" tone="brand" interactive @click="$emit('open-list', 'mine')" />
-          <UiMetricCard label="协作方处理中" :value="partnerTasks.length" description="等待协作方推进" icon="time" interactive @click="$emit('open-list', 'partners')" />
+          <UiMetricCard label="可见项目" :value="counts.all" description="当前组织参与的项目" icon="request" interactive @click="$emit('open-list', 'all')" />
+          <UiMetricCard label="待我处理" :value="counts.mine" description="下一步由本方办理" icon="activity" tone="brand" interactive @click="$emit('open-list', 'mine')" />
+          <UiMetricCard label="协作方处理中" :value="counts.partners" description="等待协作方推进" icon="time" interactive @click="$emit('open-list', 'partners')" />
         </section>
         <section v-enter="2" class="workspace-section" aria-labelledby="project-tasks">
           <header class="workspace-section-heading">
             <h2 id="project-tasks">项目待办</h2>
-            <UiButton v-if="tasks.length" variant="text" end-icon="forward" @click="$emit('open-list', 'mine')">查看全部待办</UiButton>
+            <UiButton v-if="rows.length" variant="text" end-icon="forward" @click="$emit('open-list', 'mine')">查看全部待办</UiButton>
           </header>
-          <ProjectList v-if="tasks.length" :projects="tasks.slice(0, 5)" :show-customer="role === 'dealer'" @open="item => $emit('open-project', item.id, 'mine')" />
+          <ProjectList v-if="rows.length" :projects="rows" :show-customer="role === 'dealer'" @open="item => $emit('open-project', item.id, 'mine')" />
           <UiState v-else title="当前没有待办理项目" description="新的需求或协作方回复到达后，会出现在这里。可从项目台账查看全部进度。" />
         </section>
       </template>
@@ -353,34 +349,40 @@ onUnmounted(() => {
       </ProjectDetail>
     </div>
     <template v-else>
-      <UiState v-if="loadError" state="error" title="项目列表暂不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton></UiState>
-      <section v-else v-enter="1" ref="list" class="workspace-section" aria-labelledby="project-list">
+      <section v-enter="1" ref="list" class="workspace-section" aria-labelledby="project-list" :aria-busy="loading">
         <header class="workspace-section-heading">
           <div class="live-project-scopes" role="group" aria-label="项目范围">
             <h2 id="project-list" class="ch-sr">协作项目</h2>
             <button v-for="(label, key) in scopeLabels" :key="key" type="button"
-              :aria-pressed="scope === key" @click="chooseScope(key)">{{ label }} <span>{{ scopedRows[key].length }}</span></button>
+              :aria-pressed="scope === key" @click="chooseScope(key)">{{ label }} <span>{{ counts[key] }}</span></button>
           </div>
           <div class="live-project-filters">
-            <input v-model="keyword" type="search" placeholder="搜索项目或编号" aria-label="搜索项目">
-            <select v-model="stage" aria-label="项目状态" @change="rememberStageLabel">
+            <input :value="keyword" type="search" placeholder="搜索项目或编号" aria-label="搜索项目" maxlength="120" @input="changeKeyword">
+            <select v-model="stage" aria-label="项目状态" @change="changeStage">
               <option value="">全部状态</option>
-              <option v-for="[key, label] in stages" :key="key" :value="key">{{ label }}</option>
+              <option v-for="option in stages" :key="option.id" :value="option.id">{{ option.label }}</option>
             </select>
           </div>
         </header>
-        <ProjectList v-if="results.length" :projects="results" :show-customer="role === 'dealer'" @open="openProject" />
-        <UiState v-else :title="keyword || stage ? '暂无符合条件的项目' : scope === 'mine' ? '暂无待你处理的项目' : scope === 'partners' ? '暂无等待协作方处理的项目' : '暂无协作项目'">
+        <UiState v-if="loading" state="loading" title="正在读取项目" />
+        <UiState v-else-if="loadError" state="error" title="项目列表暂不可用" :description="loadError"><UiButton @click="refreshProgress">重新载入</UiButton></UiState>
+        <ProjectList v-else-if="rows.length" :projects="rows" :show-customer="role === 'dealer'" @open="openProject" />
+        <UiState v-else :title="cursors.length > 1 ? '本页暂无项目' : keyword || stage ? '暂无符合条件的项目' : scope === 'mine' ? '暂无待你处理的项目' : scope === 'partners' ? '暂无等待协作方处理的项目' : '暂无协作项目'">
           <UiButton v-if="keyword || stage" variant="text" @click="clearFilters">清除筛选</UiButton>
           <UiButton v-else-if="scope !== 'all'" variant="text" @click="chooseScope('all')">查看全部项目</UiButton>
         </UiState>
+        <div v-if="cursors.length > 1 || page?.next_cursor" class="modal-actions live-project-pagination" role="group" aria-label="项目分页">
+          <UiButton :disabled="loading || cursors.length < 2" @click="loadPage(cursors.slice(0, -1))">上一页</UiButton>
+          <span role="status">第 {{ cursors.length }} 页</span>
+          <UiButton :disabled="loading || !!loadError || !page?.next_cursor" @click="loadPage([...cursors, page.next_cursor])">下一页</UiButton>
+        </div>
       </section>
     </template>
-    <ElDialog :model-value="!!dialog" :title="title" width="min(94vw, 610px)" :close-on-click-modal="false" :close-on-press-escape="!busy && !pending && !contextLoading" :show-close="!busy && !pending && !contextLoading" @update:model-value="value => { if (!value) closeDialog() }">
+    <ElDialog :model-value="!!(dialog || pending)" :title="title" width="min(94vw, 610px)" :close-on-click-modal="false" :close-on-press-escape="!busy && !pending && !contextLoading" :show-close="!busy && !pending && !contextLoading" @update:model-value="value => { if (!value) closeDialog() }">
       <div v-if="pending"><p role="status">{{ formError || '已保留本次办理内容，请先核对项目最新状态。' }}</p>
-        <p v-if="record">最新进度 {{ record.stageLabel }} · 版本 {{ record.revision }}</p>
-        <p v-if="pending.action === 'create'">项目列表已有 {{ rows.length }} 条记录。重放本次请求会取得已保存的结果。</p>
-        <div class="modal-actions"><UiButton :disabled="busy" @click="refresh(); loadDetail()">检查最新记录</UiButton><UiButton :loading="busy" @click="sendPending">用原请求确认结果</UiButton></div>
+        <p v-if="pendingStatus">最新进度 {{ pendingStatus.stageLabel }} · 版本 {{ pendingStatus.revision }}</p>
+        <p v-if="pending.kind === 'create'">用原请求可以取得已保存的结果。</p>
+        <div class="modal-actions"><UiButton :disabled="busy" @click="checkPending">检查最新记录</UiButton><UiButton :loading="busy" @click="retryPending">用原请求确认结果</UiButton></div>
       </div>
       <UiState v-else-if="contextLoading" state="loading" title="正在读取可选信息" />
       <UiState v-else-if="contextError" state="error" :description="contextError" title="暂时无法办理"><UiButton @click="openAction(dialog)">重试</UiButton></UiState>
@@ -395,7 +397,7 @@ onUnmounted(() => {
         </form>
       </template>
       <UiState v-else-if="dialog === 'submitInquiry' && !products.length" title="暂无可询价的已发布产品" description="请联系软件厂商发布产品后再发起询价。" />
-      <ChannelAction v-else-if="dialog && record" :key="dialog + record.revision" :action="dialog" :project="record" :role="role" :products="products" :inquiry-draft="inquiryDraft" :busy="busy" :error="formError" @submit="submit" @cancel="closeDialog" />
+      <ChannelAction v-else-if="dialog && actionProject" :key="dialog + actionProject.revision" :action="dialog" :project="actionProject" :role="role" :products="products" :inquiry-draft="inquiryDraft" :busy="busy" :error="formError" @submit="submit" @cancel="closeDialog" />
     </ElDialog>
   </section>
 </template>
@@ -435,6 +437,7 @@ onUnmounted(() => {
   font-size: inherit;
 }
 .workspace-section > .ui-state { border-top: 1px solid var(--ui-border); }
+.live-project-pagination { padding: 12px 0; align-items: center; }
 @media (max-width: 540px) {
   .live-project-actions { margin-left: 0; }
 }

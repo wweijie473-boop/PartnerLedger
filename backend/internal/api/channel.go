@@ -25,6 +25,19 @@ func (s server) listChannelProjects(c *gin.Context) {
 	channelResult(c, http.StatusOK, page, err)
 }
 
+func (s server) projectWorkspace(c *gin.Context) {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	if err != nil {
+		channelResult(c, http.StatusOK, nil, channel.ErrInvalid)
+		return
+	}
+	page, err := s.channel.Workspace(c.Request.Context(), principal(c), channel.ProjectWorkspaceQuery{
+		Scope: c.DefaultQuery("scope", "all"), Stage: c.Query("stage"), Search: c.Query("q"),
+		After: c.Query("after"), Limit: limit,
+	})
+	channelResult(c, http.StatusOK, page, err)
+}
+
 func (s server) createChannelProject(c *gin.Context) {
 	var input channel.CreateInput
 	if !decode(c, &input) {

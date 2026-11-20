@@ -63,6 +63,12 @@ func testProjectCommercial(t *testing.T, db *gorm.DB, request func(string, strin
 	if err := db.Exec("UPDATE pl_channel_quotes SET valid_until = '2020-01-01' WHERE id = ? AND project_id = ?", firstChannel, project.ID).Error; err != nil {
 		t.Fatal(err)
 	}
+	var renewal channel.ProjectWorkspacePage
+	request(http.MethodGet, "/api/channel/v1/projects/workspace?scope=mine&stage=channel_wait", vendor, "", 200, &renewal)
+	if renewal.Counts.Mine != 1 || len(renewal.Items) != 1 || renewal.Items[0].ID != project.ID ||
+		!renewal.Items[0].IsTodo || renewal.Items[0].NextStep != "发送渠道报价" {
+		t.Fatalf("expired channel quote missing from the manufacturer's projected work queue: %+v", renewal)
+	}
 	expired := send(http.MethodPost, path+"/actions/placeOrder", dealer, body(4, project.Revision, quoteID(firstSales)))
 	if expired.Code != 409 || !strings.Contains(expired.Body.String(), "quote_expired") {
 		t.Fatalf("expired channel quote could be ordered: %s", expired.Body.String())

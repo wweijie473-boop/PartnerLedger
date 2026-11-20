@@ -348,6 +348,62 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
+  /api/channel/v1/projects/workspace:
+    get:
+      summary: List lightweight workspace rows and aggregate counts for the current organization
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [all, mine, partners], default: all }
+        - name: stage
+          in: query
+          description: Stage code as projected for the caller's role.
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Literal search over the project number, display title and customer name when visible.
+          schema: { type: string, maxLength: 120 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: after
+          in: query
+          description: Cursor from the previous response for the same scope and filters.
+          schema: { type: string }
+      responses:
+        '200':
+          description: A project page with counts and visible stage options independent of the current filters.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [items, next_cursor, counts, stages]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: '#/components/schemas/ChannelProjectListItem' }
+                          next_cursor: { type: [string, 'null'] }
+                          counts:
+                            type: object
+                            required: [all, mine, partners]
+                            properties:
+                              all: { type: integer, minimum: 0 }
+                              mine: { type: integer, minimum: 0 }
+                              partners: { type: integer, minimum: 0 }
+                          stages:
+                            type: array
+                            items:
+                              type: object
+                              required: [id, label]
+                              properties:
+                                id: { type: string }
+                                label: { type: string }
+        default:
+          $ref: '#/components/responses/Error'
   /api/channel/v1/projects/{id}:
     parameters:
       - name: id
@@ -977,6 +1033,18 @@ components:
         validUntil: { type: string, format: date }
         deliveryDays: { type: integer, minimum: 1 }
         note: { type: string }
+    ChannelProjectListItem:
+      type: object
+      required: [id, title, stage, stageLabel, isTodo, nextStep]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        title: { type: string }
+        customerName: { type: string }
+        dueDate: { type: string, format: date }
+        stage: { type: string }
+        stageLabel: { type: string }
+        isTodo: { type: boolean }
+        nextStep: { type: string }
     ChannelProject:
       type: object
       required: [id, title, stage, stageLabel, revision, isTodo, nextStep, actions, timeline]
