@@ -18,11 +18,11 @@ const error = ref('')
 onMounted(async () => {
   try {
     const saved = JSON.parse(localStorage.getItem(sessionKey))
-    if (!saved?.dealer || !saved?.vendor || saved.expires <= Date.now()) return
+    if (!saved?.dealer || !saved?.vendor) return
     await requestRetailDemo('/session', { token: saved[props.role] })
     session.value = saved
   } catch (cause) {
-    if (cause.status !== 401 && cause.status !== undefined) error.value = cause.message
+    if (cause.status !== undefined) error.value = cause.message
   } finally {
     loading.value = false
   }

@@ -4,6 +4,7 @@
 /.clerk/
 *.exe
 /backend/var/
+/frontend/var/
 node_modules/
 dist/
 /frontend/playwright-report/

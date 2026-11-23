@@ -1,16 +1,15 @@
 import { randomUUID } from 'node:crypto'
+import { renewalDays } from '../src/live/renewalDates.js'
 
 const serviceCreditCents = 120000
 const ticketCategories = ['产品使用', '授权与交付', '订单与结算']
-const dayMs = 86400000
 const now = () => new Date().toISOString()
 const sum = (rows, amount) => rows.reduce((total, row) => total + amount(row), 0)
 
 export function createDealerOperations() {
   return {
     customers: [{ id: '1', name: '海河商贸（演示客户）', contact: '王经理（演示）', note: '' }],
-    renewals: [{ id: 'sample-renewal', customer: '海河商贸（演示客户）', product_name: '云财务',
-      due_at: new Date(Date.now() + 9 * dayMs).toISOString(), note: '' }],
+    renewals: [],
     topups: [], invoices: [], claims: [], tickets: [],
   }
 }
@@ -18,8 +17,7 @@ export function createDealerOperations() {
 export function trackAnnualOrder(operations, order) {
   const due = new Date(order.paid_at)
   due.setUTCFullYear(due.getUTCFullYear() + 1)
-  operations.renewals.push({ id: 'order-' + order.id, order_id: order.id, customer: order.customer,
-    product_name: order.product_name, due_at: due.toISOString(), note: '' })
+  operations.renewals.push({ id: 'order-' + order.id, order_id: order.id, due_at: due.toISOString(), note: '' })
 }
 
 function fail(status, message) {
@@ -71,20 +69,26 @@ function serviceBalance(claims) {
 
 function financeData(session, role) {
   const { customers, renewals, topups, invoices, claims, tickets } = session.operations
-  const orders = session.orders.map(({ id, source, product_name, customer, total_cents, paid_at, status }) =>
-    ({ id, source, product_name, customer, total_cents, paid_at, status }))
+  const orders = session.orders.map(({ id, source, product_name, product_version, quantity, customer, customer_id, total_cents, paid_at, status }) =>
+    ({ id, source, product_name, product_version, quantity, customer, customer_id, total_cents, paid_at, status }))
+  const ordersById = new Map(orders.map(row => [row.id, row]))
+  const customerNames = new Map(customers.map(row => [row.id, row.name]))
+  const currentRenewals = renewals.map(row => {
+    const order = ordersById.get(row.order_id)
+    return { ...order, ...row, customer: customerNames.get(order?.customer_id) ?? order?.customer ?? row.customer }
+  })
   const payouts = session.orders.filter(row => row.payout_ref).map(row => ({
     order_id: row.id, amount_cents: row.commission.cents, reference: row.payout_ref, handled_at: row.commission.settled_at,
   }))
   const paidClaims = claims.filter(row => row.status === 'paid')
   return {
-    ...(role === 'dealer' ? { customers, renewals } : {}), orders, topups, invoices, claims, tickets, payouts,
+    ...(role === 'dealer' ? { customers, renewals: currentRenewals } : {}), orders, topups, invoices, claims, tickets, payouts,
     totals: {
       customers: customers.length, orders: orders.length, promotion_orders: orders.filter(row => row.source === 'promotion').length,
       open_tickets: tickets.filter(row => row.status !== 'closed').length,
       renewals_30_days: renewals.filter(row => {
-        const remaining = Date.parse(row.due_at) - Date.now()
-        return remaining >= 0 && remaining <= 30 * dayMs
+        const remaining = renewalDays(row.due_at)
+        return remaining >= 0 && remaining <= 30
       }).length,
       topup_balance_cents: sum(topups.filter(row => row.status === 'credited'), row => row.amount_cents),
       pending_commission_cents: sum(session.orders.filter(row => row.status === 'settlement'), row => row.commission.cents),
@@ -96,13 +100,12 @@ function financeData(session, role) {
   }
 }
 
-export async function routeDealerOperations(req, path, actor, readBody) {
+export function routeDealerOperations(req, path, actor, body) {
   const { role, session } = actor
   if (req.method === 'GET' && path === 'operations') return financeData(session, role)
   if (req.method !== 'POST') fail(404, '没有这个办理入口。')
   const [, kind, id, action, ...extra] = path.split('/')
   if (extra.length) fail(404, '没有这个办理入口。')
-  const body = await readBody(req)
   const { customers, renewals, topups, invoices, claims, tickets } = session.operations
 
   if (role === 'dealer' && kind === 'renewals' && id && !action) {
