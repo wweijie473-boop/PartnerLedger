@@ -13,7 +13,9 @@ defineProps({
   <component :is="href ? 'a' : 'button'" class="workspace-account" :href="href || undefined"
     :type="href ? undefined : 'button'" :aria-label="'账号：' + label + '，' + organization"
     :title="label + ' · ' + organization">
-    <img v-if="logo" class="workspace-avatar workspace-avatar-logo" :src="logo" width="26" height="26" alt="" />
+    <span v-if="logo" class="workspace-avatar workspace-avatar-logo" aria-hidden="true">
+      <img :src="logo" width="22" height="22" alt="" />
+    </span>
     <span v-else class="workspace-avatar" aria-hidden="true">{{ [...organization][0] ?? '渠' }}</span>
     <span class="workspace-account-text">
       <strong>{{ label }}</strong>
@@ -54,10 +56,13 @@ defineProps({
   font-weight: 600;
 }
 .workspace-avatar-logo {
-  box-sizing: border-box;
+  overflow: hidden;
   background: #fff;
+}
+.workspace-avatar-logo img {
   object-fit: contain;
-  padding: 2px;
+  /* Account for the artwork's uneven white margins. */
+  transform: translate(9.2%, 3.4%);
 }
 .workspace-account-text { min-width: 0; max-width: clamp(84px, 13vw, 136px); }
 .workspace-account-text > * {
