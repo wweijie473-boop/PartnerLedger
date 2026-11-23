@@ -192,10 +192,10 @@ async function perform(payload) {
   } finally { working.value = false }
 }
 async function saveProduct(value) { await repo.saveProduct(value); await refresh(); toast('产品已保存') }
-async function captureVisit(projectId,note) {
+async function captureVisit(projectId,note,criteria) {
   const current = await repo.opportunityDesk()
   const existing = current.items.find(item => item.projectId === projectId && item.note === note)
-  const result = existing || await repo.captureOpportunity(projectId,{note})
+  const result = existing || await repo.captureOpportunity(projectId,{note,...criteria})
   await refresh()
   return result
 }
@@ -215,7 +215,7 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
       </template>
       <DealerPage v-else-if="role === 'dealer' && dealerPages.some(p => p.id === view)" :key="view" :view="view" :projects="projects" :organization="org.company" :account="names[role] + ' · 演示身份'" @project="id => openProjectFromList({ id })" @navigate="navigate" @account="openDialog('roles')" />
       <DemoCatalog v-else-if="view === 'catalog'" :items="products" :role="role" :save="saveProduct" />
-      <VisitDrafts v-else-if="role === 'dealer' && view === 'visits'" :scope="'demo:' + org.orgId" :load-projects="repo.list" :capture="captureVisit" @project="id => { navigate('ledger'); openProject({id}) }" />
+      <VisitDrafts v-else-if="role === 'dealer' && view === 'visits'" :scope="'demo:' + org.orgId" :load-projects="repo.list" :load-desk="repo.opportunityDesk" :capture="captureVisit" @project="id => { navigate('ledger'); openProject({id}) }" @opportunity="openOpportunity" />
       <OpportunityDesk v-else-if="role === 'dealer' && view === 'opportunities'" :desk="desk" :repo="repo" :projects="projects" :selected="opportunity" :capture-for="captureFor" :refresh="refresh" @select="openOpportunity" @capture-opened="captureFor = ''" @project="record => { navigate('ledger'); openProject(record) }" @notice="toast" />
       <template v-else>
         <section class="page-heading ch-head"><div v-enter :key="view"><p class="ch-kicker">{{ copy.en }} &nbsp; / &nbsp; {{ org.company }}</p><h1>{{ view === 'overview' ? copy.title : navTitle }}</h1><p class="muted">{{ view === 'overview' ? copy.intro : view === 'delivery' ? '从订单追溯报价，跟进供货、实施及客户验收。' : '按编号、项目名称和状态查找协作记录。' }}</p></div>

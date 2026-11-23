@@ -1,7 +1,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { UiButton, UiCard, UiField, UiState } from '../ui/index.js'
+import VisitPartnerFinder from './VisitPartnerFinder.vue'
 import { createHttpVisitRepository } from './httpVisits.js'
+import { createHttpOpportunityRepository } from '../channel/httpOpportunities.js'
 import { createHttpProjectRepository } from '../channel/httpProjects.js'
 import { createVisitDraftStore, splitVisit } from './visitDrafts.js'
 import { createWriteJournal } from './writeJournal.js'
@@ -10,6 +12,7 @@ import './visits.css'
 const props = defineProps({ request: Function, scope: String })
 const emit = defineEmits(['project','opportunity'])
 const remote = createHttpVisitRepository(props.request)
+const { opportunityDesk } = createHttpOpportunityRepository(props.request)
 const projectRepo = createHttpProjectRepository(props.request)
 const local = createVisitDraftStore('live:' + props.scope)
 const rows = ref([])
@@ -21,12 +24,14 @@ const error = ref('')
 const message = ref('')
 const confirmed = ref(false)
 const reviewed = ref(false)
+const criteria = ref(null)
 const localSource = ref('')
 const form = reactive({ id:'', revision:0, projectId:'', text:'', main:'', additional:'', opportunityId:'', confirmed:false })
+const partnerNote = computed(() => (reviewed.value ? form.additional : splitVisit(form.text).additional).trim())
 const journal = createWriteJournal('partnerledger-visit-write:' + props.scope, job => {
   const { input, requestId } = job
   if (job.kind === 'save') return remote.save(input.id,input.payload,input.revision,requestId)
-  if (job.kind === 'confirm') return remote.confirm(input.id,input.revision,input.createOpportunity,requestId)
+  if (job.kind === 'confirm') return remote.confirm(input.id,input.revision,input.createOpportunity,requestId,input.criteria)
   return remote.remove(input.id,input.revision,requestId)
 })
 const state = journal.state
@@ -82,7 +87,7 @@ async function afterSuccess(job, record) {
       } catch (cause) { message.value = '服务端已保存，本机同步标记更新失败，请按服务端草稿继续办理。' }
     }
     if (job.kind === 'save' && job.input.confirmAfter) {
-      await perform('confirm',{ id:record.id, revision:record.revision, createOpportunity:job.input.createOpportunity })
+      await perform('confirm',{ id:record.id, revision:record.revision, createOpportunity:job.input.createOpportunity, criteria:job.input.criteria })
       return
     }
     message.value = record.opportunityId ? '已确认并关联一条正式商机。' : '已保存到当前账号。'
@@ -120,7 +125,7 @@ async function save(confirmAfter = false) {
   if (confirmAfter && !canConfirm.value) return
   await perform('save',{
     id:form.id, revision:form.revision, localSource:localSource.value,
-    confirmAfter, createOpportunity:!!form.additional.trim(),
+    confirmAfter, createOpportunity:!!form.additional.trim(), criteria:confirmAfter && form.additional.trim() ? criteria.value : undefined,
     payload:{ projectId:form.projectId, text:form.text.trim(), main:form.main.trim(), additional:form.additional.trim(), reviewed:reviewed.value },
   })
 }
@@ -129,7 +134,7 @@ onMounted(async () => { readLocal(); await refresh() })
 
 <template>
   <section class="visit-page">
-    <header v-enter="0" class="page-heading"><div><h1>记拜访</h1><p class="muted">同步草稿仅自己可读，确认后的独立商机由团队共同跟进。</p></div><UiButton :disabled="locked" @click="refresh">刷新</UiButton></header>
+    <header v-enter="0" class="page-heading"><div><h1>记拜访</h1><p class="muted">记下客户提到的附加需求，当场看看团队里谁能引荐。同步草稿仅自己可读。</p></div><UiButton :disabled="locked" @click="refresh">刷新</UiButton></header>
     <UiCard v-if="state.job" title="核对尚未确认的提交">
       <p>{{ state.error || '已保留本次请求，请先检查服务端记录。' }}</p>
       <div class="modal-actions"><UiButton :disabled="state.busy" @click="refresh">检查最新记录</UiButton><UiButton :loading="state.busy" @click="retry">用原请求确认结果</UiButton></div>
@@ -140,7 +145,7 @@ onMounted(async () => { readLocal(); await refresh() })
       <UiCard v-enter="1" title="本次拜访">
         <form class="form-grid" @submit.prevent="save(true)">
           <fieldset class="visit-inputs" :disabled="readonly">
-            <UiField label="拜访记录" required v-slot="{control}"><textarea v-bind="control" v-model="form.text" rows="4" maxlength="2000" required @input="reviewed=false; confirmed=false"></textarea></UiField>
+            <UiField label="拜访记录" required v-slot="{control}"><textarea v-bind="control" v-model="form.text" rows="4" maxlength="2000" placeholder="例如：ERP 已定，客户还想把 ERP 工单同步到 MES。" required @input="reviewed=false; confirmed=false"></textarea></UiField>
             <UiField label="关联客户项目" v-slot="{control}"><select v-bind="control" v-model="form.projectId" @change="confirmed=false"><option value="">稍后关联项目</option><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.customerName }} · {{ project.title }}</option></select></UiField>
             <div class="visit-actions"><UiButton @click="save(false)">保存草稿</UiButton><UiButton :disabled="!form.text.trim()" @click="organize">核对两类需求</UiButton></div>
             <template v-if="reviewed">
@@ -151,6 +156,7 @@ onMounted(async () => { readLocal(); await refresh() })
             </template>
           </fieldset>
         </form>
+        <VisitPartnerFinder v-if="partnerNote || form.opportunityId" :key="form.id" :note="partnerNote" :opportunity-id="form.opportunityId" :load-desk="opportunityDesk" @criteria="criteria = $event" />
         <p v-if="form.opportunityId">已关联正式商机 {{ form.opportunityId }}。</p>
         <div class="modal-actions"><UiButton v-if="form.projectId" :disabled="locked" @click="$emit('project',form.projectId)">打开关联项目</UiButton><UiButton v-if="form.opportunityId" :disabled="locked" @click="$emit('opportunity',form.opportunityId)">查看正式商机</UiButton></div>
         <p v-if="error" role="alert">{{ error }}</p><p v-if="message" role="status">{{ message }}</p>

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { actOnProject, demoActor, seedState, viewProject } from '../src/channel/domain.js'
-import { actOpportunity, addPartner, captureOpportunity, opportunityDesk, suggestOpportunity } from '../src/channel/opportunities.js'
+import { actOpportunity, addPartner, captureOpportunity, opportunityDesk, previewPartnerMatches, suggestOpportunity } from '../src/channel/opportunities.js'
 import { createDemoRepository, demoStorageKey } from '../src/channel/repository.js'
 import { createHttpOpportunityRepository } from '../src/channel/httpOpportunities.js'
 
@@ -15,6 +15,22 @@ function fixture() {
   const desk = () => opportunityDesk(state,dealer,now)
   return {state,project,capture,act,desk}
 }
+test('拜访备注可在保存前推荐伙伴，确认后的商机保留相同的匹配条件', () => {
+  const { capture, desk } = fixture()
+  const { category, source, target, suggestedNote } = suggestOpportunity('ERP 已定，客户还想把 ERP 工单同步到 MES。')
+  const criteria = { category, source, target }
+  assert.deepEqual(criteria,{category:'integration',source:'erp',target:'mes'})
+  const { items, partners } = desk()
+  const preview = previewPartnerMatches(criteria,partners)
+  assert.ok(preview.matches.some(candidate => candidate.owner === '王经理'))
+  assert.match(preview.brief,/ERP → MES/)
+  assert.equal(desk().items.length,items.length)
+  const saved = capture({note:suggestedNote,...criteria})
+  assert.deepEqual(saved.matches,preview.matches)
+  const unclear = previewPartnerMatches(suggestOpportunity('客户还需要 IDE 接口'),partners)
+  assert.ok(unclear.questions.length)
+  assert.deepEqual(unclear.matches,[])
+})
 test('模糊接口不自动推断，未关联的私密字段不进入询问摘要或其他角色视图', () => {
   const {state,project,capture,act} = fixture()
   const draft = suggestOpportunity('ERP 已定，客户还需要 IDE 接口，原厂没有')

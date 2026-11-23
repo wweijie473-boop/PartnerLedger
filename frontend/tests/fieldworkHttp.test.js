@@ -19,6 +19,8 @@ test('拜访创建、编辑、确认和删除使用真实接口的版本与显�
   await repo.save('41',{text:'已核对',reviewed:true},2,'save-key')
   await repo.confirm('41',3,true,'confirm-key')
   await repo.remove('41',4,'remove-key')
+  const criteria = {category:'integration',source:'erp',target:'mes'}
+  await repo.confirm('41',3,true,'confirm-with-criteria',criteria)
   assert.equal(calls[1].method,'POST')
   assert.equal(calls[1].body.revision,0)
   assert.equal(calls[2].method,'PUT')
@@ -26,6 +28,7 @@ test('拜访创建、编辑、确认和删除使用真实接口的版本与显�
   assert.deepEqual(calls[3].body,{revision:3,confirmed:true,createOpportunity:true,requestId:'confirm-key'})
   assert.equal(calls[4].method,'DELETE')
   assert.deepEqual(calls[4].body,{revision:4,requestId:'remove-key'})
+  assert.deepEqual(calls[5].body,{revision:3,confirmed:true,createOpportunity:true,...criteria,requestId:'confirm-with-criteria'})
 })
 
 test('响应丢失后刷新页面，保留原请求内容及编号，其他账号不可继承', async () => {

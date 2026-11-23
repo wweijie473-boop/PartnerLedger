@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ElDialog } from 'element-plus'
 import { UiBadge, UiButton, UiCard, UiMetricCard, UiState } from '../ui/index.js'
 import OpportunityForm from './OpportunityForm.vue'
+import PartnerRecommendation from './PartnerRecommendation.vue'
 import { categoryLabels, contactFields, opportunityStages, systemLabels } from './opportunities.js'
 import { statusTone } from '../ui/statusTone.js'
 
@@ -72,10 +73,6 @@ async function save(payload) {
     }
   } finally { pending.value = false }
 }
-async function copyBrief() {
-  try { await navigator.clipboard.writeText(current.value.brief); emit('notice','已复制询问摘要，可自行发送') }
-  catch { emit('notice','可选中摘要文字手动复制') }
-}
 </script>
 
 <template>
@@ -120,25 +117,34 @@ async function copyBrief() {
           <ul v-if="current.questions.length"><li v-for="q in current.questions" :key="q">{{ q }}</li></ul>
           <template v-if="current.stage === 'open'" #footer><UiButton compact @click="open('clarify')">澄清需求</UiButton></template>
         </UiCard>
-        <UiCard v-if="current.stage === 'open'" title="团队里谁做过" description="优先列出有合作记录的伙伴。具体版本、排期仍需核实。">
-          <UiButton v-if="current.matches.length" compact :disabled="pending" @click="acknowledge">已查看这批人选</UiButton>
-          <p v-if="!current.matches.some(m => m.evidence)" class="op-muted">{{ current.questions.length ? '先澄清需求，再查找有依据的人选。' : '暂无有案例佐证的人选；可在团队伙伴中登记新的能力。' }}</p>
-          <article v-for="candidate in current.matches" :key="candidate.partnerId" class="op-line"><h3>{{ candidate.name }} <UiBadge>{{ candidate.evidence ? '有合作记录' : '仅能力登记' }}</UiBadge></h3>
-            <p>找 {{ candidate.owner }} 引荐 · {{ candidate.reason }}</p><p>{{ candidate.evidence }}</p><p class="op-muted">{{ candidate.caveat }}</p>
-            <dl class="ch-facts"><template v-for="(label,key) in contactFields" :key="key"><dt>{{ label }}</dt><dd><UiBadge :tone="candidate.checks?.[key] === 'blocked' ? 'danger' : candidate.checks?.[key] === 'confirmed' ? 'success' : 'warning'">{{ {confirmed:'已确认可行',blocked:'存在问题'}[candidate.checks?.[key]] || '待确认' }}</UiBadge></dd></template></dl>
-            <p v-if="candidate.reviewNote">{{ candidate.reviewNote }}</p>
-            <div class="op-tools"><UiButton compact @click="open('contactReview',candidate)">联系前核对</UiButton><UiButton compact @click="open('rejectPartner',candidate)">记录未匹配</UiButton><UiButton compact @click="open('introduce',candidate)">登记引荐</UiButton></div></article>
+        <UiCard v-if="current.stage === 'open'" title="推荐团队伙伴">
+          <p v-if="!current.matches.length" class="op-muted">{{ current.questions.length ? '补全需求信息后即可查找伙伴。' : '团队暂未登记匹配的伙伴。' }}</p>
+          <PartnerRecommendation v-for="candidate in current.matches" :key="candidate.partnerId" :candidate="candidate" :brief="current.brief">
+            <details>
+              <summary>伙伴跟进选项</summary>
+              <dl class="ch-facts"><template v-for="(label,key) in contactFields" :key="key"><dt>{{ label }}</dt><dd><UiBadge :tone="candidate.checks?.[key] === 'blocked' ? 'danger' : candidate.checks?.[key] === 'confirmed' ? 'success' : 'warning'">{{ {confirmed:'已确认可行',blocked:'存在问题'}[candidate.checks?.[key]] || '待确认' }}</UiBadge></dd></template></dl>
+              <p v-if="candidate.reviewNote">{{ candidate.reviewNote }}</p>
+              <div class="op-tools"><UiButton compact @click="open('contactReview',candidate)">联系前核对</UiButton><UiButton compact @click="open('rejectPartner',candidate)">记录未匹配</UiButton><UiButton compact @click="open('introduce',candidate)">登记引荐</UiButton></div>
+            </details>
+          </PartnerRecommendation>
         </UiCard>
         <UiCard v-if="current.rejections?.length" title="已排除的伙伴"><article v-for="entry in current.rejections" :key="entry.partnerId" class="op-line"><h3>{{ entry.name }}</h3><p>{{ entry.reason }}</p></article></UiCard>
         <UiCard v-if="activePartner" title="引荐与介绍费"><dl class="ch-facts"><dt>伙伴 / 引荐人</dt><dd>{{ activePartner.name }} / {{ activePartner.owner }}</dd><dt>跟进日期</dt><dd>{{ current.followUp }}</dd><dt>约定金额</dt><dd>{{ current.feeAmount ? '¥' + current.feeAmount : '未约定' }}</dd><dt>条件</dt><dd>{{ current.feeTerms || '未约定' }}</dd></dl></UiCard>
         <UiCard v-if="current.outcome" title="跟进结果"><p>{{ current.outcome }}</p></UiCard>
-        <div class="op-tools"><UiButton v-if="current.stage === 'introduced'" variant="primary" @click="open('win')">登记已促成</UiButton>
-          <UiButton v-if="current.stage === 'open' || outstanding(current)" @click="open('follow')">约定跟进日期</UiButton>
-          <UiButton v-if="['open','introduced'].includes(current.stage)" @click="open('lose')">登记未促成</UiButton>
-          <UiButton v-if="current.stage === 'won' && Number(current.feeAmount)>0" @click="open('settle')">登记介绍费结清</UiButton></div>
       </div><div v-enter:children="1" class="ch-stack">
-        <UiCard title="向伙伴询问的摘要" description="仅含已选能力和系统类型，可复制到微信询问。"><p class="op-inset">{{ current.brief }}</p><UiButton compact @click="copyBrief">复制询问摘要</UiButton></UiCard>
-        <UiCard title="团队跟进记录"><ol class="ch-timeline"><li v-for="(event,index) in [...current.history].reverse()" :key="index"><time>{{ new Date(event.at).toLocaleDateString('zh-CN') }}</time><strong>{{ event.label }}</strong></li></ol></UiCard>
+        <UiCard>
+          <details>
+            <summary>商机跟进与记录</summary>
+            <div class="op-tools">
+              <UiButton v-if="current.stage === 'open' && current.matches.length" compact :disabled="pending" @click="acknowledge">已查看这批人选</UiButton>
+              <UiButton v-if="current.stage === 'introduced'" variant="primary" @click="open('win')">登记已促成</UiButton>
+              <UiButton v-if="current.stage === 'open' || outstanding(current)" @click="open('follow')">约定跟进日期</UiButton>
+              <UiButton v-if="['open','introduced'].includes(current.stage)" @click="open('lose')">登记未促成</UiButton>
+              <UiButton v-if="current.stage === 'won' && Number(current.feeAmount)>0" @click="open('settle')">登记介绍费结清</UiButton>
+            </div>
+            <ol class="ch-timeline"><li v-for="(event,index) in [...current.history].reverse()" :key="index"><time>{{ new Date(event.at).toLocaleDateString('zh-CN') }}</time><strong>{{ event.label }}</strong></li></ol>
+          </details>
+        </UiCard>
       </div></div>
     </template>
     <UiState v-else title="这条商机不存在或不可见"><UiButton @click="$emit('select','')">返回商机台账</UiButton></UiState>

@@ -14,8 +14,8 @@ export function createHttpVisitRepository(request) {
     save(id, payload, revision, requestId = crypto.randomUUID()) {
       return write(id ? base + '/' + encodeURIComponent(id) : base, id ? 'PUT' : 'POST', { revision, payload }, requestId)
     },
-    confirm(id, revision, createOpportunity, requestId = crypto.randomUUID()) {
-      return write(base + '/' + encodeURIComponent(id) + '/confirm', 'POST', { revision, confirmed: true, createOpportunity }, requestId)
+    confirm(id, revision, createOpportunity, requestId = crypto.randomUUID(), criteria) {
+      return write(base + '/' + encodeURIComponent(id) + '/confirm', 'POST', { revision, confirmed: true, createOpportunity, ...criteria }, requestId)
     },
     remove(id, revision, requestId = crypto.randomUUID()) {
       return write(base + '/' + encodeURIComponent(id), 'DELETE', { revision }, requestId)

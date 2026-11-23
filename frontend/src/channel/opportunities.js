@@ -55,10 +55,11 @@ export function suggestOpportunity(note = '') {
     ['integration', /系统对接|对接服务|定制开发/], ['connector', /成品接口|连接器/],
   ]
   const found = options.filter(([, rule]) => rule.test(suggestedNote))
-  const category = found.length === 1 ? found[0][0] : ''
-  const pair = suggestedNote.match(/\b(ERP|MES|OA|IDE|WMS|CRM)\b\s*(?:对接|至|到|连接|→|同步至|同步到)\s*(ERP|MES|OA|IDE|WMS|CRM)\b/i)
+  const pair = suggestedNote.match(/\b(ERP|MES|OA|IDE|WMS|CRM)\b\s*[\u4e00-\u9fff]{0,12}?(对接|连接|同步|→|至|到)\s*[\u4e00-\u9fff]{0,8}?\s*\b(ERP|MES|OA|IDE|WMS|CRM)\b/i)
+  const category = found.length === 1 ? found[0][0] :
+    !found.length && pair && /对接|连接|同步/.test(pair[2]) ? 'integration' : ''
   const single = suggestedNote.match(/\b(ERP|MES|OA|IDE|WMS|CRM)\b\s*(?:插件|培训)/i)
-  const result = { category, source: pair?.[1].toLowerCase() || single?.[1].toLowerCase() || '', target: pair?.[2].toLowerCase() || '' }
+  const result = { category, source: pair?.[1].toLowerCase() || single?.[1].toLowerCase() || '', target: pair?.[3].toLowerCase() || '' }
   return { ...result, suggestedNote, questions: questionsFor(result) }
 }
 function safeBrief(item) {
@@ -85,6 +86,10 @@ function matchesFor(item, partners) {
         '确切版本、档期和报价仍需向伙伴核实。'].join(''), specificity:aligned.length }
   }).sort((left, right) => Number(!!right.evidence) - Number(!!left.evidence) ||
     right.specificity - left.specificity || left.partnerId.localeCompare(right.partnerId))
+}
+
+export function previewPartnerMatches(capability, partners) {
+  return { questions:questionsFor(capability), matches:matchesFor(capability, partners), brief:safeBrief(capability) }
 }
 function initialItem(id, orgId, projectId, note, spec, at) {
   return { id, orgId, projectId, note, ...spec, revision:1, stage:'open', partnerId:'', followUp:'',
