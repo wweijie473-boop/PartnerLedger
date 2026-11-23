@@ -3,6 +3,7 @@ import { computed, ref, watchEffect } from 'vue'
 import { createHttpProjectRepository } from './channel/httpProjects.js'
 import { formatCents, lineCents, quoteCents } from './channel/quoteMoney.js'
 import { dealerPages } from './dealerNavigation.js'
+import { retailDemoEnabled } from './live/retailDemo.js'
 import { UiButton, UiState } from './ui/index.js'
 
 const props = defineProps({ view: String, projects: Array, request: Function, organization: String, account: String })
@@ -59,6 +60,7 @@ const endpoints = [
   <section v-if="queues.includes(view)" class="dealer-panel">
     <p v-if="view === 'finance'">按订单锁定的报价版本核对渠道采购额与对客销售额，实际收付款以财务凭证为准。</p>
     <p v-if="view === 'tickets'">按项目当前阶段列出需要本方处理的事项，打开项目即可办理。</p>
+    <p v-if="view === 'support' && !request && retailDemoEnabled"><UiButton @click="emit('navigate', 'service-tickets')">打开服务工单</UiButton></p>
     <label class="dealer-search">查找项目 <input v-model="search" placeholder="项目名称、客户或编号" type="search"></label>
     <UiState v-if="loading" state="loading" title="正在读取本组织的项目" />
     <UiState v-else-if="error" state="error" title="读取失败" :description="error"><UiButton @click="retry++">重试</UiButton></UiState>

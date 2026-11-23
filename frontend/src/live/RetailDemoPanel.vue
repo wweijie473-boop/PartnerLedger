@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { UiButton, UiCard } from '../ui/index.js'
 import RetailDesk from './RetailDesk.vue'
 import { requestRetailDemo, retailDemoCounterpart } from './retailDemo.js'
@@ -7,6 +7,8 @@ import { retailApi } from './retailRequest.js'
 
 const props = defineProps({ role: String, view: String })
 const emit = defineEmits(['navigate'])
+const DealerOperations = defineAsyncComponent(() => import('./DealerOperations.vue'))
+const operations = computed(() => props.view.startsWith('funds-') || ['business-overview', 'customers', 'renewals', 'application-queue', 'service-tickets', 'vendor-finance', 'vendor-tickets'].includes(props.view))
 const sessionKey = 'partnerledger-retail-demo-session-v1'
 const session = ref(null)
 const loading = ref(true)
@@ -56,12 +58,14 @@ async function request(path, options) {
 
 <template>
   <div class="retail-demo-context">
-    <span>直购演示 · {{ role === 'dealer' ? '天津主飞（代理商）' : '畅捷通（厂商）' }}</span>
+    <span>{{ operations ? '运营演示' : '直购演示' }} · {{ role === 'dealer' ? '天津主飞（代理商）' : '畅捷通（厂商）' }}</span>
     <a :href="retailDemoCounterpart(role, view)">{{ role === 'dealer' ? '切换到厂商后台' : '返回代理商中台' }}</a>
   </div>
-  <RetailDesk v-if="session" :key="view" :mode="view" :role="role" :request="request"
+  <DealerOperations v-if="session && operations" :key="view" :view="view" :role="role" :request="request"
+    :identity="session.dealer" @navigate="emit('navigate', $event)" />
+  <RetailDesk v-else-if="session" :key="view" :mode="view" :role="role" :request="request"
     :identity="session.dealer" demo @navigate="emit('navigate', $event)" />
-  <UiCard v-else title="厂商直购与佣金演示" description="客户付款计入厂商模拟收款，代理商按订单取得 50% 演示佣金。">
+  <UiCard v-else title="渠道运营演示" description="使用共享演示数据办理客户、订单、资金和工单业务。">
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <UiButton variant="primary" :loading="loading" @click="start">开启演示</UiButton>
   </UiCard>
