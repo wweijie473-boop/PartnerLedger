@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElDialog } from 'element-plus'
 import WorkspaceShell from '../WorkspaceShell.vue'
 import DealerPage from '../DealerPage.vue'
@@ -14,6 +14,7 @@ import DemoCatalog from './DemoCatalog.vue'
 import OpportunityDesk from './OpportunityDesk.vue'
 import VisitDrafts from '../live/VisitDrafts.vue'
 import { createVisitDraftStore } from '../live/visitDrafts.js'
+import { retailDemoCounterpart, retailDemoEnabled, retailDemoLocation, retailDemoNavigation } from '../live/retailDemo.js'
 import './workspace.css'
 import './opportunities.css'
 
@@ -27,6 +28,8 @@ const copy = {
 }[props.role]
 const repo = createDemoRepository(roleKeys[props.role])
 const org = roles[roleKeys[props.role]]
+const retailNav = retailDemoEnabled ? retailDemoNavigation[props.role] ?? [] : []
+const RetailDemoPanel = defineAsyncComponent(() => import('../live/RetailDemoPanel.vue'))
 const nav = [
   ...(props.role === 'dealer' ? dealerPages : []),
   { id:'overview', label:'工作总览', icon:'overview' },
@@ -35,6 +38,7 @@ const nav = [
   ...(props.role === 'dealer' ? [{ id:'visits', label:'记拜访', icon:'request' }] : []),
   { id:'delivery', label:props.role === 'customer' ? '交付与验收' : '订单与交付', icon:'delivery' },
   ...(props.role !== 'customer' ? [{id:'catalog', label:'软件目录', icon:'catalog'}] : []),
+  ...retailNav,
 ]
 const projects = ref([])
 const products = ref([])
@@ -43,6 +47,7 @@ const opportunity = ref('')
 const captureFor = ref('')
 const params = () => new URLSearchParams(location.search)
 const view = ref('overview')
+const retailView = computed(() => retailNav.some(item => item.id === view.value))
 const selected = ref(params().get('project') || '')
 const project = computed(() => projects.value.find(item => item.id === selected.value))
 const mode = ref('')
@@ -158,7 +163,12 @@ function openDialog(action) {
   formError.value = ''; recordAtOpen.value = project.value; mode.value = action
 }
 function closeDialog() { if (!working.value) { mode.value = ''; recordAtOpen.value = null; formError.value = '' } }
-function roleHref(key) { return '/experience/' + key + (selected.value ? '?project=' + encodeURIComponent(selected.value) : '') }
+function roleHref(key) {
+  if (retailView.value && retailDemoNavigation[key]) {
+    return key === props.role ? retailDemoLocation(key, view.value) : retailDemoCounterpart(props.role, view.value)
+  }
+  return '/experience/' + key + (selected.value ? '?project=' + encodeURIComponent(selected.value) : '')
+}
 async function perform(payload) {
   if (working.value) return
   working.value = true; formError.value = ''
@@ -196,7 +206,8 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
 <template>
   <div class="ch-space">
     <WorkspaceShell demo :dealer="role === 'dealer'" :nav="nav" :view="view" :organization="org.company" :account-label="names[role] + ' · 演示身份'" environment="本地演示空间" @navigate="navigate" @account="openDialog('roles')">
-      <UiState v-if="loading" state="loading" title="正在载入工作台" />
+      <RetailDemoPanel v-if="retailView" :role="role" :view="view" @navigate="navigate" />
+      <UiState v-else-if="loading" state="loading" title="正在载入工作台" />
       <UiState v-else-if="loadError" state="error" title="工作台暂时不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton><UiButton @click="openDialog('reset')">恢复演示数据</UiButton></UiState>
       <template v-else-if="selected">
         <ProjectDetail v-if="project" :project="project" :role="role" :products="products" :opportunities="role === 'dealer' ? desk.items.filter(item => item.projectId === project.id) : []" @action="openDialog" @back="returnToProjects" @capture="openOpportunity('', project.id)" @opportunity="openOpportunity" />

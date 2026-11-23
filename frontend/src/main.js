@@ -6,9 +6,16 @@ import './ui/theme.css'
 import './style.css'
 import { entrances } from './entrances.js'
 import { reloadOnSessionChange } from './auth-session.js'
+import { demoWorkspace, retailDemoEnabled, retailDemoLocation } from './live/retailDemo.js'
 import { entrance } from './ui/entrance.js'
 
 window.addEventListener('pageshow', reloadOnSessionChange)
+
+if (retailDemoEnabled && window.location.pathname.replace(/\/+$/, '') === demoWorkspace) {
+  const params = new URLSearchParams(location.search)
+  const role = params.get('role') === 'vendor' ? 'vendor' : 'dealer'
+  history.replaceState(null, '', retailDemoLocation(role, params.get('view')))
+}
 
 const path = window.location.pathname.replace(/\/+$/, '') || '/'
 const pages = {
@@ -20,8 +27,7 @@ const pages = {
   '/login': ['登录', () => import('./LiveApp.vue')],
   '/register': ['注册', () => import('./LiveApp.vue'), { mode: 'register' }],
 }
-if (import.meta.env.MODE === 'retail-demo') {
-  pages['/experience/retail'] = ['直购与佣金演示', () => import('./live/RetailDemoWorkspace.vue')]
+if (retailDemoEnabled) {
   pages['/experience/retail-store'] = ['畅捷通演示订购', () => import('./live/RetailStore.vue'), { demo: true }]
 }
 for (const { role, label } of entrances) {
