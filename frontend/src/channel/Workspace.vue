@@ -2,6 +2,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElDialog } from 'element-plus'
 import WorkspaceShell from '../WorkspaceShell.vue'
+import DealerPage from '../DealerPage.vue'
+import { dealerPages } from '../dealerNavigation.js'
 import { UiButton, UiCard, UiIcon, UiMetricCard, UiState } from '../ui/index.js'
 import { actionLabels, roles } from './domain.js'
 import { createDemoRepository } from './repository.js'
@@ -26,6 +28,7 @@ const copy = {
 const repo = createDemoRepository(roleKeys[props.role])
 const org = roles[roleKeys[props.role]]
 const nav = [
+  ...(props.role === 'dealer' ? dealerPages : []),
   { id:'overview', label:'工作总览', icon:'overview' },
   { id:'ledger', label:copy.ledger, icon:'request' },
   ...(props.role === 'dealer' ? [{ id:'opportunities', label:'商机拾遗', icon:'workflow' }] : []),
@@ -192,13 +195,14 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
 
 <template>
   <div class="ch-space">
-    <WorkspaceShell demo :nav="nav" :view="view" :organization="org.company" :account-label="names[role] + ' · 演示身份'" environment="本地演示空间" @navigate="navigate" @account="openDialog('roles')">
+    <WorkspaceShell demo :dealer="role === 'dealer'" :nav="nav" :view="view" :organization="org.company" :account-label="names[role] + ' · 演示身份'" environment="本地演示空间" @navigate="navigate" @account="openDialog('roles')">
       <UiState v-if="loading" state="loading" title="正在载入工作台" />
       <UiState v-else-if="loadError" state="error" title="工作台暂时不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton><UiButton @click="openDialog('reset')">恢复演示数据</UiButton></UiState>
       <template v-else-if="selected">
         <ProjectDetail v-if="project" :project="project" :role="role" :products="products" :opportunities="role === 'dealer' ? desk.items.filter(item => item.projectId === project.id) : []" @action="openDialog" @back="returnToProjects" @capture="openOpportunity('', project.id)" @opportunity="openOpportunity" />
         <UiState v-else state="denied" title="当前身份无法查看此项目" description="项目不存在、尚未提交给当前组织，或已撤回。"><UiButton @click="navigate('ledger')">查看我的工作列表</UiButton></UiState>
       </template>
+      <DealerPage v-else-if="role === 'dealer' && dealerPages.some(p => p.id === view)" :key="view" :view="view" :projects="projects" :organization="org.company" :account="names[role] + ' · 演示身份'" @project="id => openProjectFromList({ id })" @navigate="navigate" @account="openDialog('roles')" />
       <DemoCatalog v-else-if="view === 'catalog'" :items="products" :role="role" :save="saveProduct" />
       <VisitDrafts v-else-if="role === 'dealer' && view === 'visits'" :scope="'demo:' + org.orgId" :load-projects="repo.list" :capture="captureVisit" @project="id => { navigate('ledger'); openProject({id}) }" />
       <OpportunityDesk v-else-if="role === 'dealer' && view === 'opportunities'" :desk="desk" :repo="repo" :projects="projects" :selected="opportunity" :capture-for="captureFor" :refresh="refresh" @select="openOpportunity" @capture-opened="captureFor = ''" @project="record => { navigate('ledger'); openProject(record) }" @notice="toast" />
