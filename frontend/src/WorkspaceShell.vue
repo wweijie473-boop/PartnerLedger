@@ -69,7 +69,9 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
     <div :class="{ 'dealer-layout': dealer }">
     <aside v-if="dealer" class="dealer-rail">
       <header>
-        <img v-if="dealerLogo" class="dealer-logo" :src="dealerLogo" width="30" height="30" alt="" />
+        <span v-if="dealerLogo" class="dealer-logo">
+          <img :src="dealerLogo" width="26" height="26" alt="" />
+        </span>
         <UiIcon v-else name="dealer" :size="24" />
         <div><strong>代理商运营中心</strong><small>{{ organization }}</small></div>
       </header>
@@ -104,7 +106,21 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
 .dealer-layout { display:grid;grid-template-columns:210px minmax(0,1fr);min-height:calc(100vh - 55px);background:#f4f7fb }
 .dealer-rail { background:#192c46;color:#e5efff;padding:18px 10px }
 .dealer-rail header {display:flex;align-items:center;gap:10px;padding:6px 8px 22px}
-.dealer-logo {flex:none;box-sizing:border-box;padding:2px;border-radius:6px;background:#fff;object-fit:contain}
+.dealer-logo {
+  display:grid;
+  flex:none;
+  width:30px;
+  height:30px;
+  place-items:center;
+  overflow:hidden;
+  border-radius:6px;
+  background:#fff;
+}
+.dealer-logo img {
+  object-fit:contain;
+  /* Center the artwork within the source image's uneven white margins. */
+  transform:translate(2.4px,.9px);
+}
 .dealer-rail strong,.dealer-rail small {display:block}.dealer-rail small {color:#b0c2dc;margin-top:4px;overflow-wrap:anywhere}
 .dealer-rail nav {display:grid;gap:3px}.dealer-rail button,.dealer-children button {display:flex;align-items:center;gap:10px;border:0;background:transparent;color:inherit;text-align:left}
 .dealer-rail button {padding:10px 14px;border-radius:5px;font-weight:500}.dealer-rail button:hover {background:#273f60}.dealer-rail button[aria-current] {background:#1467ac;color:white}
