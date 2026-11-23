@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { requestApi } from '../api.js'
+import { demoCompanies } from '../demoCompanies.js'
 import { formatCents } from '../channel/quoteMoney.js'
 import { UiButton, UiCard, UiIcon, UiState } from '../ui/index.js'
 import { requestRetailDemo } from './retailDemo.js'
@@ -13,7 +14,7 @@ const order = props.demo ? params.get('order') || '' : ''
 const valid = /^[a-f\d]{32}$/.test(order || code)
 const endpoint = order ? '/customer-orders/' + order : '/store/' + code
 const products = ref([])
-const brand = computed(() => props.demo ? '畅捷通 · 软件订购' : products.value[0]?.manufacturer || '厂商订购专区')
+const brand = computed(() => props.demo ? demoCompanies.vendor + ' · 软件订购' : products.value[0]?.manufacturer || '厂商订购专区')
 const receipt = ref(null)
 const selected = ref(null)
 const quantity = ref(1)

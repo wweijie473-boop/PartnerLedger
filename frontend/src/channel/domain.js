@@ -1,6 +1,8 @@
+import { demoCompanies } from '../demoCompanies.js'
+
 export const roles = {
-  reseller: { label: '代理商', company: '北辰软件服务', orgId: 'rs-beichen' },
-  manufacturer: { label: '软件厂商', company: '云序软件', orgId: 'mf-yunxu' },
+  reseller: { label: '代理商', company: demoCompanies.dealer, orgId: 'rs-beichen' },
+  manufacturer: { label: '软件厂商', company: demoCompanies.vendor, orgId: 'mf-yunxu' },
   customer: { label: '企业客户', company: '海川精工', orgId: 'cu-haichuan' },
 }
 

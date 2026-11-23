@@ -34,6 +34,7 @@ test('扫码购买和代客下单共用厂商收款、代理商归因和结算�
   await api('/promotion', { token: first.vendor, body: { manufacturer_id: '1' }, expect: 404 })
   const { code } = await api('/promotion', { token: first.dealer, body: { manufacturer_id: '1' } })
   const { items: [offer] } = await api('/store/' + code)
+  assert.equal(offer.manufacturer, '畅捷通')
   const purchase = { product_id: offer.product_id, quantity: 1, expected_unit_cents: offer.unit_cents, request_id: randomUUID() }
   const path = '/store/' + code + '/orders'
   const { checkout_path: receiptLink } = await api(path, { body: purchase })
@@ -41,6 +42,8 @@ test('扫码购买和代客下单共用厂商收款、代理商归因和结算�
   await api(path, { body: { ...purchase, quantity: 2 }, expect: 409 })
 
   const { items: [row] } = await api('/orders?view=commission', { token: first.dealer })
+  assert.equal(row.reseller, '天津助飞企业咨询管理有限公司')
+  assert.equal(row.manufacturer, '畅捷通')
   assert.equal(row.source, 'promotion')
   assert.equal(row.status, 'settlement')
   assert.equal(row.commission.cents, offer.unit_cents / 2)

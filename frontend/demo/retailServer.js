@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto'
+import { demoCompanies } from '../src/demoCompanies.js'
 import { createDealerOperations, routeDealerOperations, trackAnnualOrder } from './dealerOperations.js'
 
 const prefix = '/api/retail-demo/'
-const maker = '畅捷通（演示厂商）'
-const dealer = '天津主飞（演示代理商）'
+const { vendor: maker, dealer } = demoCompanies
 const offers = [
   { product_id: '1', name: '云财务', version: '标准版 · 年度', unit_cents: 199800, category: '财务管理', summary: '发票、凭证和月度财务报表。' },
   { product_id: '2', name: '进销存', version: '专业版 · 年度', unit_cents: 399800, category: '经营管理', summary: '采购、销售、库存和往来账款。' },

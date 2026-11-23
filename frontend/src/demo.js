@@ -1,6 +1,8 @@
+import { demoCompanies } from './demoCompanies.js'
+
 export const roles = {
-  dealer: { label: '经销商', company: '华东渠道服务商' },
-  vendor: { label: '厂家', company: '渠智 ERP 供应商' },
+  dealer: { label: '经销商', company: demoCompanies.dealer },
+  vendor: { label: '厂家', company: demoCompanies.vendor },
 }
 
 export const products = [
