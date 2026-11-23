@@ -1,19 +1,23 @@
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { retailDemo } from '../demo/retailServer.js'
 
 const checkoutOrder = link => new URL(link, 'http://localhost').searchParams.get('order')
 
-async function demoAPI(t) {
+async function demoAPI(t, options = { samples: false }) {
   let handle
-  retailDemo().configureServer({ middlewares: { use: middleware => { handle = middleware } } })
   const server = createServer((req, res) => handle(req, res, () => { res.writeHead(404); res.end() }))
+  retailDemo(options).configureServer({ httpServer: server, middlewares: { use: middleware => { handle = middleware } } })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
-  t.after(() => new Promise(resolve => server.close(resolve)))
+  const close = () => new Promise(resolve => server.close(resolve))
+  t.after(close)
   const origin = `http://127.0.0.1:${server.address().port}/api/retail-demo`
   async function api(path, { token, body, expect = 200 } = {}) {
     const headers = token ? { Authorization: `Bearer ${token}` } : {}
@@ -23,7 +27,7 @@ async function demoAPI(t) {
     assert.equal(response.status, expect, result.message)
     return result.data
   }
-  return api
+  return Object.assign(api, { close })
 }
 
 test('扫码购买和代客下单共用厂商收款、代理商归因和结算记录', async t => {
@@ -37,9 +41,10 @@ test('扫码购买和代客下单共用厂商收款、代理商归因和结算�
   assert.equal(offer.manufacturer, '畅捷通')
   const purchase = { product_id: offer.product_id, quantity: 1, expected_unit_cents: offer.unit_cents, request_id: randomUUID() }
   const path = '/store/' + code + '/orders'
-  const { checkout_path: receiptLink } = await api(path, { body: purchase })
-  assert.deepEqual(await api(path, { body: purchase }), { checkout_path: receiptLink })
-  await api(path, { body: { ...purchase, quantity: 2 }, expect: 409 })
+  const buyer = { ...purchase, customer_name: '扫码测试企业' }
+  const { checkout_path: receiptLink } = await api(path, { body: buyer })
+  assert.deepEqual(await api(path, { body: buyer }), { checkout_path: receiptLink })
+  await api(path, { body: { ...buyer, quantity: 2 }, expect: 409 })
 
   const { items: [row] } = await api('/orders?view=commission', { token: first.dealer })
   assert.equal(row.reseller, '天津助飞企业咨询管理有限公司')
@@ -120,7 +125,7 @@ test('客户、资金和工单按场次共享，财务办理与佣金分账', as
   await api(pay, { body: {} })
   const renewals = (await data(dealer)).renewals
   assert.equal(renewals.filter(row => row.order_id === order.id).length, 1)
-  assert.equal((await data(dealer)).totals.renewals_30_days, 1)
+  assert.equal((await data(dealer)).totals.renewals_30_days, 0)
   const followUp = await action('renewals/' + renewals[0].id, dealer, { note: '客户下周确认续费计划。' })
   assert.ok(followUp.contacted_at)
   assert.equal((await data(vendor)).renewals, undefined)
@@ -147,4 +152,44 @@ test('客户、资金和工单按场次共享，财务办理与佣金分账', as
   const result = (await data(dealer)).tickets[0]
   assert.equal(result.status, 'closed')
   assert.equal(result.replies.length, 3)
+})
+
+test('重开演示数据库后保留样例、扫码和代客订单、购买链接及续费记录', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'partnerledger-retail-'))
+  const database = join(dir, 'retail.sqlite')
+  const first = await demoAPI(t, { database })
+  const session = await first('/sessions', { body: {} })
+  const dealer = { token: session.dealer }
+  const initial = await first('/operations', dealer)
+  assert.equal(initial.customers.length, 6)
+  assert.equal(initial.orders.length, 6)
+  assert.equal(initial.totals.renewals_30_days, 3)
+  const { code } = await first('/promotion', { ...dealer, body: { manufacturer_id: '1' } })
+  const path = '/store/' + code + '/orders'
+  const promoBody = { product_id: '1', quantity: 2, expected_unit_cents: 199800, request_id: randomUUID(), customer_name: '扫码验收企业' }
+  const promo = await first(path, { body: promoBody })
+  const promoReceipt = await first('/customer-orders/' + checkoutOrder(promo.checkout_path))
+  const assisted = await first('/orders', { ...dealer, body: { product_id: '2', quantity: 1, expected_unit_cents: 399800,
+    customer_id: '1', request_id: randomUUID() } })
+  const pending = (await first('/orders?status=confirmation', dealer)).items[0]
+  assert.equal(pending.id, assisted.id)
+  await first('/operations/renewals/order-' + promoReceipt.id, { ...dealer, body: { note: '下月安排回访。' } })
+  await first.close()
+
+  const restarted = await demoAPI(t, { database })
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  assert.equal((await restarted('/session', dealer)).role, 'dealer')
+  assert.deepEqual(await restarted(path, { body: promoBody }), promo)
+  const paid = await restarted('/customer-orders/' + checkoutOrder(pending.checkout_path) + '/pay', { body: {} })
+  assert.ok(paid.paid_at)
+  const restored = await restarted('/operations', dealer)
+  assert.equal(restored.orders.length, 8)
+  assert.equal(restored.customers.length, 7)
+  assert.equal(restored.renewals.length, 8)
+  const scanned = restored.renewals.find(row => row.order_id === promoReceipt.id)
+  assert.equal(scanned.source, 'promotion')
+  assert.equal(scanned.customer, promoBody.customer_name)
+  assert.equal(scanned.quantity, 2)
+  assert.equal(scanned.note, '下月安排回访。')
+  assert.equal(restored.renewals.find(row => row.order_id === assisted.id).source, 'assisted')
 })

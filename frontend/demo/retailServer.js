@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { demoCompanies } from '../src/demoCompanies.js'
 import { createDealerOperations, routeDealerOperations, trackAnnualOrder } from './dealerOperations.js'
+import { openRetailDatabase } from './retailDatabase.js'
 
 const prefix = '/api/retail-demo/'
 const { vendor: maker, dealer } = demoCompanies
@@ -43,121 +44,146 @@ function publicOrder(row) {
   }
 }
 
+function orderRow(id, offer, quantity, customer, source) {
+  const total = offer.unit_cents * quantity
+  return {
+    id, source, manufacturer: maker, reseller: dealer, customer: customer.name, customer_id: customer.id,
+    product_name: offer.name, product_version: offer.version, quantity, total_cents: total,
+    status: 'confirmation', commission: { rate_bps: 5000, cents: total / 2, reminder_count: 0 },
+  }
+}
+
+function seedOrders(session) {
+  const samples = [
+    ['海河商贸', 0, 4, 'promotion'], ['津湾精密', 2, 18, 'assisted'], ['北辰仓配', 1, 28, 'promotion'],
+    ['远川设备', 2, 46, 'assisted'], ['澄海办公', 0, 78, 'promotion'], ['启航零售', 1, -8, 'assisted'],
+  ]
+  for (const [index, [name, product, days, source]] of samples.entries()) {
+    const customer = { id: String(index + 1), name: name + '（演示客户）', contact: '', note: '' }
+    if (index === 0) Object.assign(session.operations.customers[0], customer, { contact: '王经理（演示）' })
+    else session.operations.customers.push(customer)
+    const id = 'S' + String(index + 1).padStart(3, '0')
+    const order = orderRow(id, offers[product], 1, customer, source)
+    const paid = new Date(Date.now() + days * lifetime)
+    paid.setUTCFullYear(paid.getUTCFullYear() - 1)
+    markPaid(session, order, paid)
+    order.status = 'settled'
+    order.payout_ref = 'DEMO-OUT-' + id
+    order.commission.settled_at = paid.toISOString()
+    session.orders.push(order)
+  }
+}
+
 function recordOrder(session, body, source) {
   const { product_id, quantity, expected_unit_cents, request_id } = body
   const offer = offers.find(item => item.product_id === product_id)
-  const customer = session.operations.customers.find(item => item.id === body.customer_id)
+  let customer = session.operations.customers.find(item => item.id === body.customer_id)
+  const customerName = typeof body.customer_name === 'string' ? body.customer_name.trim() : ''
   if (!offer || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000 ||
-      typeof request_id !== 'string' || !requestFormat.test(request_id) || (source === 'assisted' && !customer)) {
+      typeof request_id !== 'string' || !requestFormat.test(request_id) ||
+      (source === 'assisted' ? !customer : body.customer_id != null || !customerName || Array.from(customerName).length > 80)) {
     fail(400, '请核对订购产品、数量和客户。')
   }
   if (offer.unit_cents !== expected_unit_cents) fail(409, '产品价格已变化，请刷新后重试。')
   const key = source + ':' + request_id
-  const fingerprint = JSON.stringify([product_id, quantity, expected_unit_cents, customer?.id])
-  const prior = session.requests.get(key)
+  const fingerprint = JSON.stringify([product_id, quantity, expected_unit_cents, source === 'assisted' ? customer.id : customerName])
+  const prior = session.requests[key]
   if (prior) {
     if (prior.fingerprint !== fingerprint) fail(409, '请求已用于另一笔订单。')
-    return prior.row
+    return session.orders.find(row => row.id === prior.orderID)
   }
   if (session.orders.length >= 200) fail(409, '该演示已达到订单上限，请开启新一轮演示。')
-  const id = String(session.orders.length + 1).padStart(4, '0')
-  const total = offer.unit_cents * quantity
-  const row = {
-    id, source, manufacturer: maker, reseller: dealer, customer: customer?.name ?? '扫码客户（演示）',
-    product_name: offer.name, product_version: offer.version, quantity, total_cents: total,
-    status: source === 'promotion' ? 'settlement' : 'confirmation',
-    commission: { rate_bps: 5000, cents: total / 2, reminder_count: 0 },
+  if (source === 'promotion') {
+    const customers = session.operations.customers
+    customer = customers.find(item => item.name.toLowerCase() === customerName.toLowerCase())
+    if (!customer) {
+      if (customers.length >= 200) fail(409, '演示客户已达到上限。')
+      customer = { id: token(), name: customerName, contact: '', note: '' }
+      customers.unshift(customer)
+    }
   }
+  const row = orderRow(String(++session.orderSequence).padStart(4, '0'), offer, quantity, customer, source)
   if (source === 'promotion') markPaid(session, row)
   session.orders.unshift(row)
-  session.requests.set(key, { fingerprint, row })
+  session.requests[key] = { fingerprint, orderID: row.id }
   return row
 }
 
-function markPaid(session, row) {
+function markPaid(session, row, paid = new Date()) {
   row.status = 'settlement'
-  row.paid_at = new Date().toISOString()
+  row.paid_at = paid.toISOString()
   row.receipt_ref = 'DEMO-IN-' + row.id
   trackAnnualOrder(session.operations, row)
 }
 
-export function retailDemo() {
-  const sessions = new Set()
-  const actors = new Map()
-  const promotions = new Map()
-  const customerOrders = new Map()
+export function retailDemo({ database = ':memory:', samples = true } = {}) {
 
-  function issueCustomerLink(session, row) {
+  function issueCustomerLink(db, session, row) {
     if (row.checkout_path) return row.checkout_path
     const secret = token()
-    session.customerKeys.push(secret)
-    customerOrders.set(secret, { session, row })
+    db.addCheckout(secret, session, row)
     row.checkout_path = customerPath(secret)
     return row.checkout_path
   }
 
-  function start() {
-    for (const session of sessions) {
-      if (session.expires > Date.now()) continue
-      sessions.delete(session)
-      promotions.delete(session.code)
-      actors.delete(session.dealerKey)
-      actors.delete(session.vendorKey)
-      for (const secret of session.customerKeys) customerOrders.delete(secret)
-    }
-    if (sessions.size >= 100) fail(503, '演示场次已满，请稍后重试。')
-    const session = { code: token(), dealerKey: token(), vendorKey: token(), expires: Date.now() + lifetime,
-      orders: [], requests: new Map(), customerKeys: [], operations: createDealerOperations() }
-    sessions.add(session)
-    actors.set(session.dealerKey, { role: 'dealer', session })
-    actors.set(session.vendorKey, { role: 'vendor', session })
-    return { dealer: session.dealerKey, vendor: session.vendorKey, expires: session.expires }
+  function start(db) {
+    const session = { code: token(), dealerKey: token(), vendorKey: token(), promotionActive: false,
+      orders: [], orderSequence: 0, requests: {}, operations: createDealerOperations() }
+    if (samples) seedOrders(session)
+    db.save(session)
+    return { dealer: session.dealerKey, vendor: session.vendorKey }
   }
 
-  async function route(req, url) {
+  function route(db, req, url, body) {
     const path = url.pathname.slice(prefix.length)
     const get = req.method === 'GET'
     const post = req.method === 'POST'
-    if (post && path === 'sessions') {
-      await readBody(req)
-      return start()
+    if (post && path === 'sessions') return start(db)
+
+    const save = (session, result) => {
+      db.save(session)
+      return result
     }
 
     const [resource, id, action, ...extra] = path.split('/')
     if (!extra.length && id && secretFormat.test(id)) {
       if (resource === 'store') {
-        const session = promotions.get(id)
-        if (!session || session.expires <= Date.now()) fail(404, '推广链接无效或已过期。')
+        const session = db.promotion(id)
+        if (!session) fail(404, '推广链接无效，请联系代理商获取新链接。')
         if (get && !action) return { ...page(offers), manufacturer: maker }
         if (post && action === 'orders') {
-          const row = recordOrder(session, await readBody(req), 'promotion')
-          return { checkout_path: issueCustomerLink(session, row) }
+          const row = recordOrder(session, body, 'promotion')
+          return save(session, { checkout_path: issueCustomerLink(db, session, row) })
         }
       }
       if (resource === 'customer-orders') {
-        const item = customerOrders.get(id)
-        if (!item || item.session.expires <= Date.now()) fail(404, '客户订单链接无效或已过期。')
+        const item = db.checkout(id)
+        if (!item?.row) fail(404, '客户订单链接无效，请从原订单重新打开。')
         if (get && !action) return publicOrder(item.row)
         if (post && action === 'pay') {
-          await readBody(req)
-          if (item.row.status === 'confirmation') markPaid(item.session, item.row)
+          if (item.row.status === 'confirmation') {
+            markPaid(item.session, item.row)
+            db.save(item.session)
+          }
           return publicOrder(item.row)
         }
       }
     }
 
-    const actor = actors.get(req.headers.authorization?.replace(/^Bearer /, ''))
-    if (!actor || actor.session.expires <= Date.now()) fail(401, '演示场次已结束，请开启新一轮演示。')
+    const actor = db.actor(req.headers.authorization?.replace(/^Bearer /, '') ?? '')
+    if (!actor) fail(401, '找不到这场演示，请开启演示。')
     const { session, role } = actor
-    if (resource === 'operations') return routeDealerOperations(req, path, actor, readBody)
+    if (resource === 'operations') {
+      const result = routeDealerOperations(req, path, actor, body)
+      return post ? save(session, result) : result
+    }
     if (get && path === 'session') return { role }
     if (get && path === 'offers' && role === 'dealer') return page(offers)
     if (get && path === 'organization-links' && role === 'dealer') return page(session.operations.customers.map(({ id, name }) => ({ id, name })))
     if (post && path === 'promotion' && role === 'dealer') {
-      const body = await readBody(req)
       if (body.manufacturer_id !== '1') fail(400, '请选择演示厂商。')
-      promotions.set(session.code, session)
-      return { code: session.code }
+      session.promotionActive = true
+      return save(session, { code: session.code })
     }
     if (get && path === 'orders') {
       const status = url.searchParams.get('status')
@@ -177,21 +203,20 @@ export function retailDemo() {
       return { ...result, summary }
     }
     if (post && path === 'orders' && role === 'dealer') {
-      const row = recordOrder(session, await readBody(req), 'assisted')
-      issueCustomerLink(session, row)
-      return { id: row.id }
+      const row = recordOrder(session, body, 'assisted')
+      issueCustomerLink(db, session, row)
+      return save(session, { id: row.id })
     }
     if (post && resource === 'orders' && !extra.length) {
       const row = session.orders.find(item => item.id === id)
       if (!row) fail(404, '该订单不存在。')
-      const body = await readBody(req)
       if (role === 'dealer' && action === 'remind' && row.status === 'settlement') {
         const last = row.commission.reminded_at
         if (!last || Date.now() - Date.parse(last) >= lifetime) {
           row.commission.reminded_at = new Date().toISOString()
           row.commission.reminder_count++
         }
-        return {}
+        return save(session, {})
       }
       if (role === 'vendor' && action === 'settle') {
         const reference = typeof body.reference === 'string' ? body.reference.trim() : ''
@@ -201,7 +226,7 @@ export function retailDemo() {
         row.status = 'settled'
         row.payout_ref = reference
         row.commission.settled_at = new Date().toISOString()
-        return {}
+        return save(session, {})
       }
       fail(409, '订单当前无法办理该操作。')
     }
@@ -209,13 +234,17 @@ export function retailDemo() {
   }
 
   function configureServer(server) {
+    const db = openRetailDatabase(database)
+    server.httpServer?.once('close', () => db.close())
     server.middlewares.use(async (req, res, next) => {
       const url = new URL(req.url, 'http://localhost')
       if (!url.pathname.startsWith(prefix)) return next()
       res.setHeader('Content-Type', 'application/json; charset=utf-8')
       res.setHeader('Cache-Control', 'no-store')
       try {
-        const data = await route(req, url)
+        const post = req.method === 'POST'
+        const body = post ? await readBody(req) : undefined
+        const data = post ? db.write(() => route(db, req, url, body)) : route(db, req, url, body)
         res.end(JSON.stringify({ code: 200, data }))
       } catch (error) {
         res.statusCode = error.status ?? 500

@@ -18,6 +18,7 @@ const brand = computed(() => props.demo ? demoCompanies.vendor + ' · 软件订�
 const receipt = ref(null)
 const selected = ref(null)
 const quantity = ref(1)
+const customerName = ref('')
 const loading = ref(true)
 const busy = ref(false)
 const error = ref('')
@@ -60,7 +61,8 @@ async function pay() {
     if (order) {
       receipt.value = await requestRetailDemo(endpoint + '/pay', { method: 'POST', body: {} })
     } else if (selected.value && amount.value) {
-      const body = { product_id: selected.value.product_id, quantity: quantity.value, expected_unit_cents: selected.value.unit_cents }
+      const body = { product_id: selected.value.product_id, quantity: quantity.value, expected_unit_cents: selected.value.unit_cents,
+        customer_name: customerName.value }
       const storageKey = 'partnerledger-retail-demo-checkout:' + code
       const requestId = pendingRetailRequest(storageKey, body)
       const result = await requestRetailDemo(endpoint + '/orders', { method: 'POST', body: { ...body, request_id: requestId } })
@@ -108,11 +110,12 @@ async function pay() {
             <dt>收款方</dt><dd>{{ selected.manufacturer }}</dd>
             <dt>单价</dt><dd>{{ money(selected.unit_cents) }}</dd>
           </dl>
+          <label class="checkout-customer">演示企业名称<input v-model.trim="customerName" type="text" maxlength="80" placeholder="请输入虚构企业名称" required></label>
           <label>订购数量 <input v-model.number="quantity" type="number" min="1" max="10000" step="1" required></label>
           <p class="checkout-total">应付金额 <strong>{{ money(amount) }}</strong></p>
           <p v-if="paymentError" class="form-error" role="alert">{{ paymentError }}</p>
           <div class="checkout-actions">
-            <UiButton variant="primary" type="submit" :loading="busy" :disabled="!amount">模拟付款</UiButton>
+            <UiButton variant="primary" type="submit" :loading="busy" :disabled="!amount || !customerName">模拟付款</UiButton>
             <UiButton :disabled="busy" @click="selected = null">返回选购</UiButton>
           </div>
         </form>
@@ -165,6 +168,8 @@ async function pay() {
 .checkout-details dd { margin:0; }
 .checkout-details dt { color:#4e656f; }
 .checkout-form input { width:80px; margin-left:8px; padding:6px; }
+.checkout-customer { display:grid; gap:6px; margin-bottom:14px; }
+.checkout-customer input { box-sizing:border-box; width:100%; margin-left:0; }
 .checkout-actions,.store-paid { display:flex; align-items:center; gap:10px; }
 .store-paid { color:#236454; }
 .store-footer { padding-block:24px; }
