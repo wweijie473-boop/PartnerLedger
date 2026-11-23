@@ -3,6 +3,8 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { requestApi } from './api.js'
 import { currentSession, saveSession, sessionFromCredentials } from './auth-session.js'
 import WorkspaceShell from './WorkspaceShell.vue'
+import DealerPage from './DealerPage.vue'
+import { dealerPages } from './dealerNavigation.js'
 import ProductCatalog from './live/ProductCatalog.vue'
 import RequirementParser from './live/RequirementParser.vue'
 import LiveProjects from './live/LiveProjects.vue'
@@ -45,6 +47,7 @@ const isManufacturer = computed(() => organization.value?.kind === 'MANUFACTURER
 const isDealer = computed(() => organization.value?.kind === 'RESELLER')
 const kindLabel = computed(() => portal.value?.label || '')
 const navigation = computed(() => [
+  ...(isDealer.value ? dealerPages.filter(item => item.id !== 'staff') : []),
   { id: 'overview', label: '工作总览', icon: 'overview' },
   { id: 'projects', label: entry.value === 'customer' ? '我的采购项目' : isManufacturer.value ? '渠道询价' : '客户项目', icon: 'request' },
   ...(entry.value !== 'customer' ? [{ id: 'catalog', label: '产品目录', icon: 'catalog' }] : []),
@@ -332,9 +335,10 @@ function openOpportunity(id = '', projectId = '') {
     </UiCard>
   </main>
 
-  <WorkspaceShell v-else :nav="navigation" :view="view" :organization="organization.name"
+  <WorkspaceShell v-else :dealer="isDealer" :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
-    <template v-if="view === 'overview'">
+    <DealerPage v-if="isDealer && dealerPages.some(p => p.id === view)" :key="view" :view="view" :request="authenticated" @navigate="navigate" @project="openProject" />
+    <template v-else-if="view === 'overview'">
       <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" :user-id="user.id"
         @open-project="openProject" @open-list="scope => navigate('projects', { scope })">
         <template #heading>
