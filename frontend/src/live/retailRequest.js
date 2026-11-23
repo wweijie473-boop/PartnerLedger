@@ -1,3 +1,27 @@
+export const retailApi = '/api/retail/v1'
+
+export function customerCheckoutLink(code, product) {
+  return '/login/customer?' + new URLSearchParams({ view: 'checkout', code, product })
+}
+
+export function customerOrderLink(orderID) {
+  return '/login/customer?' + new URLSearchParams({ view: 'retail-orders', order_id: orderID })
+}
+
+export async function readRetailCatalog(read, path) {
+  const items = []
+  const cursors = new Set()
+  let cursor = ''
+  do {
+    const page = await read(path + (cursor ? (path.includes('?') ? '&' : '?') + 'after=' + encodeURIComponent(cursor) : ''))
+    items.push(...page.items)
+    cursor = page.next_cursor
+    if (cursor && cursors.has(cursor)) throw new Error('产品目录分页无效，请刷新。')
+    cursors.add(cursor)
+  } while (cursor)
+  return items
+}
+
 export function pendingRetailRequest(key, body) {
   const payload = JSON.stringify(body)
   let pending

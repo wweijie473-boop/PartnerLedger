@@ -49,13 +49,13 @@ const kindLabel = computed(() => portal.value?.label || '')
 const RetailDesk = defineAsyncComponent(() => import('./live/RetailDesk.vue'))
 const retailNavigation = computed(() => isDealer.value ? [
   { id: 'promotion', label: '推广获客二维码', icon: 'workflow' },
-  { id: 'assisted', label: '帮客户下单', icon: 'order' },
+  { id: 'assisted', label: '代客下单', icon: 'order' },
   { id: 'retail-orders', label: '厂商直收订单', icon: 'order' },
   { id: 'commission', label: '佣金结算', icon: 'quote' },
 ] : isManufacturer.value ? [
   { id: 'pricing', label: '订购价格与佣金', icon: 'catalog' },
   { id: 'manufacturer-receipts', label: '直收订单与收款', icon: 'order' },
-  { id: 'manufacturer-settlements', label: '代理商分佣', icon: 'quote' },
+  { id: 'manufacturer-settlements', label: '代理商佣金结算', icon: 'quote' },
 ] : entry.value === 'customer' ? [
   { id: 'retail-orders', label: '厂商订购订单', icon: 'order' },
   ...(entryParams.get('view') === 'checkout' ? [{ id: 'checkout', label: '确认厂商订单', icon: 'order' }] : []),
@@ -88,9 +88,16 @@ function accessPath(nextMode, role = entry.value) {
   return '/' + nextMode + (role ? '/' + role : '')
 }
 
+function customerRetailIntent() {
+  const params = new URLSearchParams(location.search)
+  if (params.get('view') === 'checkout' && params.has('code')) return 'checkout'
+  if (params.get('view') === 'retail-orders' && params.has('order_id')) return 'retail-orders'
+  return ''
+}
+
 function identityLink(nextMode) {
   const path = accessPath(nextMode)
-  return entry.value === 'customer' && entryParams.get('view') === 'checkout' ? path + location.search : path
+  return entry.value === 'customer' && customerRetailIntent() ? path + location.search : path
 }
 
 function selectRole(role) {
@@ -174,6 +181,8 @@ async function loadIdentity() {
     document.title = entrances[accountRole].label + '工作台 · 渠智链'
     user.value = profile
     organization.value = currentOrg
+    const retailIntent = accountRole === 'customer' && customerRetailIntent()
+    if (retailIntent) view.value = retailIntent
     if (!navigation.value.some(item => item.id === view.value)) view.value = 'overview'
   } catch (error) {
     if (session.value === active) identityError.value = error.message
@@ -360,7 +369,7 @@ function openOpportunity(id = '', projectId = '') {
 
   <WorkspaceShell v-else :dealer="isDealer" :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
-    <RetailDesk v-if="retailNavigation.some(item => item.id === view)" :key="view" :mode="view" :role="entry" :request="authenticated" :identity="user.id" @navigate="navigate" />
+    <RetailDesk v-if="retailNavigation.some(item => item.id === view)" :key="navigationRevision + ':' + view" :mode="view" :role="entry" :request="authenticated" :identity="user.id" @navigate="navigate" />
     <DealerPage v-else-if="isDealer && dealerPages.some(p => p.id === view)" :key="view" :view="view" :request="authenticated" @navigate="navigate" @project="openProject" />
     <template v-else-if="view === 'overview'">
       <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" :user-id="user.id"

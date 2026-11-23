@@ -1,16 +1,19 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { requestApi } from '../api.js'
 import { formatCents } from '../channel/quoteMoney.js'
 import { UiButton, UiCard, UiIcon, UiState } from '../ui/index.js'
 import { requestRetailDemo } from './retailDemo.js'
-import { pendingRetailRequest } from './retailRequest.js'
+import { customerCheckoutLink, pendingRetailRequest, readRetailCatalog, retailApi } from './retailRequest.js'
 
+const props = defineProps({ demo: Boolean })
 const params = new URLSearchParams(location.search)
 const code = params.get('code') || ''
-const order = params.get('order') || ''
+const order = props.demo ? params.get('order') || '' : ''
 const valid = /^[a-f\d]{32}$/.test(order || code)
 const endpoint = order ? '/customer-orders/' + order : '/store/' + code
 const products = ref([])
+const brand = computed(() => props.demo ? '畅捷通 · 软件订购' : products.value[0]?.manufacturer || '厂商订购专区')
 const receipt = ref(null)
 const selected = ref(null)
 const quantity = ref(1)
@@ -21,15 +24,22 @@ const paymentError = ref('')
 const amount = computed(() => Number.isInteger(quantity.value) && quantity.value > 0 && quantity.value <= 10000
   ? quantity.value * (selected.value?.unit_cents ?? 0) : 0)
 const money = cents => formatCents(BigInt(cents))
+const controller = new AbortController()
+onUnmounted(() => controller.abort())
 
 onMounted(async () => {
   try {
     if (!valid) throw new Error('请从代理商提供的二维码或客户确认链接进入。')
-    const result = await requestRetailDemo(endpoint)
-    if (order) receipt.value = result
-    else products.value = result.items
+    if (props.demo) {
+      const result = await requestRetailDemo(endpoint, { signal: controller.signal })
+      if (order) receipt.value = result
+      else products.value = result.items
+    } else {
+      products.value = await readRetailCatalog(path => requestApi(path, { signal: controller.signal }), retailApi + endpoint)
+      if (products.value[0]) document.title = products.value[0].manufacturer + ' · 软件订购'
+    }
   } catch (cause) {
-    error.value = cause.message
+    if (!controller.signal.aborted) error.value = cause.message
   } finally {
     loading.value = false
   }
@@ -65,12 +75,13 @@ async function pay() {
 </script>
 
 <template>
-  <div class="demo-store">
+  <div class="retail-store">
     <header class="store-header">
       <div class="store-wrap store-brand">
         <UiIcon name="catalog" :size="24" />
-        <span>畅捷通 · 软件订购</span>
-        <span class="store-tag">模拟交易</span>
+        <span>{{ brand }}</span>
+        <span v-if="demo" class="store-tag">模拟交易</span>
+        <a v-else class="store-tag" href="/">渠智链</a>
       </div>
     </header>
     <main class="store-wrap">
@@ -105,29 +116,32 @@ async function pay() {
           </div>
         </form>
       </UiCard>
-      <template v-else>
+      <template v-else-if="products.length">
         <section class="store-intro">
           <h1>企业软件订购</h1>
-          <p>选择财务管理、进销存或企业 ERP。订购费用由厂商收取。</p>
+          <p>{{ demo ? '选择财务管理、进销存或企业 ERP。订购费用由厂商收取。' : '从厂商目录选择产品，以企业客户身份登录并确认订单。订购费用由厂商收取。' }}</p>
         </section>
         <div class="store-catalog">
           <article v-for="item in products" :key="item.product_id" class="store-product">
-            <span class="product-category">{{ item.category }}</span>
+            <span v-if="item.category" class="product-category">{{ item.category }}</span>
             <h2>{{ item.name }}</h2>
             <p class="product-version">{{ item.version }}</p>
-            <p>{{ item.summary }}</p>
+            <p v-if="item.summary || item.description">{{ item.summary || item.description }}</p>
             <div class="product-action"><strong>{{ money(item.unit_cents) }} <small>／份</small></strong>
-              <UiButton variant="primary" @click="choose(item)">订购{{ item.name }}</UiButton></div>
+              <UiButton v-if="demo" variant="primary" @click="choose(item)">订购{{ item.name }}</UiButton>
+              <a v-else class="store-order-link" :href="customerCheckoutLink(code, item.product_id)" :aria-label="'登录并订购' + item.name">登录并订购</a>
+            </div>
           </article>
         </div>
       </template>
+      <UiState v-else title="厂商暂未上架可订购产品" />
     </main>
-    <footer class="store-wrap store-footer">PartnerLedger 演示 · 软件和价格均为样例</footer>
+    <footer class="store-wrap store-footer">{{ demo ? 'PartnerLedger 演示 · 软件和价格均为样例' : '渠智链 · 厂商订购专区' }}</footer>
   </div>
 </template>
 
 <style scoped>
-.demo-store { min-height:100vh; color:#122a3a; background:#f2f7f8; }
+.retail-store { min-height:100vh; color:#122a3a; background:#f2f7f8; }
 .store-wrap { width:min(1080px, calc(100% - 36px)); margin-inline:auto; }
 .store-header { border-bottom:1px solid #d9e6eb; background:white; }
 .store-brand { min-height:66px; display:flex; align-items:center; gap:10px; font-size:18px; font-weight:700; }
@@ -143,6 +157,8 @@ async function pay() {
 .product-action { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:auto; padding-top:16px; }
 .product-action strong,.checkout-total strong { font-size:22px; }
 .product-action small { font-size:12px; color:#4e656f; font-weight:400; }
+.store-order-link { display:inline-flex; align-items:center; min-height:40px; padding-inline:14px; border-radius:6px; background:var(--ui-accent); color:var(--ui-on-accent); font-weight:600; text-decoration:none; }
+.store-order-link:hover { background:var(--ui-accent-hover); }
 .checkout-card { max-width:640px; margin:28px auto; }
 .checkout-details { display:grid; grid-template-columns:auto 1fr; gap:10px 18px; margin:14px 0 22px; }
 .checkout-details dd { margin:0; }
