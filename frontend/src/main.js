@@ -13,7 +13,7 @@ window.addEventListener('pageshow', reloadOnSessionChange)
 const path = window.location.pathname.replace(/\/+$/, '') || '/'
 const pages = {
   '/': ['软件渠道协作平台', () => import('./Portal.vue')],
-  '/retail-store': ['厂商订购专区', () => import('./live/RetailDesk.vue'), { mode: 'store' }],
+  '/retail-store': ['厂商订购专区', () => import('./live/RetailStore.vue')],
   '/ui': ['UI 组件库', () => import('./UiGallery.vue')],
   '/demo': ['双角色原型', () => import('./App.vue')],
   '/tables': ['表格工作台', () => import('./tables/TableStudio.vue')],
@@ -22,7 +22,7 @@ const pages = {
 }
 if (import.meta.env.MODE === 'retail-demo') {
   pages['/experience/retail'] = ['直购与佣金演示', () => import('./live/RetailDemoWorkspace.vue')]
-  pages['/experience/retail-store'] = ['畅捷通演示订购', () => import('./live/RetailDemoStore.vue')]
+  pages['/experience/retail-store'] = ['畅捷通演示订购', () => import('./live/RetailStore.vue'), { demo: true }]
 }
 for (const { role, label } of entrances) {
   pages['/login/' + role] = [label + '登录', () => import('./LiveApp.vue'), { role }]

@@ -83,11 +83,27 @@ func testRetailWorkflow(t *testing.T, db *gorm.DB, request func(string, string, 
 	request("POST", row(self.ID, "settle"), vendor, `{"reference":"fixture-payout"}`, 200, nil)
 	list.Items = nil
 	request("GET", base+"/orders", customer, "", 200, &list)
-	if list.Items[1].Status != "paid" || list.Items[1].Commission != nil {
+	if list.Items[1].Status != "paid" || list.Items[1].Commission != nil || list.Items[1].Receipt != nil || list.Items[1].Payout != nil {
 		t.Fatal("customers should see their payment status without the partner commission")
 	}
+	request("GET", base+"/orders?order_id="+proxy.ID, customer, "", 200, &list)
+	if len(list.Items) != 1 || fmt.Sprint(list.Items[0].ID) != proxy.ID {
+		t.Fatal("the assigned customer should be able to open their assisted order directly")
+	}
+	request("GET", base+"/orders?order_id="+proxy.ID, otherDealer, "", 200, &list)
+	if len(list.Items) != 0 {
+		t.Fatal("an order ID must not bypass organization scope")
+	}
 	request("GET", base+"/orders", vendor, "", 200, &list)
-	if list.Items[1].Status != "settled" || list.Items[1].Commission.SettledAt == nil {
+	if list.Items[1].Status != "settled" || list.Items[1].Commission.SettledAt == nil || list.Items[1].Receipt == nil || list.Items[1].Payout == nil {
 		t.Fatal("settlement missing")
+	}
+	var funds struct {
+		Items   []retailOrderRow
+		Summary retailSettlementSummary
+	}
+	request("GET", base+"/orders?view=commission&status=settlement", dealer, "", 200, &funds)
+	if len(funds.Items) != 0 || funds.Summary.SettledCents != 152 || funds.Summary.SettlementCents != 0 || funds.Summary.Reminded != 0 {
+		t.Fatal("commission totals must stay scoped and include settled rows even while the list filters them out")
 	}
 }

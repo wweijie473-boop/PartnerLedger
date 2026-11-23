@@ -40,6 +40,7 @@ type offerCard struct {
 	Manufacturer   string `json:"manufacturer"`
 	Name           string `json:"name"`
 	Version        string `json:"version"`
+	Description    string `json:"description"`
 	UnitCents      uint64 `json:"unit_cents"`
 }
 
@@ -86,6 +87,14 @@ type retailOrderRow struct {
 	Customer     string            `json:"customer"`
 	TotalCents   uint64            `json:"total_cents" gorm:"-"`
 	Commission   *retailCommission `json:"commission,omitempty" gorm:"-"`
+	Receipt      *string           `json:"receipt_ref,omitempty" gorm:"-"`
+	Payout       *string           `json:"payout_ref,omitempty" gorm:"-"`
+}
+
+type retailSettlementSummary struct {
+	SettlementCents uint64 `json:"settlement_cents,string"`
+	SettledCents    uint64 `json:"settled_cents,string"`
+	Reminded        uint64 `json:"reminded"`
 }
 type retailCommission struct {
 	RateBPS       uint32     `json:"rate_bps"`
@@ -114,7 +123,7 @@ func publishedOffers(db *gorm.DB) *gorm.DB {
 		Where("offer.active = ? AND product.published = ?", true, true)
 }
 
-const offerFields = "product.id AS product_id, product.manufacturer_id, maker.name AS manufacturer, product.name, product.version, offer.unit_cents"
+const offerFields = "product.id AS product_id, product.manufacturer_id, maker.name AS manufacturer, product.name, product.version, product.description, offer.unit_cents"
 
 func retailRespond(c *gin.Context, value any, err error) {
 	switch {
@@ -267,24 +276,35 @@ func retailScope(actor data.User) string {
 
 func (s server) listRetailOrders(c *gin.Context) {
 	actor := principal(c)
+	db := s.db.WithContext(c.Request.Context())
+	scope := retailScope(actor)
+	commissionView := c.Query("view") == "commission" && actor.Organization.Kind != data.Customer
 	before, err := strconv.ParseUint(c.DefaultQuery("before", "0"), 10, 64)
 	if err != nil {
 		respond(c, http.StatusBadRequest, "invalid_request", nil)
 		return
 	}
 	items := make([]retailOrderRow, 0)
-	query := s.db.WithContext(c.Request.Context()).Table("pl_retail_orders AS orders").
+	query := db.Table("pl_retail_orders AS orders").
 		Select("orders.*, maker.name AS manufacturer, partner.name AS reseller, client.name AS customer").
 		Joins("JOIN pl_organizations AS maker ON maker.id = orders.manufacturer_id").
 		Joins("JOIN pl_organizations AS partner ON partner.id = orders.reseller_id").
 		Joins("JOIN pl_organizations AS client ON client.id = orders.customer_id").
-		Where("orders."+retailScope(actor)+" = ?", actor.OrganizationID)
+		Where("orders."+scope+" = ?", actor.OrganizationID)
+	if rawID, exists := c.GetQuery("order_id"); exists {
+		id, parseErr := strconv.ParseUint(rawID, 10, 64)
+		if parseErr != nil || id == 0 {
+			respond(c, http.StatusBadRequest, "invalid_request", nil)
+			return
+		}
+		query = query.Where("orders.id = ?", id)
+	}
 	if before != 0 {
 		query = query.Where("orders.id < ?", before)
 	}
 	switch c.Query("status") {
 	case "":
-		if c.Query("view") == "commission" && actor.Organization.Kind != data.Customer {
+		if commissionView {
 			query = query.Where("orders.status IN ?", []string{"settlement", "settled"})
 		}
 	case "paid":
@@ -306,6 +326,10 @@ func (s server) listRetailOrders(c *gin.Context) {
 		return
 	}
 	err = query.Order("orders.id DESC").Limit(51).Scan(&items).Error
+	if err != nil {
+		retailRespond(c, nil, err)
+		return
+	}
 	var next *string
 	if len(items) > 50 {
 		items = items[:50]
@@ -320,13 +344,27 @@ func (s server) listRetailOrders(c *gin.Context) {
 				RateBPS: item.CommissionBPS, Cents: (item.TotalCents*uint64(item.CommissionBPS) + 5000) / 10000,
 				SettledAt: item.SettledAt, RemindedAt: item.RemindedAt, ReminderCount: item.ReminderCount,
 			}
+			item.Payout = item.PayoutRef
+			if actor.Organization.Kind == data.Manufacturer {
+				item.Receipt = item.ReceiptRef
+			}
 		} else {
 			if item.Status == "settlement" || item.Status == "settled" {
 				item.Status = "paid"
 			}
 		}
 	}
-	retailRespond(c, gin.H{"items": items, "next_cursor": next}, err)
+	result := gin.H{"items": items, "next_cursor": next}
+	if commissionView {
+		const cents = "((unit_cents * quantity * commission_bps + 5000) DIV 10000)"
+		var summary retailSettlementSummary
+		err = db.Model(&RetailOrder{}).Where(scope+" = ? AND status IN ?", actor.OrganizationID, []string{"settlement", "settled"}).
+			Select("COALESCE(SUM(CASE WHEN status = 'settlement' THEN " + cents + " ELSE 0 END), 0) AS settlement_cents, " +
+				"COALESCE(SUM(CASE WHEN status = 'settled' THEN " + cents + " ELSE 0 END), 0) AS settled_cents, " +
+				"COUNT(CASE WHEN status = 'settlement' AND reminder_count > 0 THEN 1 END) AS reminded").Scan(&summary).Error
+		result["summary"] = summary
+	}
+	retailRespond(c, result, err)
 }
 
 type retailOrderInput struct {
