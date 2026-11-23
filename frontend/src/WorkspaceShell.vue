@@ -18,6 +18,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['navigate', 'account'])
 const { account, signedIn } = props.demo ? useSessionAccount() : { account: null, signedIn: false }
+const dealerLogo = computed(() => props.demo && props.dealer ? '/brand/zhufei-logo.png' : '')
 const tabs = ref(null)
 const section = computed(() => dealerSections.find(item => item.views.includes(props.view)) || dealerSections[0])
 const childrenOf = group => group.views.map(id => props.nav.find(item => item.id === id)).filter(Boolean)
@@ -44,7 +45,7 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
     <a href="#workspace-content" class="skip-link">跳转到主要内容</a>
     <PortalHeader :account="account" :signed-in="signedIn">
       <template v-if="!demo || !signedIn" #account>
-        <WorkspaceAccount :label="accountLabel" :organization="organization" @click="emit('account')" />
+        <WorkspaceAccount :label="accountLabel" :organization="organization" :logo="dealerLogo" @click="emit('account')" />
       </template>
       <template v-if="!dealer" #secondary>
         <div class="workspace-subbar">
@@ -67,7 +68,11 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
     </PortalHeader>
     <div :class="{ 'dealer-layout': dealer }">
     <aside v-if="dealer" class="dealer-rail">
-      <header><UiIcon name="dealer" :size="24" /><div><strong>代理商运营中心</strong><small>{{ organization }}</small></div></header>
+      <header>
+        <img v-if="dealerLogo" class="dealer-logo" :src="dealerLogo" width="30" height="30" alt="" />
+        <UiIcon v-else name="dealer" :size="24" />
+        <div><strong>代理商运营中心</strong><small>{{ organization }}</small></div>
+      </header>
       <nav aria-label="代理商业务栏目">
         <button v-for="group in sections" :key="group.id" type="button"
           :aria-current="section.id === group.id ? 'true' : undefined" @click="emit('navigate', childrenOf(group)[0].id)">
@@ -99,6 +104,7 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
 .dealer-layout { display:grid;grid-template-columns:210px minmax(0,1fr);min-height:calc(100vh - 55px);background:#f4f7fb }
 .dealer-rail { background:#192c46;color:#e5efff;padding:18px 10px }
 .dealer-rail header {display:flex;align-items:center;gap:10px;padding:6px 8px 22px}
+.dealer-logo {flex:none;box-sizing:border-box;padding:2px;border-radius:6px;background:#fff;object-fit:contain}
 .dealer-rail strong,.dealer-rail small {display:block}.dealer-rail small {color:#b0c2dc;margin-top:4px;overflow-wrap:anywhere}
 .dealer-rail nav {display:grid;gap:3px}.dealer-rail button,.dealer-children button {display:flex;align-items:center;gap:10px;border:0;background:transparent;color:inherit;text-align:left}
 .dealer-rail button {padding:10px 14px;border-radius:5px;font-weight:500}.dealer-rail button:hover {background:#273f60}.dealer-rail button[aria-current] {background:#1467ac;color:white}

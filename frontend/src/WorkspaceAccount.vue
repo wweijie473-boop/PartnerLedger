@@ -5,6 +5,7 @@ defineProps({
   label: { type: String, required: true },
   organization: { type: String, required: true },
   href: { type: String, default: '' },
+  logo: { type: String, default: '' },
 })
 </script>
 
@@ -12,7 +13,8 @@ defineProps({
   <component :is="href ? 'a' : 'button'" class="workspace-account" :href="href || undefined"
     :type="href ? undefined : 'button'" :aria-label="'账号：' + label + '，' + organization"
     :title="label + ' · ' + organization">
-    <span class="workspace-avatar" aria-hidden="true">{{ [...organization][0] ?? '渠' }}</span>
+    <img v-if="logo" class="workspace-avatar workspace-avatar-logo" :src="logo" width="26" height="26" alt="" />
+    <span v-else class="workspace-avatar" aria-hidden="true">{{ [...organization][0] ?? '渠' }}</span>
     <span class="workspace-account-text">
       <strong>{{ label }}</strong>
       <small>{{ organization }}</small>
@@ -50,6 +52,12 @@ defineProps({
   color: var(--ui-link);
   font-size: 13px;
   font-weight: 600;
+}
+.workspace-avatar-logo {
+  box-sizing: border-box;
+  background: #fff;
+  object-fit: contain;
+  padding: 2px;
 }
 .workspace-account-text { min-width: 0; max-width: clamp(84px, 13vw, 136px); }
 .workspace-account-text > * {
