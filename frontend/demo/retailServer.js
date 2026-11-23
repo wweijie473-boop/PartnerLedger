@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto'
+import { createDealerOperations, routeDealerOperations, trackAnnualOrder } from './dealerOperations.js'
 
 const prefix = '/api/retail-demo/'
 const maker = '畅捷通（演示厂商）'
 const dealer = '天津主飞（演示代理商）'
-const customers = [{ id: '1', name: '海河商贸（演示客户）' }]
 const offers = [
   { product_id: '1', name: '云财务', version: '标准版 · 年度', unit_cents: 199800, category: '财务管理', summary: '发票、凭证和月度财务报表。' },
   { product_id: '2', name: '进销存', version: '专业版 · 年度', unit_cents: 399800, category: '经营管理', summary: '采购、销售、库存和往来账款。' },
@@ -46,7 +46,7 @@ function publicOrder(row) {
 function recordOrder(session, body, source) {
   const { product_id, quantity, expected_unit_cents, request_id } = body
   const offer = offers.find(item => item.product_id === product_id)
-  const customer = customers.find(item => item.id === body.customer_id)
+  const customer = session.operations.customers.find(item => item.id === body.customer_id)
   if (!offer || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000 ||
       typeof request_id !== 'string' || !requestFormat.test(request_id) || (source === 'assisted' && !customer)) {
     fail(400, '请核对订购产品、数量和客户。')
@@ -68,16 +68,17 @@ function recordOrder(session, body, source) {
     status: source === 'promotion' ? 'settlement' : 'confirmation',
     commission: { rate_bps: 5000, cents: total / 2, reminder_count: 0 },
   }
-  if (source === 'promotion') markPaid(row)
+  if (source === 'promotion') markPaid(session, row)
   session.orders.unshift(row)
   session.requests.set(key, { fingerprint, row })
   return row
 }
 
-function markPaid(row) {
+function markPaid(session, row) {
   row.status = 'settlement'
   row.paid_at = new Date().toISOString()
   row.receipt_ref = 'DEMO-IN-' + row.id
+  trackAnnualOrder(session.operations, row)
 }
 
 export function retailDemo() {
@@ -106,7 +107,7 @@ export function retailDemo() {
     }
     if (sessions.size >= 100) fail(503, '演示场次已满，请稍后重试。')
     const session = { code: token(), dealerKey: token(), vendorKey: token(), expires: Date.now() + lifetime,
-      orders: [], requests: new Map(), customerKeys: [] }
+      orders: [], requests: new Map(), customerKeys: [], operations: createDealerOperations() }
     sessions.add(session)
     actors.set(session.dealerKey, { role: 'dealer', session })
     actors.set(session.vendorKey, { role: 'vendor', session })
@@ -139,7 +140,7 @@ export function retailDemo() {
         if (get && !action) return publicOrder(item.row)
         if (post && action === 'pay') {
           await readBody(req)
-          if (item.row.status === 'confirmation') markPaid(item.row)
+          if (item.row.status === 'confirmation') markPaid(item.session, item.row)
           return publicOrder(item.row)
         }
       }
@@ -148,9 +149,10 @@ export function retailDemo() {
     const actor = actors.get(req.headers.authorization?.replace(/^Bearer /, ''))
     if (!actor || actor.session.expires <= Date.now()) fail(401, '演示场次已结束，请开启新一轮演示。')
     const { session, role } = actor
+    if (resource === 'operations') return routeDealerOperations(req, path, actor, readBody)
     if (get && path === 'session') return { role }
     if (get && path === 'offers' && role === 'dealer') return page(offers)
-    if (get && path === 'organization-links' && role === 'dealer') return page(customers)
+    if (get && path === 'organization-links' && role === 'dealer') return page(session.operations.customers.map(({ id, name }) => ({ id, name })))
     if (post && path === 'promotion' && role === 'dealer') {
       const body = await readBody(req)
       if (body.manufacturer_id !== '1') fail(400, '请选择演示厂商。')
