@@ -109,6 +109,7 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
 .dealer-logo {
   display:grid;
   flex:none;
+  align-self:flex-start;
   width:30px;
   height:30px;
   place-items:center;
