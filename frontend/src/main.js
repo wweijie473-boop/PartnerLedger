@@ -20,6 +20,10 @@ const pages = {
   '/login': ['登录', () => import('./LiveApp.vue')],
   '/register': ['注册', () => import('./LiveApp.vue'), { mode: 'register' }],
 }
+if (import.meta.env.MODE === 'retail-demo') {
+  pages['/experience/retail'] = ['直购与佣金演示', () => import('./live/RetailDemoWorkspace.vue')]
+  pages['/experience/retail-store'] = ['畅捷通演示订购', () => import('./live/RetailDemoStore.vue')]
+}
 for (const { role, label } of entrances) {
   pages['/login/' + role] = [label + '登录', () => import('./LiveApp.vue'), { role }]
   pages['/register/' + role] = [label + '注册', () => import('./LiveApp.vue'), { role, mode: 'register' }]

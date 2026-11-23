@@ -3,8 +3,10 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { requestApi } from '../api.js'
 import { UiButton, UiCard, UiState } from '../ui/index.js'
 import { formatCents, quoteCents } from '../channel/quoteMoney.js'
+import { demoStore } from './retailDemo.js'
+import { pendingRetailRequest } from './retailRequest.js'
 
-const props = defineProps({ mode: String, role: String, request: Function, identity: String })
+const props = defineProps({ mode: String, role: String, request: Function, identity: String, demo: Boolean })
 const emit = defineEmits(['navigate'])
 const api = '/api/retail/v1'
 const params = new URLSearchParams(location.search)
@@ -25,6 +27,7 @@ const offers = ref([])
 const products = ref([])
 const customers = ref([])
 const orders = ref([])
+const summary = ref(null)
 const next = ref(null)
 const loading = ref(true)
 const busy = ref(false)
@@ -56,6 +59,7 @@ const selected = computed(() => offers.value.find(o => o.product_id === product.
 const total = computed(() => selected.value && Number.isInteger(quantity.value) ? selected.value.unit_cents * quantity.value : 0)
 const money = value => formatCents(BigInt(value))
 const settlementView = ['commission', 'manufacturer-settlements'].includes(props.mode)
+const receiptView = props.mode === 'manufacturer-receipts'
 const statusOptions = Object.entries(labels).filter(([key]) => {
   if (settlementView) return ['settlement', 'settled'].includes(key)
   return props.role === 'customer' ? !['settlement', 'settled'].includes(key) : key !== 'paid'
@@ -71,6 +75,7 @@ async function list(cursor = '') {
   if (settlementView) query.set('view', 'commission')
   const result = await read(api + '/orders?' + query)
   orders.value = cursor ? [...orders.value,...result.items] : result.items
+  summary.value = result.summary || null
   next.value = result.next_cursor
 }
 async function readCatalog(path) {
@@ -110,8 +115,17 @@ async function load() {
     loading.value = false
   }
 }
-onMounted(load)
-onUnmounted(() => controller.abort())
+function refreshOnFocus() {
+  if (!busy.value && !loading.value) load()
+}
+onMounted(() => {
+  load()
+  if (props.demo && ledger) window.addEventListener('focus', refreshOnFocus)
+})
+onUnmounted(() => {
+  controller.abort()
+  window.removeEventListener('focus', refreshOnFocus)
+})
 
 async function run(task) {
   if (busy.value) return
@@ -127,7 +141,7 @@ function buyLink(item) {
 function generate() {
   run(async () => {
     const result = await write('/promotion', { manufacturer_id:maker.value })
-    const url = new URL('/retail-store', location.origin)
+    const url = new URL(props.demo ? demoStore : '/retail-store', location.origin)
     url.searchParams.set('code', result.code)
     const { default: qrCode } = await import('qrcode')
     const image = await qrCode.toDataURL(url.href, { width:240, margin:2 })
@@ -137,6 +151,12 @@ function generate() {
 }
 function copyLink() {
   run(async () => {
+    if (!navigator.clipboard) {
+      const field = document.querySelector('input[aria-label="推广链接"]')
+      field?.select()
+      notice.value = '链接已选中，可以手动复制。'
+      return
+    }
     await navigator.clipboard.writeText(href.value)
     notice.value = '推广链接已复制。'
   })
@@ -167,12 +187,7 @@ function submitOrder() {
       ...(assisted ? { customer_id:customer.value } : { code }) }
     // Preserve the request ID on a lost response, including after a reload in this tab.
     const key = 'partnerledger-retail-checkout:' + props.identity + ':' + props.mode
-    const payload = JSON.stringify(draft)
-    let pending
-    try { pending = JSON.parse(sessionStorage.getItem(key)) } catch {}
-    if (pending?.payload !== payload) pending = { payload, id:crypto.randomUUID() }
-    sessionStorage.setItem(key, JSON.stringify(pending))
-    await write('/orders', { ...draft, request_id:pending.id })
+    await write('/orders', { ...draft, request_id:pendingRetailRequest(key, draft) })
     sessionStorage.removeItem(key)
     emit('navigate','retail-orders')
   })
@@ -209,7 +224,7 @@ function advance(row, action, refValue) {
     <UiState v-if="loading" state="loading" title="正在读取业务记录" />
 
     <UiCard v-else-if="promotion" title="厂商专属推广码">
-      <p class="muted">客户扫码进入本平台的厂商订购专区。通过该入口提交的订单会归属当前代理商。</p>
+      <p class="muted">{{ demo ? '客户扫码进入厂商演示官网。付款归厂商，订单自动归属当前代理商。' : '客户扫码进入本平台的厂商订购专区。通过该入口提交的订单会归属当前代理商。' }}</p>
       <form class="retail-form" @submit.prevent="generate">
         <label>推广厂商<select v-model="maker" required :disabled="busy" @change="href=''; qr=''"><option value="">选择厂商</option><option v-for="[id,name] in makers" :key="id" :value="id">{{ name }}</option></select></label>
         <UiButton type="submit" variant="primary" :disabled="!maker" :loading="busy">生成推广二维码</UiButton>
@@ -217,7 +232,7 @@ function advance(row, action, refValue) {
       <UiState v-if="!makers.length && !error" title="当前没有厂商上架直购产品" />
       <div v-if="qr" class="retail-qr">
         <img :src="qr" width="240" height="240" alt="扫码查看厂商订购产品">
-        <div><a :href="href">预览推广页面</a><input :value="href" readonly aria-label="推广链接"><UiButton @click="copyLink">复制链接</UiButton> <a :href="qr" download="partnerledger-promotion.png">保存二维码</a><p v-if="localPreview" class="muted">当前链接供本机预览。对外推广请从已部署的渠智链地址生成二维码。</p></div>
+        <div><a :href="href" target="_blank" rel="noopener">预览推广页面</a><input :value="href" readonly aria-label="推广链接"><UiButton @click="copyLink">复制链接</UiButton> <a :href="qr" download="partnerledger-promotion.png">保存二维码</a><p v-if="localPreview" class="muted">{{ demo ? '当前二维码仅供本机预览。手机扫码请从同一网络可访问的地址打开演示，再生成二维码。' : '当前链接供本机预览。对外推广请从已部署的渠智链地址生成二维码。' }}</p></div>
       </div>
     </UiCard>
 
@@ -235,7 +250,7 @@ function advance(row, action, refValue) {
     </UiCard>
 
     <UiCard v-else-if="assisted || checkout" :title="assisted ? '创建代客订单' : '核对订购信息'">
-      <p class="muted">{{ assisted ? '订单将提交给关联客户确认，客户随后向厂商付款。' : '提交后请按厂商提供的方式付款，由厂商核对并登记收款。' }}</p>
+      <p class="muted">{{ demo ? '选定客户和产品后，在订单列表打开客户确认链接，交给客户确认并模拟付款。' : assisted ? '订单将提交给关联客户确认，客户随后向厂商付款。' : '提交后请按厂商提供的方式付款，由厂商核对并登记收款。' }}</p>
       <form v-if="offers.length && (!assisted || customers.length)" class="retail-form" @submit.prevent="submitOrder">
         <label v-if="assisted">关联客户<select v-model="customer" required><option value="">选择客户</option><option v-for="item in customers" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
         <label>订购产品<select v-model="product" required><option value="">选择产品</option><option v-for="item in offers" :key="item.product_id" :value="item.product_id">{{ item.manufacturer }} · {{ item.name }} · {{ item.version }} · {{ money(item.unit_cents) }}</option></select></label>
@@ -247,7 +262,12 @@ function advance(row, action, refValue) {
     </UiCard>
 
     <UiCard v-else-if="ledger" :title="settlementView ? '厂商直收订单佣金' : '订单列表'">
-      <p v-if="vendor || dealer" class="muted">{{ vendor ? '核对实际收款或转账凭证后，再登记对应结果。' : '厂商确认收款后可查看待结算金额，每笔订单每 24 小时可催结算一次。' }}</p>
+      <p v-if="vendor || dealer" class="muted">{{ demo && vendor ? (receiptView ? '客户完成模拟付款后，订单归入厂商收款，同时生成代理商佣金。' : '核对代理商、佣金金额和催办记录，登记模拟转账凭证。') : vendor ? '核对实际收款或转账凭证后，再登记对应结果。' : '厂商确认收款后可查看待结算金额，每笔订单每 24 小时可催结算一次。' }}</p>
+      <dl v-if="summary" class="retail-summary">
+        <div><dt>待结算佣金</dt><dd>{{ money(summary.settlement_cents) }}</dd></div>
+        <div><dt>已结算佣金</dt><dd>{{ money(summary.settled_cents) }}</dd></div>
+        <div><dt>已催办待结算</dt><dd>{{ summary.reminded }} 笔</dd></div>
+      </dl>
       <label class="retail-filter">状态 <select v-model="status" :disabled="busy" @change="load"><option value="">全部</option><option v-for="[value,label] in statusOptions" :key="value" :value="value">{{ label }}</option></select></label>
       <div v-if="orders.length" class="retail-table"><table>
         <thead><tr><th>订单和产品</th><th>交易方</th><th>来源</th><th>金额</th><th v-if="vendor || dealer">佣金</th><th>状态与办理</th></tr></thead>
@@ -256,14 +276,17 @@ function advance(row, action, refValue) {
           <td>{{ vendor ? row.reseller : row.manufacturer }}<small v-if="vendor || dealer">{{ row.customer }}</small></td>
           <td>{{ row.source === 'assisted' ? '帮客户下单' : '推广获客' }}</td>
           <td>{{ money(row.total_cents) }}</td>
-          <td v-if="row.commission">{{ money(row.commission.cents) }} <small>{{ row.commission.rate_bps / 100 }}%</small></td>
+          <td v-if="vendor || dealer"><template v-if="row.commission && (!demo || row.paid_at)">{{ money(row.commission.cents) }} <small>{{ row.commission.rate_bps / 100 }}%</small></template><span v-else>待收款</span></td>
           <td>
             <strong>{{ labels[row.status] }}</strong>
             <small v-if="row.commission?.reminder_count">催结算 {{ row.commission.reminder_count }} 次 · 最近 {{ new Date(row.commission.reminded_at).toLocaleString() }}</small>
             <small v-if="row.commission?.settled_at">结算 {{ new Date(row.commission.settled_at).toLocaleString() }}</small>
+            <small v-if="demo && vendor && row.receipt_ref">模拟收款凭证 {{ row.receipt_ref }}</small>
+            <small v-if="demo && row.payout_ref">模拟转账凭证 {{ row.payout_ref }}</small>
+            <a v-if="demo && dealer && row.checkout_path && row.status === 'confirmation'" :href="row.checkout_path" target="_blank" rel="noopener">打开客户确认链接</a>
             <div v-if="role === 'customer' && row.status === 'confirmation'" class="retail-actions"><UiButton compact :disabled="busy" @click="advance(row,'confirm')">确认订单</UiButton> <UiButton compact :disabled="busy" @click="advance(row,'decline')">拒绝</UiButton></div>
-            <UiButton v-if="dealer && row.status === 'settlement'" compact class="retail-actions" :disabled="busy || !canRemind(row)" @click="advance(row,'remind')">{{ canRemind(row) ? '催结算' : '已催结算' }}</UiButton>
-            <template v-if="vendor && (row.status === 'payment' || row.status === 'settlement')">
+            <UiButton v-if="dealer && (!demo || settlementView) && row.status === 'settlement'" compact class="retail-actions" :disabled="busy || !canRemind(row)" @click="advance(row,'remind')">{{ canRemind(row) ? '催结算' : '已催结算' }}</UiButton>
+            <template v-if="vendor && (!demo || settlementView) && (row.status === 'payment' || row.status === 'settlement')">
               <UiButton v-if="actionOrder !== row.id" compact class="retail-actions" :disabled="busy" @click="actionOrder=row.id; reference=''">{{ row.status === 'payment' ? '登记收款' : '登记结算' }}</UiButton>
               <form v-else class="retail-actions" @submit.prevent="advance(row,row.status === 'payment' ? 'receipt' : 'settle',reference)">
                 <label>{{ row.status === 'payment' ? '收款凭证编号' : '转账凭证编号' }}<input v-model="reference" required maxlength="100"></label>
@@ -297,4 +320,8 @@ input:not([type=checkbox]),select { width:100%; min-width:0; padding:7px 10px; b
 .retail-table table { width:100%; min-width:680px; }
 .retail-table small { display:block; color:var(--ui-ink-muted); }
 .retail-actions { margin-top:6px; }
+.retail-summary { display:flex; flex-wrap:wrap; gap:10px; margin-block:14px; }
+.retail-summary div { flex:1 1 145px; padding:12px 14px; background:var(--ui-surface-hover); border:1px solid var(--ui-border); border-radius:7px; }
+.retail-summary dt { font-size:13px; color:var(--ui-ink-muted); }
+.retail-summary dd { margin:4px 0 0; font-weight:700; }
 </style>

@@ -12,6 +12,7 @@ import './portal.css'
 const phase = ref(0)
 const hero = ref(null)
 const changedPhase = ref(false)
+const retailDemoEnabled = import.meta.env.MODE === 'retail-demo'
 const { account, signedIn } = useSessionAccount()
 const phases = [
   {
@@ -52,6 +53,7 @@ function showPhase(index) {
             <p class="pl-subtitle">客户提需求，代理商整理方案，厂商确认供货。三方在同一个项目里查看需求、报价和交付进度。</p>
             <div class="pl-hero-actions">
               <a class="pl-primary" href="/experience/dealer">体验代理商工作台 <UiIcon name="forward" :size="15" /></a>
+              <a v-if="retailDemoEnabled" class="pl-secondary" href="/experience/retail">体验厂商直购与佣金</a>
               <a class="pl-secondary" href="#journey">了解三方协作</a>
             </div>
           </div>

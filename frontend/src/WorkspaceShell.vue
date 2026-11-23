@@ -21,6 +21,9 @@ const { account, signedIn } = props.demo ? useSessionAccount() : { account: null
 const tabs = ref(null)
 const section = computed(() => dealerSections.find(item => item.views.includes(props.view)) || dealerSections[0])
 const childrenOf = group => group.views.map(id => props.nav.find(item => item.id === id)).filter(Boolean)
+const sections = computed(() => dealerSections.filter(group => childrenOf(group).length))
+const shortcuts = computed(() => ['visits','opportunities','orders','finance','tickets']
+  .map(id => props.nav.find(item => item.id === id)).filter(Boolean))
 
 function revealActiveTab() {
   const nav = tabs.value
@@ -66,7 +69,7 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
     <aside v-if="dealer" class="dealer-rail">
       <header><UiIcon name="dealer" :size="24" /><div><strong>代理商运营中心</strong><small>{{ organization }}</small></div></header>
       <nav aria-label="代理商业务栏目">
-        <button v-for="group in dealerSections" :key="group.id" type="button"
+        <button v-for="group in sections" :key="group.id" type="button"
           :aria-current="section.id === group.id ? 'true' : undefined" @click="emit('navigate', childrenOf(group)[0].id)">
           <UiIcon :name="group.icon" :size="17" />{{ group.label }}
         </button>
@@ -79,10 +82,10 @@ watch(() => props.view, revealActiveTab, { flush: 'post' })
           <button v-for="item in childrenOf(section)" :key="item.id" type="button" :aria-current="item.id === view ? 'page' : undefined" @click="emit('navigate', item.id)">{{ item.label }}</button>
         </nav>
         <div v-if="$slots.actions || (demo && signedIn)" class="workspace-context"><slot name="actions" /><UiButton v-if="demo && signedIn" @click="emit('account')">切换演示身份</UiButton></div>
-        <nav v-if="view === 'overview'" class="dealer-quick" aria-label="业务快捷入口">
-          <button v-for="id in ['visits','opportunities','orders','finance','tickets']" :key="id" @click="emit('navigate', id)">
-            <UiIcon :name="nav.find(item => item.id === id).icon" :size="20" />
-            {{ nav.find(item => item.id === id).label }}
+        <nav v-if="view === 'overview' && shortcuts.length" class="dealer-quick" aria-label="业务快捷入口">
+          <button v-for="item in shortcuts" :key="item.id" @click="emit('navigate', item.id)">
+            <UiIcon :name="item.icon" :size="20" />
+            {{ item.label }}
           </button>
         </nav>
       </template>
