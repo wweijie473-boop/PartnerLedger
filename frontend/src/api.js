@@ -10,6 +10,7 @@ const apiMessages = {
   invalid_product_knowledge: '请检查模块、授权范围和资料来源。',
   invalid_requirement: '请检查需求文字或已确认的需求字段。',
   invalid_request: '请检查输入后再试。',
+  retail_conflict: '订单状态、价格或凭证已变化。请刷新核对后再办理。',
   revision_conflict: '项目已被协作方更新，请重新核对后办理。',
   idempotency_conflict: '此请求的内容已变更，请重新核对后提交。',
   invalid_transition: '项目状态已变化，当前操作暂不可办理。',

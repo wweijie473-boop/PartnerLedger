@@ -177,6 +177,7 @@ func TestOrganizationIsolation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	testRetailWorkflow(t, db, request, product, dealer, customer, first, otherDealer, second, dealerID, customerID)
 	const base = "/api/channel/v1/projects"
 	var links struct{ Items []data.Organization }
 	request(http.MethodGet, "/api/channel/v1/organization-links", customer, "", 200, &links)

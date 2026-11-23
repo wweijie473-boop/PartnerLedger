@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
 import { requestApi } from './api.js'
 import { currentSession, saveSession, sessionFromCredentials } from './auth-session.js'
 import WorkspaceShell from './WorkspaceShell.vue'
@@ -46,6 +46,20 @@ const navigationRevision = ref(0)
 const isManufacturer = computed(() => organization.value?.kind === 'MANUFACTURER')
 const isDealer = computed(() => organization.value?.kind === 'RESELLER')
 const kindLabel = computed(() => portal.value?.label || '')
+const RetailDesk = defineAsyncComponent(() => import('./live/RetailDesk.vue'))
+const retailNavigation = computed(() => isDealer.value ? [
+  { id: 'promotion', label: '推广获客二维码', icon: 'workflow' },
+  { id: 'assisted', label: '帮客户下单', icon: 'order' },
+  { id: 'retail-orders', label: '厂商直收订单', icon: 'order' },
+  { id: 'commission', label: '佣金结算', icon: 'quote' },
+] : isManufacturer.value ? [
+  { id: 'pricing', label: '订购价格与佣金', icon: 'catalog' },
+  { id: 'manufacturer-receipts', label: '直收订单与收款', icon: 'order' },
+  { id: 'manufacturer-settlements', label: '代理商分佣', icon: 'quote' },
+] : entry.value === 'customer' ? [
+  { id: 'retail-orders', label: '厂商订购订单', icon: 'order' },
+  ...(entryParams.get('view') === 'checkout' ? [{ id: 'checkout', label: '确认厂商订单', icon: 'order' }] : []),
+] : [])
 const navigation = computed(() => [
   ...(isDealer.value ? dealerPages.filter(item => item.id !== 'staff') : []),
   { id: 'overview', label: '工作总览', icon: 'overview' },
@@ -54,6 +68,7 @@ const navigation = computed(() => [
   ...(isDealer.value ? [{ id: 'requirement', label: 'AI 需求解析', icon: 'request' }] : []),
   ...(isDealer.value ? [{ id: 'visits', label: '记拜访', icon: 'request' }] : []),
   ...(isDealer.value ? [{ id: 'opportunities', label: '商机拾遗', icon: 'workflow' }] : []),
+  ...retailNavigation.value,
   { id: 'account', label: '账号与组织', icon: portal.value?.icon || 'customer' },
 ])
 const shortcuts = computed(() => [
@@ -71,6 +86,11 @@ const shortcuts = computed(() => [
 
 function accessPath(nextMode, role = entry.value) {
   return '/' + nextMode + (role ? '/' + role : '')
+}
+
+function identityLink(nextMode) {
+  const path = accessPath(nextMode)
+  return entry.value === 'customer' && entryParams.get('view') === 'checkout' ? path + location.search : path
 }
 
 function selectRole(role) {
@@ -223,7 +243,7 @@ async function signUp() {
     password.value = ''
     confirmPassword.value = ''
     mode.value = 'login'
-    history.replaceState(null, '', accessPath('login'))
+    history.replaceState(null, '', identityLink('login'))
     document.title = accessTitle.value + ' · 渠智链'
     accessNotice.value = '注册成功，请用刚创建的账号登录。'
   } catch (error) {
@@ -261,7 +281,10 @@ function navigate(target, params = {}) {
   view.value = target
   captureProject.value = ''
   const url = new URL(location.href)
-  url.search = new URLSearchParams({ view: target, ...params })
+  const checkout = target === 'checkout'
+    ? { code: entryParams.get('code') ?? '', product: entryParams.get('product') ?? '' }
+    : {}
+  url.search = new URLSearchParams({ view: target, ...checkout, ...params })
   history.replaceState(null, '', url)
   window.scrollTo(0, 0)
 }
@@ -318,7 +341,7 @@ function openOpportunity(id = '', projectId = '') {
         </form>
       </UiCard>
       <div v-enter="2" class="access-links">
-        <a :href="accessPath(isRegister ? 'login' : 'register')">{{ isRegister ? '已有账号？登录' : '没有账号？注册' }}</a>
+        <a :href="identityLink(isRegister ? 'login' : 'register')">{{ isRegister ? '已有账号？登录' : '没有账号？注册' }}</a>
         <a :href="'/experience/' + (entry || 'dealer')">体验演示</a>
       </div>
     </section>
@@ -337,7 +360,8 @@ function openOpportunity(id = '', projectId = '') {
 
   <WorkspaceShell v-else :dealer="isDealer" :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
-    <DealerPage v-if="isDealer && dealerPages.some(p => p.id === view)" :key="view" :view="view" :request="authenticated" @navigate="navigate" @project="openProject" />
+    <RetailDesk v-if="retailNavigation.some(item => item.id === view)" :key="view" :mode="view" :role="entry" :request="authenticated" :identity="user.id" @navigate="navigate" />
+    <DealerPage v-else-if="isDealer && dealerPages.some(p => p.id === view)" :key="view" :view="view" :request="authenticated" @navigate="navigate" @project="openProject" />
     <template v-else-if="view === 'overview'">
       <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" :user-id="user.id"
         @open-project="openProject" @open-list="scope => navigate('projects', { scope })">
@@ -352,10 +376,10 @@ function openOpportunity(id = '', projectId = '') {
       <section v-enter="3" class="workspace-section" aria-labelledby="workspace-shortcuts">
         <header class="workspace-section-heading"><h2 id="workspace-shortcuts">常用工作</h2></header>
         <ul class="live-shortcuts">
-          <li v-for="shortcut in shortcuts" :key="shortcut.id">
+          <li v-for="shortcut in [...shortcuts, ...retailNavigation.filter(item => item.id !== 'checkout')]" :key="shortcut.id">
             <button type="button" @click="navigate(shortcut.id)">
               <UiIcon :name="shortcut.icon" :size="17" />
-              <span><strong>{{ shortcut.label }}</strong><small>{{ shortcut.description }}</small></span>
+              <span><strong>{{ shortcut.label }}</strong><small v-if="shortcut.description">{{ shortcut.description }}</small></span>
               <UiIcon name="chevron-right" :size="14" />
             </button>
           </li>
