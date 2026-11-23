@@ -1,6 +1,7 @@
 <script setup>
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { UiButton, UiCard } from '../ui/index.js'
+import { demoCompanies } from '../demoCompanies.js'
 import RetailDesk from './RetailDesk.vue'
 import { requestRetailDemo, retailDemoCounterpart } from './retailDemo.js'
 import { retailApi } from './retailRequest.js'
@@ -58,7 +59,7 @@ async function request(path, options) {
 
 <template>
   <div class="retail-demo-context">
-    <span>{{ operations ? '运营演示' : '直购演示' }} · {{ role === 'dealer' ? '天津主飞（代理商）' : '畅捷通（厂商）' }}</span>
+    <span>{{ operations ? '运营演示' : '直购演示' }} · {{ demoCompanies[role] }}</span>
     <a :href="retailDemoCounterpart(role, view)">{{ role === 'dealer' ? '切换到厂商后台' : '返回代理商中台' }}</a>
   </div>
   <DealerOperations v-if="session && operations" :key="view" :view="view" :role="role" :request="request"

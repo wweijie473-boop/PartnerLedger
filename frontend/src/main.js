@@ -5,6 +5,7 @@ import 'element-plus/theme-chalk/el-overlay.css'
 import './ui/theme.css'
 import './style.css'
 import { entrances } from './entrances.js'
+import { demoCompanies } from './demoCompanies.js'
 import { reloadOnSessionChange } from './auth-session.js'
 import { demoWorkspace, retailDemoEnabled, retailDemoLocation } from './live/retailDemo.js'
 import { entrance } from './ui/entrance.js'
@@ -28,7 +29,7 @@ const pages = {
   '/register': ['注册', () => import('./LiveApp.vue'), { mode: 'register' }],
 }
 if (retailDemoEnabled) {
-  pages['/experience/retail-store'] = ['畅捷通演示订购', () => import('./live/RetailStore.vue'), { demo: true }]
+  pages['/experience/retail-store'] = [demoCompanies.vendor + '演示订购', () => import('./live/RetailStore.vue'), { demo: true }]
 }
 for (const { role, label } of entrances) {
   pages['/login/' + role] = [label + '登录', () => import('./LiveApp.vue'), { role }]
