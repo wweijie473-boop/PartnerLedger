@@ -13,7 +13,7 @@ const props = defineProps({ mode: String, title: String, role: String, request: 
 const emit = defineEmits(['navigate'])
 const params = new URLSearchParams(location.search)
 const code = params.get('code') ?? ''
-const orderID = !props.demo && props.mode === 'retail-orders' ? params.get('order_id') : null
+const orderID = !props.demo && ['retail-orders', 'manufacturer-receipts'].includes(props.mode) ? params.get('order_id') : null
 const promotion = props.mode === 'promotion'
 const assisted = props.mode === 'assisted'
 const checkout = props.mode === 'checkout'
@@ -291,7 +291,7 @@ function advance(row, action, refValue) {
     <header class="page-heading"><h1>{{ title }}</h1><UiButton compact variant="text" :disabled="loading || busy" @click="load">刷新</UiButton></header>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
-    <UiButton v-if="orderID !== null" compact @click="emit('navigate', 'retail-orders')">查看全部订单</UiButton>
+    <UiButton v-if="orderID !== null" compact @click="emit('navigate', mode)">查看全部订单</UiButton>
     <p v-if="checkout && capable"><a :href="storefront">返回厂商商城</a></p>
     <UiCard v-if="pendingCheckout" title="待核对订单提交">
       <p class="muted">

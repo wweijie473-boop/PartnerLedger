@@ -58,6 +58,10 @@ func testRetailWorkflow(t *testing.T, db *gorm.DB, request func(string, string, 
 	if self.ID == "" || replay.ID != self.ID {
 		t.Fatal("duplicate customer submission created another order")
 	}
+	assertSiteSearch(t, request, customer, "#"+self.ID, "retail-orders", "order_id", self.ID, true)
+	assertSiteSearch(t, request, vendor, "订单 "+self.ID, "manufacturer-receipts", "order_id", self.ID, true)
+	assertSiteSearch(t, request, otherDealer, self.ID, "retail-orders", "order_id", self.ID, false)
+	assertSiteSearch(t, request, otherVendor, self.ID, "manufacturer-receipts", "order_id", self.ID, false)
 	request("POST", base+"/orders", otherDealer, assisted, 404, nil)
 	request("POST", base+"/orders", dealer, assisted, 200, &proxy)
 	byRequest := base + "/orders/requests/"

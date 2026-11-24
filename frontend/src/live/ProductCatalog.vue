@@ -85,7 +85,11 @@ function closePanel() {
   panel.value = ''
 }
 
-onMounted(() => loadProducts())
+onMounted(() => {
+  loadProducts()
+  const id = new URLSearchParams(location.search).get('product')
+  if (id) openDetail(id)
+})
 onUnmounted(() => {
   pageController.abort()
   detailController?.abort()

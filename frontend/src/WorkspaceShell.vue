@@ -75,7 +75,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
 <template>
   <div class="workspace-shell">
     <a href="#workspace-content" class="skip-link">跳转到主要内容</a>
-    <PortalHeader :account="account" :signed-in="signedIn">
+    <PortalHeader :account="account" :signed-in="signedIn" :workspace-role="demo ? '' : role">
       <template v-if="!demo || !signedIn" #account>
         <WorkspaceAccount :label="accountLabel" :organization="organization" :logo="dealerLogo" @click="emit('account')" />
       </template>

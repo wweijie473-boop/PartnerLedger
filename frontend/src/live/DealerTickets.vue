@@ -5,13 +5,15 @@ import { pendingRetailRequest } from './retailRequest.js'
 
 const props = defineProps({ state: Object, role: String, identity: String, busy: Boolean, submit: Function, demo: Boolean })
 const vendor = props.role === 'vendor'
+const linkedTicket = ref(props.demo ? '' : new URLSearchParams(location.search).get('ticket'))
 const newTicket = ref(null)
 const response = ref(null)
 const status = ref('')
 const labels = { open: '待厂商处理', resolved: '待代理商确认', closed: '已关闭' }
 const tones = { open: 'warning', resolved: 'info', closed: 'success' }
 const labelsByRole = { dealer: '代理商', vendor: '厂商' }
-const rows = computed(() => props.state.tickets.filter(row => !status.value || row.status === status.value))
+const rows = computed(() => props.state.tickets.filter(row =>
+  (!linkedTicket.value || row.id === linkedTicket.value) && (!status.value || row.status === status.value)))
 const time = value => new Date(value).toLocaleString('zh-CN')
 
 function create() {
@@ -44,6 +46,13 @@ async function sendReply() {
 function closeTicket(row) {
   return props.submit('tickets/' + row.id + '/close', props.demo ? {} : { revision: row.revision }, '工单已关闭。')
 }
+
+function showAllTickets() {
+  linkedTicket.value = ''
+  const url = new URL(location.href)
+  url.searchParams.delete('ticket')
+  history.replaceState(history.state, '', url)
+}
 </script>
 
 <template>
@@ -67,11 +76,12 @@ function closeTicket(row) {
     <header class="workspace-section-heading">
       <h2 id="ticket-records">工单列表</h2>
       <div class="workspace-record-controls">
+        <UiButton v-if="linkedTicket" @click="showAllTickets">查看全部工单</UiButton>
         <label class="ticket-filter">工单状态 <select v-model="status"><option value="">全部</option><option v-for="(label, key) in labels" :key="key" :value="key">{{ label }}</option></select></label>
         <UiButton v-if="!vendor && !newTicket" variant="primary" :disabled="busy || (!demo && !state.partners.length)" @click="create">新建工单</UiButton>
       </div>
     </header>
-    <details v-for="row in rows" :key="row.id" class="ticket-record">
+    <details v-for="row in rows" :key="row.id" class="ticket-record" :open="row.id === linkedTicket || undefined">
       <summary>
         <span><strong>{{ row.subject }}</strong><small>{{ row.category }}<template v-if="row.partner"> · {{ row.partner }}</template><template v-if="row.order_id"> · 订单 {{ row.order_id }}</template></small></span>
         <UiBadge :tone="tones[row.status]" dot>{{ labels[row.status] }}</UiBadge>

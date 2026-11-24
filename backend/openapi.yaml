@@ -131,6 +131,42 @@ paths:
                       data: { $ref: '#/components/schemas/Organization' }
         default:
           $ref: '#/components/responses/Error'
+  /api/search/v1/records:
+    get:
+      summary: Search for business records visible to the signed-in organization
+      description: Returns up to three results per kind. Name terms are matched literally, and a standalone numeric query also matches exact record IDs.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Up to eight whitespace-separated terms.
+          schema: { type: string, minLength: 1, maxLength: 120 }
+      responses:
+        '200':
+          description: Matching record names and links to their workspaces
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            maxItems: 12
+                            items:
+                              type: object
+                              required: [kind, label, description, href]
+                              properties:
+                                kind: { type: string, enum: [project, order, product, ticket] }
+                                label: { type: string }
+                                description: { type: string }
+                                href: { type: string, description: Same-origin workspace route. }
+        default:
+          $ref: '#/components/responses/Error'
   /api/products:
     get:
       summary: List products visible to the current organization

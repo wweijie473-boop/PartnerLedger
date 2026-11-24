@@ -172,12 +172,12 @@ func projectTodoPredicate(role, today string) clause.Expr {
 }
 
 func searchWorkspaceProjects(query *gorm.DB, role, keyword string) *gorm.DB {
-	pattern := "%" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(strings.ToLower(keyword)) + "%"
+	terms := []string{keyword}
 	if role == data.Manufacturer {
-		return query.Where("LOWER(CONCAT_WS(' ', pl_channel_projects.id, CONCAT(pl_channel_projects.product_name, ' · 渠道采购项目'))) LIKE ? ESCAPE '!'", pattern)
+		return data.MatchSearchTerms(query, "CONCAT_WS(' ', pl_channel_projects.id, CONCAT(pl_channel_projects.product_name, ' · 渠道采购项目'))", terms)
 	}
-	return query.Joins("JOIN pl_organizations customer ON customer.id = pl_channel_projects.customer_id").
-		Where("LOWER(CONCAT_WS(' ', pl_channel_projects.id, pl_channel_projects.title, customer.name)) LIKE ? ESCAPE '!'", pattern)
+	query = query.Joins("JOIN pl_organizations customer ON customer.id = pl_channel_projects.customer_id")
+	return data.MatchSearchTerms(query, "CONCAT_WS(' ', pl_channel_projects.id, pl_channel_projects.title, customer.name)", terms)
 }
 
 func (page *ProjectWorkspacePage) summarize(query *gorm.DB, todo clause.Expr, role string) error {

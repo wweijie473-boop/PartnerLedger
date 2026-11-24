@@ -67,6 +67,7 @@ func TestOrganizationIsolation(t *testing.T) {
 	}
 	request(http.MethodGet, "/readyz", "", "", 200, nil)
 	request(http.MethodGet, "/api/products", "", "", 401, nil)
+	request(http.MethodGet, "/api/search/v1/records?q=123", "", "", 401, nil)
 	testPublicRegistration(t, db, cache, router)
 
 	ctx := context.Background()
@@ -121,10 +122,17 @@ func TestOrganizationIsolation(t *testing.T) {
 	productPath := "/api/products/" + strconv.FormatUint(product.ID, 10)
 	request(http.MethodGet, productPath, reseller, "", 404, nil)
 	request(http.MethodGet, productPath, second, "", 404, nil)
+	productID := strconv.FormatUint(product.ID, 10)
+	assertSiteSearch(t, request, first, productID, "catalog", "product", productID, true)
+	assertSiteSearch(t, request, second, productID, "catalog", "product", productID, false)
+	assertSiteSearch(t, request, reseller, productID, "catalog", "product", productID, false)
 	request(http.MethodPut, productPath, second, published, 404, nil)
 	request(http.MethodPut, productPath, first, published, 200, nil)
 	request(http.MethodPut, productPath, first, published, 200, nil)
 	request(http.MethodGet, productPath, reseller, "", 200, nil)
+	assertSiteSearch(t, request, reseller, "ERP integration", "catalog", "product", productID, true)
+	assertSiteSearch(t, request, reseller, "ERP%integration", "catalog", "product", productID, false)
+	request(http.MethodGet, "/api/search/v1/records", reseller, "", 400, nil)
 	request(http.MethodPut, productPath, reseller, draft, 403, nil)
 	request(http.MethodPost, "/api/ai/parse-requirement", reseller, `{"text":"我们需要ERP"}`, 503, nil)
 	if os.Getenv("PARTNERLEDGER_LIVE_MODEL_TEST") == "1" {
@@ -206,6 +214,9 @@ func TestOrganizationIsolation(t *testing.T) {
 	}
 	request(http.MethodPost, base, customer, strings.ReplaceAll(create, "Private project", "Changed"), 409, nil)
 	path := base + "/" + project.ID
+	assertSiteSearch(t, request, dealer, "Private project", "projects", "project", project.ID, true)
+	assertSiteSearch(t, request, otherDealer, "Private project", "projects", "project", project.ID, false)
+	assertSiteSearch(t, request, first, project.ID, "projects", "project", project.ID, false)
 	testProductKnowledge(t, request, path, product.ID, first, second, dealer, otherDealer, customer)
 	for _, token := range []string{first, second, otherCustomer, otherDealer} {
 		request(http.MethodGet, path, token, "", 404, nil)
@@ -224,6 +235,8 @@ func TestOrganizationIsolation(t *testing.T) {
 	request(http.MethodGet, path, second, "", 404, nil)
 	var view map[string]any
 	request(http.MethodGet, path, first, "", 200, &view)
+	assertSiteSearch(t, request, first, "ERP integration", "projects", "project", project.ID, true)
+	assertSiteSearch(t, request, first, "Private project", "projects", "project", project.ID, false)
 	for _, forbidden := range []string{"customerName", "requirement", "dueDate", "salesQuotes"} {
 		if _, ok := view[forbidden]; ok {
 			t.Fatalf("manufacturer was sent %s", forbidden)

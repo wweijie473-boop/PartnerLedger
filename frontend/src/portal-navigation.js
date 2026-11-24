@@ -1,4 +1,5 @@
 import { entrances } from './entrances.js'
+import { workspacePages } from './workspaceNavigation.js'
 
 export const portalMenus = [
   {
@@ -27,10 +28,19 @@ export const portalResources = [
 const entries = [...portalMenus.flatMap(menu => menu.links), ...portalResources]
 const normalize = value => value.normalize('NFKC').trim().toLocaleLowerCase('zh-CN')
 
-export function searchPortal(query) {
+export function searchPortal(query, role) {
   const terms = normalize(query).split(/\s+/).filter(Boolean)
   if (!terms.length) return entries.slice(0, 4)
-  return entries.map(entry => {
+  const workspaces = entrances.filter(item => !role || role === item.role)
+    .flatMap(item => workspacePages(item.role).filter(page => !page.direct).map(page => ({
+      label: page.label,
+      href: '/login/' + item.role + '?' + new URLSearchParams({ view: page.id }),
+      icon: page.icon,
+      description: item.label + '工作台',
+      keywords: '',
+    })))
+  const searchable = role ? [...workspaces, ...entries] : [...entries, ...workspaces]
+  return searchable.map(entry => {
     const title = normalize(entry.label)
     const content = normalize([entry.label, entry.description, entry.keywords].join(' '))
     const score = terms.every(term => content.includes(term))

@@ -83,7 +83,7 @@ body:has(.pl-header) { min-width: 0; }
 .pl-search-field button:hover { background: var(--ui-accent-bg); }
 .pl-search-field input { flex: 1; min-width: 0; padding: 5px 4px 5px 9px; color: var(--ui-ink); border: 0; outline: 0; background: transparent; font-size: 12px; }
 .pl-search-field input::placeholder { color: var(--ui-ink-muted); }
-.pl-search-panel { left: auto; right: 0; width: min(354px, calc(100vw - 32px)); }
+.pl-search-panel { left: auto; right: 0; width: min(354px, calc(100vw - 32px)); max-height: min(420px, 60vh); overflow-y: auto; }
 .pl-search-panel ul { list-style: none; padding: 0; margin: 0; }
 .pl-search-caption { padding: 7px 10px 3px; font-size: 12px; font-weight: 400; color: var(--ui-ink-muted); }
 .pl-search-empty { padding: 6px 10px 12px; color: var(--ui-ink-muted); font-size: 14px; }

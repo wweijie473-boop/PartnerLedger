@@ -80,6 +80,10 @@ func testChannelFinanceAndSupport(t *testing.T, db *gorm.DB, request func(string
 	if ticket.ID == "" || ticket != replay {
 		t.Fatal("ticket retry should reuse the previous record")
 	}
+	assertSiteSearch(t, request, dealer, "License delivery", "service-tickets", "ticket", ticket.ID, true)
+	assertSiteSearch(t, request, vendor, ticket.ID, "vendor-tickets", "ticket", ticket.ID, true)
+	assertSiteSearch(t, request, otherVendor, ticket.ID, "vendor-tickets", "ticket", ticket.ID, false)
+	assertSiteSearch(t, request, customer, ticket.ID, "service-tickets", "ticket", ticket.ID, false)
 	ticketURL := tickets + "/" + ticket.ID
 	request("POST", ticketURL+"/resolve", otherVendor, `{"revision":1,"reply":"Not our customer"}`, 404, nil)
 	request("POST", ticketURL+"/close", dealer, `{"revision":1}`, 409, nil)

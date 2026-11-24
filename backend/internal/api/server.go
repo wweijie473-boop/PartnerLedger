@@ -52,6 +52,7 @@ func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementPars
 	secured.POST("/auth/logout", s.logout)
 	secured.GET("/user/profile", func(c *gin.Context) { respond(c, http.StatusOK, "success", principal(c)) })
 	secured.GET("/org/current", func(c *gin.Context) { respond(c, http.StatusOK, "success", principal(c).Organization) })
+	secured.GET("/search/v1/records", s.searchSiteRecords)
 	secured.GET("/products", s.listProducts)
 	secured.GET("/products/:id", s.getProduct)
 	secured.POST("/products", s.requireManufacturer, s.createProduct)
