@@ -44,10 +44,10 @@ function submit(){
   <form class="op-form" @submit.prevent="submit">
     <template v-if="isCapture">
       <label>关联项目<select v-model="form.projectId" required><option disabled value="">请选择一笔项目</option><option v-for="record in projects" :key="record.id" :value="record.id">{{ record.title }} · {{ record.id }}</option></select></label>
-      <label>走访记录<textarea v-model="rawNote" required rows="3" maxlength="1000" placeholder="例：ERP 已定，客户还需要 IDE 接口，原厂暂不支持。" @input="extracted = false; confirmed = false"></textarea></label>
+      <label>走访记录<textarea v-autogrow v-model="rawNote" required rows="3" maxlength="1000" placeholder="例：ERP 已定，客户还需要 IDE 接口，原厂暂不支持。" @input="extracted = false; confirmed = false"></textarea></label>
       <UiButton v-if="!extracted" :disabled="!rawNote.trim() || !form.projectId" @click="review">整理成商机草稿</UiButton>
       <template v-else>
-        <label>保留为商机的需求<textarea v-model="form.note" required maxlength="1000" rows="2"></textarea></label>
+        <label>保留为商机的需求<textarea v-autogrow v-model="form.note" required maxlength="1000" rows="2"></textarea></label>
         <OpportunityFields :form="form" />
         <div v-if="suggestion.questions?.length" class="op-inset"><strong>下次可向客户确认</strong><ul><li v-for="q in suggestion.questions" :key="q">{{ q }}</li></ul></div>
         <label class="op-check"><input v-model="confirmed" type="checkbox" required>我已核对这是一条需要单独跟进的需求。</label>
@@ -62,7 +62,7 @@ function submit(){
       <div class="op-fields"><label>伙伴名称或代称<input v-model="form.name" required maxlength="60" placeholder="例如：北城实施团队"></label>
         <label>团队内谁能引荐<input v-model="form.owner" required maxlength="60" placeholder="例如：王经理"></label></div>
       <OpportunityFields :form="form" require-category />
-      <label>合作依据（选填）<textarea v-model="form.evidence" rows="2" maxlength="500" placeholder="已授权的案例简述；没有合作记录就留空。"></textarea></label>
+      <label>合作依据（选填）<textarea v-autogrow v-model="form.evidence" rows="2" maxlength="500" placeholder="已授权的案例简述；没有合作记录就留空。"></textarea></label>
       <p class="op-muted">只记录已获授权的业务能力和团队引荐人，不录入电话或私人通讯录。</p>
     </template>
     <template v-else-if="mode === 'introduce'">
@@ -78,10 +78,10 @@ function submit(){
     <template v-else-if="mode === 'contactReview'">
       <p>与 {{ partner.owner }} 核对 {{ partner.name }} 的承接条件。</p>
       <label v-for="(label,key) in contactFields" :key="key">{{ label }}<select :value="form.checks[key] || 'unknown'" @change="form.checks[key] = $event.target.value"><option value="unknown">待确认</option><option value="confirmed">已确认可行</option><option value="blocked">存在问题</option></select></label>
-      <label>联系备注<textarea v-model="form.contactNote" rows="3" maxlength="500" placeholder="记录具体版本、地区或下次可交付时间。"></textarea></label>
+      <label>联系备注<textarea v-autogrow v-model="form.contactNote" rows="3" maxlength="500" placeholder="记录具体版本、地区或下次可交付时间。"></textarea></label>
     </template>
-    <template v-else-if="mode === 'rejectPartner'"><p>保留与 {{ partner.name }} 未匹配成的原因，此商机仍可继续寻找其他伙伴。</p><label>未匹配原因<textarea v-model="form.reason" rows="3" required maxlength="500" placeholder="例如：只支持旧版接口，无法满足本次版本要求。"></textarea></label></template>
-    <template v-else><label>{{ mode === 'win' ? '合作结果' : '关闭原因' }}<textarea v-model="form.outcome" rows="3" required maxlength="500" :placeholder="mode === 'win' ? '记录实际承接的事项。' : '例如：客户决定暂缓该需求。'"></textarea></label>
+    <template v-else-if="mode === 'rejectPartner'"><p>保留与 {{ partner.name }} 未匹配成的原因，此商机仍可继续寻找其他伙伴。</p><label>未匹配原因<textarea v-autogrow v-model="form.reason" rows="3" required maxlength="500" placeholder="例如：只支持旧版接口，无法满足本次版本要求。"></textarea></label></template>
+    <template v-else><label>{{ mode === 'win' ? '合作结果' : '关闭原因' }}<textarea v-autogrow v-model="form.outcome" rows="3" required maxlength="500" :placeholder="mode === 'win' ? '记录实际承接的事项。' : '例如：客户决定暂缓该需求。'"></textarea></label>
       <label v-if="mode === 'win'" class="op-check"><input type="checkbox" v-model="remember">已获授权，将此次成交作为团队案例。仅保存商机编号及能力类型。</label>
     </template>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>

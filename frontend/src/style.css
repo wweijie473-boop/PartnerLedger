@@ -1,7 +1,12 @@
-:root { font-family: var(--ui-font); color: var(--ui-ink); background: var(--ui-canvas); font-synthesis: none; }
+:root { font-family: var(--ui-font); color: var(--ui-ink); background: var(--ui-canvas); font-synthesis: none; scrollbar-gutter: stable; }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; font-size: 14px; line-height: 1.6; }
+body { margin: 0; min-width: min(320px, 100%); font-size: 14px; line-height: 1.6; }
 button, input, textarea, select { font: inherit; }
+textarea { resize: none; }
+@supports (scrollbar-gutter: stable) {
+  /* The viewport already reserves the scrollbar space when Element Plus locks the body. */
+  body.el-popup-parent--hidden { width: auto !important; }
+}
 button { cursor: pointer; }
 button:disabled { cursor: default; }
 h1, h2, h3, p, dl { margin: 0; }

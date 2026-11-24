@@ -80,13 +80,13 @@ onMounted(async () => {
     <p class="visit-hint">草稿保存在此设备。<template v-if="!capture">附加商机同步接口待开放，核对结果可继续留在草稿中。</template></p>
     <div class="visit-layout"><UiCard title="这次客户提了什么">
       <form class="form-grid" @submit.prevent="finish">
-        <UiField label="拜访记录" required v-slot="{control}"><textarea v-bind="control" v-model="form.text" rows="4" maxlength="2000" placeholder="例如：ERP 已定，客户还想把 ERP 工单同步到 MES。" :readonly="saving || !!form.opportunityId" @input="review=false; confirmed=false"></textarea></UiField>
+        <UiField label="拜访记录" required v-slot="{control}"><textarea v-autogrow v-bind="control" v-model="form.text" rows="4" maxlength="2000" placeholder="例如：ERP 已定，客户还想把 ERP 工单同步到 MES。" :readonly="saving || !!form.opportunityId" @input="review=false; confirmed=false"></textarea></UiField>
         <VisitPartnerFinder v-if="loadDesk && (partnerNote || form.opportunityId)" :key="form.id" :note="partnerNote" :opportunity-id="form.opportunityId" :load-desk="loadDesk" @criteria="criteria = $event" />
         <UiField label="关联客户 / 项目" v-slot="{control}"><select v-bind="control" v-model="form.projectId" :disabled="loading || saving || !!form.opportunityId" @change="confirmed=false"><option value="">稍后选择客户项目</option><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.customerName }} · {{ project.title }}</option></select></UiField>
         <div class="visit-actions"><UiButton :disabled="saving" @click="saveDraft">保存草稿</UiButton><UiButton v-if="!form.opportunityId" :disabled="saving || !form.text.trim()" @click="organize">核对两类需求</UiButton></div>
         <template v-if="review">
-          <UiField label="主采购事项" hint="仅整理记录，项目需求可回到原项目继续核对。" v-slot="{control}"><textarea v-bind="control" v-model="form.main" rows="2" :readonly="saving || !!form.opportunityId" @input="confirmed=false"></textarea></UiField>
-          <UiField label="附加需求" hint="类型不清楚时保留原说法，后续向客户澄清。" v-slot="{control}"><textarea v-bind="control" v-model="form.additional" rows="2" :readonly="saving || !!form.opportunityId" @input="confirmed=false"></textarea></UiField>
+          <UiField label="主采购事项" hint="仅整理记录，项目需求可回到原项目继续核对。" v-slot="{control}"><textarea v-autogrow v-bind="control" v-model="form.main" rows="2" :readonly="saving || !!form.opportunityId" @input="confirmed=false"></textarea></UiField>
+          <UiField label="附加需求" hint="类型不清楚时保留原说法，后续向客户澄清。" v-slot="{control}"><textarea v-autogrow v-bind="control" v-model="form.additional" rows="2" :readonly="saving || !!form.opportunityId" @input="confirmed=false"></textarea></UiField>
           <label v-if="!form.opportunityId" class="visit-check"><input v-model="confirmed" type="checkbox" required>已核对分类和关联项目</label>
           <UiButton v-if="!form.opportunityId" type="submit" variant="primary" :disabled="!confirmed || saving" :loading="saving">{{ capture && form.additional.trim() ? '保存并记录附加商机' : '保存核对结果' }}</UiButton>
           <UiButton v-else compact variant="text" @click="$emit('opportunity',form.opportunityId)">查看关联商机</UiButton>

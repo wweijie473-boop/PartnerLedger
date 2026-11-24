@@ -425,7 +425,7 @@ onBeforeUnmount(() => {
       <div class="grid-formula">
         <input class="grid-address" aria-label="转到单元格" :value="address" @keydown.enter.prevent="jump" />
         <span class="grid-fx" aria-hidden="true">ƒx</span>
-        <textarea v-model="bar" rows="1" aria-label="单元格内容" :readonly="!editable"
+        <textarea v-autogrow v-model="bar" rows="1" aria-label="单元格内容" :readonly="!editable"
           @focus="barFocused = true" @blur="finishBar" @keydown.enter.exact.prevent="finishBar(); focusGrid()" />
       </div>
       <div ref="grid" role="grid" tabindex="0" class="grid-scroll" :aria-label="sheet.name"

@@ -35,7 +35,7 @@ for (const width of [1440, 390]) {
           await expect(group.getByRole('button', { name: target.neighbor })).toBeVisible()
         }
       }
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.body.clientWidth)).toBe(0)
     }
     await page.goto('/experience/retail?role=vendor&view=vendor-tickets')
     await expect(page).toHaveURL(/\/experience\/vendor\?view=vendor-tickets$/)
@@ -93,7 +93,7 @@ test('mobile transactions and tickets show state, preserve fields, and complete 
   await page.getByLabel('处理结果').fill('已核对，按订单交付。')
   await page.getByRole('button', { name: '提交处理结果' }).click()
   await expect(ticket).toContainText('待代理商确认')
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.body.clientWidth)).toBe(0)
   expect(actions).toEqual([
     { endpoint: '/api/retail-demo/orders/41/settle', body: { reference: '示例结算号' } },
     { endpoint: '/api/retail-demo/operations/tickets/61/resolve', body: { reply: '已核对，按订单交付。' } },

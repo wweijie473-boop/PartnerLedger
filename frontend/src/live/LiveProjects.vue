@@ -388,7 +388,7 @@ onUnmounted(() => {
         <form v-else class="form-grid" @submit.prevent="create">
           <UiField :label="role === 'dealer' ? '客户组织' : '经办代理商'" required v-slot="{control}"><select v-bind="control" v-model="form.organization" required><option disabled value="">选择已关联组织</option><option v-for="link in links" :key="link.id" :value="link.id">{{ link.name }}</option></select></UiField>
           <UiField label="项目名称" required v-slot="{control}"><input v-bind="control" v-model="form.title" required maxlength="120"></UiField>
-          <UiField label="采购需求" required v-slot="{control}"><textarea v-bind="control" v-model="form.requirement" required maxlength="3000" rows="4"></textarea></UiField>
+          <UiField label="采购需求" required v-slot="{control}"><textarea v-autogrow v-bind="control" v-model="form.requirement" required maxlength="3000" rows="4"></textarea></UiField>
           <UiField label="目标日期" v-slot="{control}"><input v-bind="control" v-model="form.dueDate" type="date"></UiField>
           <p v-if="formError" role="alert">{{ formError }}</p><div class="modal-actions"><UiButton @click="closeDialog">取消</UiButton><UiButton type="submit" variant="primary">提交需求</UiButton></div>
         </form>

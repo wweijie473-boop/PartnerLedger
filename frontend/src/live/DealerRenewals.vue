@@ -26,7 +26,7 @@ async function save() {
 <template>
   <UiCard v-if="draft" :title="'跟进续费 · ' + draft.customer">
     <form class="operations-form" @submit.prevent="save">
-      <label>沟通结果与下一步<textarea v-model.trim="draft.note" required maxlength="300" /></label>
+      <label>沟通结果与下一步<textarea v-autogrow v-model.trim="draft.note" required maxlength="300" /></label>
       <div class="operations-actions"><UiButton type="submit" variant="primary" :loading="busy">保存跟进</UiButton><UiButton :disabled="busy" @click="draft = null">取消</UiButton></div>
     </form>
   </UiCard>

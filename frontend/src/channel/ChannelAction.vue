@@ -84,7 +84,7 @@ function submit() {
     <template v-if="action === 'create'">
       <UiField label="项目名称" required v-slot="{ control }"><input v-bind="control" v-model="form.title" required maxlength="100" placeholder="例如：生产基地 ERP 升级" /></UiField>
       <UiField v-if="role === 'dealer'" label="已关联客户组织" hint="当前演示代理商已获此客户授权，可代录需求并交由其确认报价。" v-slot="{ control }"><input v-bind="control" :value="form.customerName" readonly /></UiField>
-      <UiField label="业务需求" required v-slot="{ control }"><textarea v-bind="control" v-model="form.requirement" required maxlength="2000" rows="5" placeholder="描述业务场景、所需模块、预计授权数和部署方式。" /></UiField>
+      <UiField label="业务需求" required v-slot="{ control }"><textarea v-autogrow v-bind="control" v-model="form.requirement" required maxlength="2000" rows="5" placeholder="描述业务场景、所需模块、预计授权数和部署方式。" /></UiField>
       <UiField label="目标日期（选填）" v-slot="{ control }"><input v-bind="control" v-model="form.dueDate" type="date" /></UiField>
     </template>
     <template v-else-if="action === 'submitInquiry'">
@@ -99,7 +99,7 @@ function submit() {
           </div><UiButton compact @click="applyFields">用已核对字段填写摘要</UiButton>
         </template>
       </div>
-      <UiField label="对厂商的询价摘要" required v-slot="{ control }"><textarea v-bind="control" v-model="form.summary" required rows="4" maxlength="3000" @input="approved = false" /></UiField>
+      <UiField label="对厂商的询价摘要" required v-slot="{ control }"><textarea v-autogrow v-bind="control" v-model="form.summary" required rows="4" maxlength="3000" @input="approved = false" /></UiField>
       <label class="ch-checkbox"><input v-model="approved" type="checkbox" required /> 已核对产品与摘要，确认发送给厂商。</label>
     </template>
     <template v-else-if="quoteAction">
@@ -117,13 +117,13 @@ function submit() {
         <UiField label="有效至" required v-slot="{ control }"><input v-bind="control" v-model="form.validUntil" type="date" :min="today" required /></UiField>
         <UiField label="交付周期（天）" required v-slot="{ control }"><input v-bind="control" v-model="form.deliveryDays" type="number" min="1" max="3650" required /></UiField>
       </div>
-      <UiField label="方案与服务说明" v-slot="{ control }"><textarea v-bind="control" v-model="form.note" maxlength="2000" rows="3" /></UiField>
+      <UiField label="方案与服务说明" v-slot="{ control }"><textarea v-autogrow v-bind="control" v-model="form.note" maxlength="2000" rows="3" /></UiField>
     </template>
     <template v-else-if="action === 'confirmSales' || action === 'placeOrder'">
       <p class="ch-callout">{{ action === 'confirmSales' ? '确认后由代理商单独下单。' : '将按已确认的对客报价生成唯一订单。' }}</p>
       <dl v-if="lastQuote" class="details"><dt>报价版本</dt><dd>{{ lastQuote.id }} · V{{ lastQuote.version }}</dd><dt>总金额</dt><dd>{{ formatCents(quoteCents(lastQuote.total)) }}</dd><dt>有效至</dt><dd>{{ lastQuote.validUntil }}</dd></dl>
     </template>
-    <UiField v-else-if="noteSpec" :label="noteSpec[0]" :required="action !== 'accept'" v-slot="{ control }"><textarea v-bind="control" v-model="form.note" :required="action !== 'accept'" :placeholder="noteSpec[1]" maxlength="2000" rows="4" /></UiField>
+    <UiField v-else-if="noteSpec" :label="noteSpec[0]" :required="action !== 'accept'" v-slot="{ control }"><textarea v-autogrow v-bind="control" v-model="form.note" :required="action !== 'accept'" :placeholder="noteSpec[1]" maxlength="2000" rows="4" /></UiField>
     <p v-else-if="action === 'withdrawInquiry'" class="ch-callout">撤回后厂商不能继续处理这笔询价。你可以核对内容并重新提交。</p>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <div class="modal-actions"><UiButton :disabled="busy" @click="$emit('cancel')">取消</UiButton><UiButton type="submit" variant="primary" :loading="busy">{{ submitText }}</UiButton></div>

@@ -186,7 +186,7 @@ const checkLabels = { met: '符合', unknown: '待核实', missing: '不符' }
     <UiCard title="原始需求">
       <form class="form-grid" @submit.prevent="parse">
         <UiField label="需求描述" hint="使用脱敏示例，最多 2000 字。" required v-slot="{ control }">
-          <textarea v-bind="control" v-model="text" :disabled="parsing || savingDraft" rows="7" maxlength="2000" required
+          <textarea v-autogrow v-bind="control" v-model="text" :disabled="parsing || savingDraft" rows="7" maxlength="2000" required
             placeholder="例如：一家 120 人的制造企业需要财务和库存模块，希望私有化部署。" />
         </UiField>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>

@@ -22,7 +22,7 @@ async function save() {
     <form class="operations-form" @submit.prevent="save">
       <label>企业名称<input v-model.trim="draft.name" required maxlength="80"></label>
       <label>联系人<input v-model.trim="draft.contact" maxlength="40"></label>
-      <label>服务备注<textarea v-model.trim="draft.note" maxlength="200" /></label>
+      <label>服务备注<textarea v-autogrow v-model.trim="draft.note" maxlength="200" /></label>
       <div class="operations-actions"><UiButton type="submit" variant="primary" :loading="busy">保存客户</UiButton><UiButton :disabled="busy" @click="draft = null">取消</UiButton></div>
     </form>
   </UiCard>

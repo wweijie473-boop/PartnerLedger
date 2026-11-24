@@ -27,7 +27,7 @@ async function copyInquiry() {
     <p v-if="candidate.caveat" class="muted">{{ candidate.caveat }}</p>
     <UiButton compact variant="primary" @click="copyInquiry">复制微信询问</UiButton>
     <p v-if="feedback" role="status">{{ feedback }}</p>
-    <textarea v-if="manualCopy" aria-label="微信询问文案" :value="message" readonly rows="3"></textarea>
+    <textarea v-autogrow v-if="manualCopy" aria-label="微信询问文案" :value="message" readonly rows="3"></textarea>
     <slot />
   </article>
 </template>

@@ -9,7 +9,6 @@
 .op-tools input,.op-tools select,.op-form :is(input:not([type=checkbox]),select,textarea) { border:1px solid var(--ui-border-strong); background:var(--ui-surface); color:var(--ui-ink); border-radius:8px; padding:9px; min-width:0; }
 .op-form { display:grid; gap:16px; }
 .op-form label { display:grid; gap:6px; font-weight:550; }
-.op-form textarea { resize:vertical; }
 .op-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:12px; }
 .op-form .op-check { display:flex; gap:8px; align-items:baseline; font-weight:400; }
 .op-records button { width:100%; justify-content:space-between; text-align:left; padding:8px 4px; color:inherit; background:none; border:0; border-top:1px solid var(--ui-border); }

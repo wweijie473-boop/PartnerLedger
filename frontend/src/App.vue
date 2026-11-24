@@ -313,7 +313,7 @@ function reset() {
         <UiField label="授权用户数" hint="待确认时可以留空。" v-slot="{ control }"><input v-bind="control" v-model="request.seats" type="number" min="1" /></UiField>
       </div>
       <UiField label="需求描述" required v-slot="{ control }">
-        <textarea v-bind="control" v-model="request.description" rows="4" maxlength="800" placeholder="写明所需模块、部署方式和交付要求。"></textarea>
+        <textarea v-autogrow v-bind="control" v-model="request.description" rows="4" maxlength="800" placeholder="写明所需模块、部署方式和交付要求。"></textarea>
       </UiField>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <div class="modal-actions"><UiButton @click="saveRequest(false)">保存草稿</UiButton><UiButton type="submit" variant="primary">提交询价</UiButton></div>
@@ -326,7 +326,7 @@ function reset() {
         <UiField label="报价有效期" required v-slot="{ control }"><input v-bind="control" v-model="input.expiry" type="date" /></UiField>
       </div>
       <UiField label="报价明细" required v-slot="{ control }">
-        <textarea v-bind="control" v-model="input.notes" rows="4" maxlength="600" placeholder="说明授权、实施、培训费用与交付周期。"></textarea>
+        <textarea v-autogrow v-bind="control" v-model="input.notes" rows="4" maxlength="600" placeholder="说明授权、实施、培训费用与交付周期。"></textarea>
       </UiField>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <div class="modal-actions"><UiButton icon="back" @click="showDetail(selected)">返回</UiButton><UiButton type="submit" variant="primary">发送报价</UiButton></div>
@@ -334,7 +334,7 @@ function reset() {
 
     <form v-if="modal === 'reason'" class="form-grid" @submit.prevent="submitReason">
       <UiField :label="{ revision: '报价需要如何修改？', supplement: '需要经销商补充什么？', reply: '补充资料' }[reasonAction]" required v-slot="{ control }">
-        <textarea v-bind="control" v-model="input.reason" rows="4" maxlength="500"></textarea>
+        <textarea v-autogrow v-bind="control" v-model="input.reason" rows="4" maxlength="500"></textarea>
       </UiField>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <div class="modal-actions"><UiButton @click="showDetail(selected)">返回</UiButton><UiButton type="submit" variant="primary">提交说明</UiButton></div>

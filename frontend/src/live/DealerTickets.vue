@@ -46,7 +46,7 @@ async function sendReply() {
       <label>关联订单<select v-model="newTicket.order_id"><option value="">无需关联</option>
         <option v-for="order in state.orders" :key="order.id" :value="order.id">订单 {{ order.id }} · {{ order.product_name }}</option>
       </select></label>
-      <label>问题描述<textarea v-model.trim="newTicket.detail" maxlength="500" required /></label>
+      <label>问题描述<textarea v-autogrow v-model.trim="newTicket.detail" maxlength="500" required /></label>
       <div class="operations-actions"><UiButton type="submit" variant="primary" :loading="busy">提交工单</UiButton><UiButton :disabled="busy" @click="newTicket = null">取消</UiButton></div>
     </form>
   </UiCard>
@@ -71,7 +71,7 @@ async function sendReply() {
         <li v-for="(reply, index) in row.replies" :key="index"><strong>{{ labelsByRole[reply.role] }}</strong> {{ reply.text }}<small class="operations-meta">{{ time(reply.time) }}</small></li>
       </ul>
       <form v-if="response?.id === row.id" class="operations-form" @submit.prevent="sendReply">
-        <label>{{ vendor ? '处理结果' : '补充说明' }}<textarea v-model.trim="response.reply" required maxlength="500" /></label>
+        <label>{{ vendor ? '处理结果' : '补充说明' }}<textarea v-autogrow v-model.trim="response.reply" required maxlength="500" /></label>
         <div class="operations-actions"><UiButton type="submit" variant="primary" :loading="busy">{{ vendor ? '提交处理结果' : '提交补充说明' }}</UiButton><UiButton :disabled="busy" @click="response = null">取消</UiButton></div>
       </form>
       <div v-else-if="vendor ? row.status === 'open' : row.status === 'resolved'" class="operations-actions">

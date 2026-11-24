@@ -169,8 +169,17 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
   color: var(--ui-link);
 }
 .workspace-menu { flex: none; }
-.workspace-menu-trigger[aria-expanded="true"] { color: var(--ui-link); background: var(--ui-accent-bg); }
-.workspace-tabs button:hover, .workspace-menu-trigger:hover, .workspace-subpages button:hover {
+.workspace-menu-trigger {
+  min-height: 32px;
+  margin-block: 3px;
+  border-bottom: 0;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-accent-hover);
+  color: var(--ui-on-accent);
+  font-weight: 600;
+}
+.workspace-menu-trigger:hover, .workspace-menu-trigger[aria-expanded="true"] { background: var(--ui-link); }
+.workspace-tabs button:hover, .workspace-subpages button:hover {
   background: var(--ui-surface-hover); color: var(--ui-link);
 }
 .workspace-directory {

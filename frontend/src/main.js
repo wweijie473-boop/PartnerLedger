@@ -8,6 +8,7 @@ import { entrances } from './entrances.js'
 import { demoCompanies } from './demoCompanies.js'
 import { reloadOnSessionChange } from './auth-session.js'
 import { demoWorkspace, retailDemoEnabled, retailDemoLocation } from './live/retailDemo.js'
+import { autogrow } from './ui/autogrow.js'
 
 window.addEventListener('pageshow', reloadOnSessionChange)
 
@@ -40,7 +41,7 @@ const root = document.getElementById('app')
 root.classList.toggle('inner-page', path !== '/')
 
 function mount(component, props) {
-  createApp(component, props).mount(root)
+  createApp(component, props).directive('autogrow', autogrow).mount(root)
 }
 
 if (route) {

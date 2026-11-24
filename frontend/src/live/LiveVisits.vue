@@ -145,12 +145,12 @@ onMounted(async () => { readLocal(); await refresh() })
       <UiCard title="本次拜访">
         <form class="form-grid" @submit.prevent="save(true)">
           <fieldset class="visit-inputs" :disabled="readonly">
-            <UiField label="拜访记录" required v-slot="{control}"><textarea v-bind="control" v-model="form.text" rows="4" maxlength="2000" placeholder="例如：ERP 已定，客户还想把 ERP 工单同步到 MES。" required @input="reviewed=false; confirmed=false"></textarea></UiField>
+            <UiField label="拜访记录" required v-slot="{control}"><textarea v-autogrow v-bind="control" v-model="form.text" rows="4" maxlength="2000" placeholder="例如：ERP 已定，客户还想把 ERP 工单同步到 MES。" required @input="reviewed=false; confirmed=false"></textarea></UiField>
             <UiField label="关联客户项目" v-slot="{control}"><select v-bind="control" v-model="form.projectId" @change="confirmed=false"><option value="">稍后关联项目</option><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.customerName }} · {{ project.title }}</option></select></UiField>
             <div class="visit-actions"><UiButton @click="save(false)">保存草稿</UiButton><UiButton :disabled="!form.text.trim()" @click="organize">核对两类需求</UiButton></div>
             <template v-if="reviewed">
-              <UiField label="主采购事项" v-slot="{control}"><textarea v-bind="control" v-model="form.main" rows="2" maxlength="2000" @input="confirmed=false"></textarea></UiField>
-              <UiField label="附加需求" v-slot="{control}"><textarea v-bind="control" v-model="form.additional" rows="2" maxlength="2000" @input="confirmed=false"></textarea></UiField>
+              <UiField label="主采购事项" v-slot="{control}"><textarea v-autogrow v-bind="control" v-model="form.main" rows="2" maxlength="2000" @input="confirmed=false"></textarea></UiField>
+              <UiField label="附加需求" v-slot="{control}"><textarea v-autogrow v-bind="control" v-model="form.additional" rows="2" maxlength="2000" @input="confirmed=false"></textarea></UiField>
               <label class="visit-check"><input v-model="confirmed" type="checkbox">已核对记录和关联项目</label>
               <UiButton type="submit" variant="primary" :disabled="!canConfirm">{{ form.additional.trim() ? '保存并确认生成商机' : '保存并确认核对结果' }}</UiButton>
             </template>

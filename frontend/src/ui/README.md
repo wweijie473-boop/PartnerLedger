@@ -22,6 +22,8 @@
 
 使用 `theme.css` 中的 `--ui-*` 变量定义颜色、文字、间距和圆角。蓝色用于主要操作和选中项，白色卡片放在浅蓝灰页面上。成功、警告、失败使用语义颜色，并配合文字及图标。项目状态标签通过 `statusTone.js` 映射，`UiProjectProgress` 根据当前角色可见的状态显示协作阶段。正文采用 14px／22px，关键标签至少 14px，辅助编号为 12px。手机控件触控高度至少 44px。
 
+多行字段使用 `rows` 指定初始行数，并添加 `v-autogrow` 让高度随内容变化。
+
 ```vue
 <script setup>
 import { ref } from 'vue'

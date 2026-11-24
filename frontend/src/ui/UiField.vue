@@ -43,7 +43,6 @@ const control = computed(() => ({
   font: inherit;
   font-size: var(--ui-text-md);
 }
-:slotted(textarea) { resize: vertical; }
 :slotted([aria-invalid='true']) { border-color: var(--ui-danger-ink); }
 :slotted(:disabled) { background: var(--ui-surface-muted); color: var(--ui-ink-muted); }
 </style>

@@ -9,7 +9,7 @@
 .dealer-operations .workspace-record-controls :is(input,select) { width:auto; max-width:100%; min-height:var(--ui-control-height); padding:4px 8px; }
 .operations-check { display:flex; align-items:center; gap:6px; margin-bottom:14px; }
 .dealer-operations .operations-check input { width:auto; }
-.operations-form textarea { min-height:80px; resize:vertical; }
+.operations-form textarea { min-height:80px; }
 .operations-table { overflow:auto; }
 .operations-table table { min-width:560px; width:100%; border-collapse:collapse; text-align:left; }
 .operations-table th,.operations-table td { padding:10px 12px; border-bottom:1px solid var(--ui-border); }

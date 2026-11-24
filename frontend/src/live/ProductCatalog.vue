@@ -197,7 +197,7 @@ async function saveProduct() {
     <form v-else-if="panel === 'editor'" class="form-grid" @submit.prevent="saveProduct">
       <UiField label="产品名称" required v-slot="{ control }"><input v-bind="control" v-model="form.name" maxlength="150" required /></UiField>
       <UiField label="版本" required v-slot="{ control }"><input v-bind="control" v-model="form.version" maxlength="100" required /></UiField>
-      <UiField label="产品说明" v-slot="{ control }"><textarea v-bind="control" v-model="form.description" maxlength="2000" rows="5"></textarea></UiField>
+      <UiField label="产品说明" v-slot="{ control }"><textarea v-autogrow v-bind="control" v-model="form.description" maxlength="2000" rows="5"></textarea></UiField>
       <label class="publish-option"><input v-model="form.published" type="checkbox" /> 发布给代理商</label>
       <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
       <div class="modal-actions">

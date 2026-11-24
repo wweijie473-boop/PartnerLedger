@@ -85,7 +85,7 @@ onUnmounted(() => controller.abort())
     <form v-else-if="editing" class="form-grid" @submit.prevent="save">
       <UiField label="产品分类" v-slot="{ control }"><input v-bind="control" v-model="form.category" maxlength="80" /></UiField>
       <UiField label="支持模块" hint="以顿号、逗号或换行分隔，每项最多 70 字。" v-slot="{ control }">
-        <textarea v-bind="control" v-model="form.modules" rows="2" maxlength="2130"></textarea>
+        <textarea v-autogrow v-bind="control" v-model="form.modules" rows="2" maxlength="2130"></textarea>
       </UiField>
       <fieldset>
         <legend>部署方式</legend>
@@ -97,12 +97,12 @@ onUnmounted(() => controller.abort())
         <UiField label="最低授权席位" v-slot="{ control }"><input v-bind="control" v-model.number="form.minimum" type="number" min="1" max="1000000" placeholder="待补充" /></UiField>
         <UiField label="最高授权席位" v-slot="{ control }"><input v-bind="control" v-model.number="form.maximum" type="number" min="1" max="1000000" placeholder="待补充" /></UiField>
       </div>
-      <UiField label="授权说明" v-slot="{ control }"><textarea v-bind="control" v-model="form.note" maxlength="500" rows="2"></textarea></UiField>
+      <UiField label="授权说明" v-slot="{ control }"><textarea v-autogrow v-bind="control" v-model="form.note" maxlength="500" rows="2"></textarea></UiField>
       <fieldset v-for="(source, index) in form.sources" :key="source.key" class="form-grid">
         <legend>资料来源 {{ index + 1 }}</legend>
         <UiField label="资料名称" required v-slot="{ control }"><input v-bind="control" v-model="source.title" maxlength="120" required /></UiField>
         <UiField label="链接、文件名或页码" required v-slot="{ control }"><input v-bind="control" v-model="source.reference" maxlength="300" required /></UiField>
-        <UiField label="摘录" required v-slot="{ control }"><textarea v-bind="control" v-model="source.excerpt" maxlength="500" rows="2" required></textarea></UiField>
+        <UiField label="摘录" required v-slot="{ control }"><textarea v-autogrow v-bind="control" v-model="source.excerpt" maxlength="500" rows="2" required></textarea></UiField>
         <UiButton compact :disabled="saving" @click="form.sources.splice(index, 1)">移除来源</UiButton>
       </fieldset>
       <div><UiButton compact :disabled="saving || form.sources.length >= 10" @click="addSource">添加资料来源</UiButton></div>
