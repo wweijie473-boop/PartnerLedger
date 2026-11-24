@@ -43,6 +43,29 @@ for (const width of [1440, 390]) {
   })
 }
 
+test('the default dev server opens the complete dealer and vendor demo', async ({ page }) => {
+  await page.goto('/experience/dealer')
+  const trigger = page.getByRole('button', { name: '全部功能' })
+  const directory = page.getByRole('navigation', { name: '全部工作台功能' })
+  await trigger.click()
+  for (const name of ['经营看板', '客户档案', '续费跟进', '推广获客二维码', '厂商直收订单', '代客下单', '资金总览', '服务工单']) {
+    await expect(directory.getByRole('button', { name, exact: true })).toBeVisible()
+  }
+  await directory.getByRole('button', { name: '经营看板', exact: true }).click()
+  await page.getByRole('button', { name: '开启演示' }).click()
+  await expect(page.getByRole('heading', { name: '经营看板' })).toBeVisible()
+  await expect(page.getByText('未关闭工单', { exact: true })).toBeVisible()
+
+  await page.goto('/experience/vendor')
+  await trigger.click()
+  for (const name of ['直收订单与收款', '代理商佣金结算', '财务办理', '渠道工单']) {
+    await expect(directory.getByRole('button', { name, exact: true })).toBeVisible()
+  }
+  await directory.getByRole('button', { name: '渠道工单', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '渠道工单', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '开启演示' })).toHaveCount(0)
+})
+
 test('mobile transactions and tickets show state, preserve fields, and complete vendor actions', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 850 })
   const actions = []

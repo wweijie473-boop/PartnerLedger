@@ -4,7 +4,7 @@ import { isRetailDemoPage, workspacePages } from '../workspaceNavigation.js'
 export const retailDemoApi = '/api/retail-demo'
 export const demoWorkspace = '/experience/retail'
 export const demoStore = '/experience/retail-store'
-export const retailDemoEnabled = import.meta.env.MODE === 'retail-demo'
+export const retailDemoEnabled = import.meta.env.PARTNERLEDGER_RETAIL_DEMO
 
 export function retailDemoLocation(role, view) {
   const views = workspacePages(role, { demo: true, retailDemo: true }).filter(isRetailDemoPage)

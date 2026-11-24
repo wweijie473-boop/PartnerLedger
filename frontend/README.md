@@ -1,6 +1,6 @@
 # PartnerLedger Vue 前端
 
-使用 Vue 3、Vite 和 Element Plus。在 PowerShell 中运行以下命令，然后打开终端显示的 `Local` 地址。
+使用 Vue 3、Vite 和 Element Plus。本地开发需要 Node.js 22.13 或更新版本。在 PowerShell 中运行以下命令，然后打开终端显示的 `Local` 地址。
 
 ```powershell
 Set-Location F:\PartnerLedger\frontend
@@ -29,14 +29,14 @@ npm run dev
 
 ### 厂商直购与佣金演示
 
-运行 `npm run demo:retail` 并打开 `/experience/dealer`，体验推广、代客下单与佣金结算。使用手机扫码时，从终端显示的 `Network` 地址打开工作台。同一场演示共享三端订单。普通 `npm run dev` 启动正式联调和浏览器内的项目演示，直购和运营 SQLite 演示需使用 `retail-demo` 模式。
+运行 `npm run dev` 后打开 `/experience/dealer`，可在「全部功能」中打开推广、代客下单、佣金结算及运营演示。手机扫码时，运行 `npm run demo:retail`，用终端显示的 `Network` 地址打开工作台。同一场演示共享三端订单。
 
 1. 在代理商中台进入「获取商机 → 推广获客二维码」，首次点击「开启演示」，再生成畅捷通演示厂商的二维码。可扫码或打开预览。同组的「商机拾遗」仍可处理原有商机。
 2. 在厂商演示官网选购「云财务」并模拟付款。单份 ¥1,998.00 计入畅捷通的模拟收款，天津助飞企业咨询管理有限公司获得 ¥999.00 的待结佣金。
 3. 在代理商中台进入「资金往来 → 佣金结算」，点击「催结算」。点击「切换到厂商后台」，在「直收订单与收款」核对收入，在「代理商佣金结算」查看催办并登记模拟转账凭证。点击「返回代理商中台」查看结算结果。
 4. 在「下单订购 → 代客下单」选演示客户和产品，在「厂商直收订单」打开客户确认链接。客户确认并模拟付款后，沿用同一条收款、催办与结算流程。
 
-手机和电脑连接同一网络时，从 Vite 输出的 `Network` 地址打开工作台再生成二维码。用 `localhost` 生成的码供电脑本机预览。演示订单、客户、购买链接和续费台账保存在本机 `frontend/var/retail-demo.sqlite`，需要 Node.js 22.13 或更新版本。同一浏览器和站点地址重进时会恢复同一场演示，服务重启后也会恢复。浏览器保存进入当前场次的凭证，项目演示仍保存在浏览器站点数据中。默认前端构建不包含此演示入口。
+手机和电脑连接同一网络时，从 Vite 输出的 `Network` 地址打开工作台再生成二维码。用 `localhost` 生成的码供电脑本机预览。演示订单、客户、购买链接和续费台账保存在本机 `frontend/var/retail-demo.sqlite`。同一浏览器和站点地址重进时会恢复同一场演示，服务重启后也会恢复。浏览器保存进入当前场次的凭证，项目演示仍保存在浏览器站点数据中。默认前端构建不包含此演示入口。
 
 演示按畅捷通服务商专区的三处入口组织。其「获取商机」用云产品二维码和链接获取注册试用客户，「下单订购」区分服务商付款与客户付款，「资金往来」包含资金结算统计、服务费和推广费明细。演示采用客户直接付款、50% 样例佣金、按单催办和厂商登记转账。厂商后台是根据上述协作关系设计的 PartnerLedger 页面。 [获取商机](https://partner.chanjet.com/correct/#/business/index) · [下单订购](https://partner.chanjet.com/correct/#/placeOrder/index) · [资金往来](https://partner.chanjet.com/correct/#/settlement/index)
 
