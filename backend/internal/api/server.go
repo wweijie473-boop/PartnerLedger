@@ -60,6 +60,7 @@ func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementPars
 	secured.GET("/products/:id/knowledge", s.getKnowledge)
 	secured.PUT("/products/:id/knowledge", s.requireManufacturer, s.putKnowledge)
 	secured.POST("/ai/parse-requirement", s.parseRequirement)
+	secured.POST("/ai/workspace/route", s.routeWorkspace)
 	secured.POST("/ai/match-products", s.matchProducts)
 	projects := secured.Group("/channel/v1")
 	projects.GET("/organization-links", s.channelLinks)

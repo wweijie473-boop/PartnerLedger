@@ -7,16 +7,39 @@ export const aiDemoProject = {
 }
 
 export function parseDemoRequirement(text) {
-  if (text !== aiDemoProject.requirement) {
-    throw new Error('本地演示可解析内置样例。其他需求可以手工填写字段后继续匹配。')
+  const count = value => {
+    const number = Number(value)
+    return number >= 1 && number <= 1000000 ? number : null
   }
+  const employeeCount = count(text.match(/(\d+)\s*人(?:的|规模|左右|企业|公司|员工)|(?:员工人数|员工)\s*[:：]?\s*(\d+)\s*人/)?.slice(1).find(Boolean))
+  const licenseCount = count(text.match(/(?:授权|账号|席位)\s*[:：]?\s*(\d+)\s*(?:席|个|位|人)?|(\d+)\s*(?:个|位|名|席)?\s*(?:授权|账号|席位)/)?.slice(1).find(Boolean))
+  const modules = ['财务', '库存', '生产排程', '工序', '质检', '审批', '合同', '文档'].filter(module => text.includes(module))
+  if (/采购(?:管理|模块)|[、和与及]采购|采购[、和与及]/.test(text)) modules.push('采购')
+  const deployment = ['私有化部署', '私有部署', '本地部署', '云部署', 'SaaS'].find(mode => text.includes(mode)) ?? ''
   return {
-    enterprise_type: '制造业',
-    employee_count: 120,
-    required_modules: ['财务', '库存'],
-    deployment_mode: '云部署',
-    license_count: null,
-    follow_up_questions: ['需要为多少位用户开通 ERP？', 'MES 接口是否纳入本次询价？'],
+    enterprise_type: text.includes('制造企业') ? '制造业' : '',
+    employee_count: employeeCount,
+    required_modules: modules,
+    deployment_mode: deployment === '私有化部署' ? '私有部署' : deployment,
+    license_count: licenseCount,
+    follow_up_questions: [
+      ...(!licenseCount ? ['需要为多少位用户开通软件授权？'] : []),
+      ...(text.includes('MES') && text.includes('可能') ? ['MES 接口是否纳入本次询价？'] : []),
+    ],
+  }
+}
+
+export function routeDemoWorkspace(text) {
+  const status = /进展|进度|到哪|状态|待办/.test(text)
+  const sends = /(?:发送|提交|发给).{0,12}询价|询价.{0,12}(?:发给|发送|提交)/.test(text) &&
+    !/(?:不|别|无需|先别|不用|是否|怎么).{0,5}(?:发送|提交|发给)|[？?]$/.test(text)
+  const match = /匹配|推荐|找.{0,4}产品|选型/.test(text)
+  const prepare = /询价|草稿|采购|需求|ERP|MES/i.test(text)
+  const extracted = parseDemoRequirement(text)
+  return {
+    intent: status ? 'project_status' : sends ? 'submit_inquiry' : match && !/草稿|询价/.test(text) ? 'match_products' : prepare ? 'prepare_inquiry' : 'help',
+    use_project_requirement: !(extracted.employee_count || extracted.license_count || extracted.enterprise_type ||
+      extracted.required_modules.length || extracted.deployment_mode),
   }
 }
 

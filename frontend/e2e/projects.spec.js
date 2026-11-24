@@ -28,6 +28,8 @@ async function mockProjectAPI(context, initial = []) {
   const creates = []
   const requests = []
   const drafts = new Map()
+  const draftAttempts = []
+  let dropNextDraft = false
   const expired = new Set()
   let dropNextCreate = false
   await context.route('**/api/**', async route => {
@@ -49,6 +51,9 @@ async function mockProjectAPI(context, initial = []) {
     const product = { id: '51', name: '示例 ERP', version: '1.0', published: true }
     if (pathname === '/api/products') return reply({ items: [product], next_cursor: null })
     if (pathname === '/api/products/51') return reply(product)
+    if (pathname === '/api/ai/workspace/route' && role === 'dealer') {
+      return reply({ intent: 'prepare_inquiry', use_project_requirement: true })
+    }
     if (pathname === '/api/ai/parse-requirement' && role === 'dealer') {
       return reply({ employee_count: 120, required_modules: ['财务'], follow_up_questions: ['需要多少授权用户？'] })
     }
@@ -97,14 +102,18 @@ async function mockProjectAPI(context, initial = []) {
       if (section === 'inquiry-draft') {
         if (role !== 'dealer' || project.stage !== 'requested') return reply(null, 404, 'not_found')
         const key = username + ':' + id
-        if (method === 'GET') return drafts.has(key) ? reply(drafts.get(key)) : reply(null, 404, 'not_found')
+        if (method === 'GET') return drafts.has(key) ? reply(drafts.get(key).draft) : reply(null, 404, 'not_found')
         const input = request.postDataJSON()
+        draftAttempts.push(input)
+        const previous = drafts.get(key)
+        if (previous?.requestId === input.requestId) return reply(previous.draft, 201)
         if (input.revision !== project.revision) return reply(null, 409, 'revision_conflict')
         const draft = {
           projectId: id, projectRevision: input.revision, productId: input.productId, requirement: input.requirement,
           summary: '员工人数：120；所需模块：财务；授权席位：待确认',
         }
-        drafts.set(key, draft)
+        drafts.set(key, { requestId: input.requestId, draft })
+        if (dropNextDraft) { dropNextDraft = false; return route.abort('failed') }
         return reply(draft, 201)
       }
       if (section === 'opportunities') {
@@ -124,7 +133,11 @@ async function mockProjectAPI(context, initial = []) {
     }
     return reply(null, 404, 'not_found')
   })
-  return { projects, creates, requests, expire: username => expired.add(username), restore: username => expired.delete(username), dropCreate: () => { dropNextCreate = true } }
+  return {
+    projects, creates, requests, draftAttempts,
+    expire: username => expired.add(username), restore: username => expired.delete(username),
+    dropCreate: () => { dropNextCreate = true }, dropDraft: () => { dropNextDraft = true },
+  }
 }
 
 async function login(page, username, open = true) {
@@ -142,29 +155,36 @@ async function createProject(page, title) {
   await form.getByRole('button', { name: '提交需求' }).click()
 }
 
-test('the formal AI workspace carries the current project into a draft and reopens it', async ({ page, context }) => {
+test('the formal AI workspace carries the current project into an approved draft and recovers a lost response', async ({ page, context }) => {
   const requirement = '120 人的制造企业需要财务模块'
   const api = await mockProjectAPI(context, [{ id: '1', title: 'ERP 采购试点', requirement, revision: 3, stage: 'requested' }])
   await page.goto('/login/dealer?project=1')
   await login(page, 'dealer_a', false)
   await page.getByRole('button', { name: '用 AI 整理需求' }).click()
-  await expect(page.getByLabel('关联项目')).toHaveValue('1')
-  await expect(page.getByLabel('需求描述')).toHaveValue(requirement)
-  await page.getByRole('button', { name: '用 AI 整理', exact: true }).click()
-  await expect(page.getByLabel('授权用户数')).toHaveValue('')
-  await page.getByRole('button', { name: '确认需求并匹配' }).click()
-  await page.getByRole('button', { name: '用此产品预览草稿' }).click()
+  await expect(page.getByLabel('项目上下文')).toHaveValue('1')
+  await page.getByRole('button', { name: '整理当前项目需求' }).click()
+  const dialog = page.getByRole('dialog', { name: '审批需求字段' })
+  await expect(dialog.getByLabel('授权用户数')).toHaveValue('')
+  await expect(dialog.getByLabel('关联项目')).toHaveValue('1')
+  await dialog.getByText('查看需求原文').click()
+  await expect(dialog.getByText(requirement)).toBeVisible()
+  expect(api.requests.some(item => item.method === 'POST' && item.pathname.includes('/inquiry-draft'))).toBe(false)
+  api.dropDraft()
   const posted = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/1/inquiry-draft'))
-  await page.getByRole('button', { name: '保存询价草稿' }).click()
+  await dialog.getByRole('button', { name: '同意并继续' }).click()
   expect((await posted).postDataJSON()).toMatchObject({
     revision: 3, productId: '51', confirmed: true, requestId: expect.any(String),
     requirement: { employee_count: 120, license_count: null },
   })
-  await expect(page.getByText('已保存 · 未提交')).toBeVisible()
+  await expect(page.getByRole('button', { name: '用原请求确认结果' })).toBeVisible()
   expect(api.requests.some(item => item.method === 'POST' && item.pathname.includes('/actions/'))).toBe(false)
   await page.reload()
-  await expect(page.getByText('已保存 · 未提交')).toBeVisible()
-  await expect(page.getByRole('definition').filter({ hasText: '示例 ERP' })).toBeVisible()
+  await page.getByRole('button', { name: '用原请求确认结果' }).click()
+  await expect(page.getByText('已确认草稿保存成功。')).toBeVisible()
+  expect(api.draftAttempts).toHaveLength(2)
+  expect(api.draftAttempts[1]).toEqual(api.draftAttempts[0])
+  await page.reload()
+  await expect(page.getByText('询价草稿 · 示例 ERP')).toBeVisible()
 })
 
 test('a pending project write survives lost response and expiry for its original account only', async ({ page, context }) => {

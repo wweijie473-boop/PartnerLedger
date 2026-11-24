@@ -56,3 +56,34 @@ func TestParseRequirementHandlesProviderRateLimit(t *testing.T) {
 		t.Fatalf("expected model unavailable, got %v", err)
 	}
 }
+
+func TestWorkspaceRouterAcceptsOnlyRegisteredSkills(t *testing.T) {
+	for _, test := range []struct {
+		intent string
+		valid  bool
+	}{
+		{"prepare_inquiry", true},
+		{"delete_project", false},
+		{"", false},
+	} {
+		t.Run(test.intent, func(t *testing.T) {
+			mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				content, _ := json.Marshal(WorkspaceRoute{Intent: test.intent, UseProjectRequirement: true})
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]string{"content": string(content)}}},
+				})
+			}))
+			defer mock.Close()
+			model := NewDeepSeek("test-key", "test-model")
+			model.endpoint = mock.URL
+			route, err := model.RouteWorkspace(context.Background(), "请整理当前项目的采购需求")
+			if test.valid {
+				if err != nil || route.Intent != test.intent || !route.UseProjectRequirement {
+					t.Fatalf("unexpected route: %+v, %v", route, err)
+				}
+			} else if !errors.Is(err, ErrResponse) {
+				t.Fatalf("unexpected error for unknown intent %q: %v", test.intent, err)
+			}
+		})
+	}
+}

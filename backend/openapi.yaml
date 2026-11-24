@@ -279,6 +279,36 @@ paths:
                         $ref: '#/components/schemas/Requirement'
         default:
           $ref: '#/components/responses/Error'
+  /api/ai/workspace/route:
+    post:
+      summary: Identify an AI workspace skill for a reseller message
+      description: Returns a routing suggestion. This endpoint reads no project records and makes no business changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        '200':
+          description: Recognized workspace intent and whether it needs existing project requirements
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [intent, use_project_requirement]
+                        properties:
+                          intent: { type: string, enum: [match_products, prepare_inquiry, submit_inquiry, project_status, help] }
+                          use_project_requirement: { type: boolean }
+        default:
+          $ref: '#/components/responses/Error'
   /api/retail/v1/orders/requests/{requestId}:
     get:
       summary: Recover a committed retail order by its original submission ID
