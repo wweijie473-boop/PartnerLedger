@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { retailDemo } from '../demo/retailServer.js'
-import { pendingRetailOrder } from '../src/live/retailRequest.js'
+import { pendingRetailOrder, readRetailCheckout } from '../src/live/retailRequest.js'
 
 const checkoutOrder = link => new URL(link, 'http://localhost').searchParams.get('order')
 
@@ -22,6 +22,7 @@ test('订单重试沿用升级前的请求体和请求号', () => {
     const draft = { product_id: '9', quantity: 1, expected_unit_cents: 101, customer_id: '7' }
     const id = randomUUID()
     storage.set('legacy', JSON.stringify({ id, payload: JSON.stringify(draft) }))
+    assert.deepEqual(readRetailCheckout('legacy'), { ...draft, request_id: id })
     assert.deepEqual(pendingRetailOrder('legacy', draft, { annual: true }), { ...draft, request_id: id })
     const order = pendingRetailOrder('new', draft, { annual: true })
     assert.equal(order.expected_annual, true)

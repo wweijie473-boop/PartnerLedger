@@ -26,7 +26,7 @@ let draftAttempt
 const controller = new AbortController()
 const labels = {
   enterprise_type: '企业类型', employee_count: '员工人数', required_modules: '所需模块',
-  deployment_mode: '部署方式', license_count: '授权用户数',
+  deployment_mode: '部署方式', license_count: '授权用户数', version: '指定版本',
 }
 
 onUnmounted(() => controller.abort())
@@ -83,7 +83,7 @@ async function parse() {
       modules: (data.required_modules ?? []).join('、'),
       deployment: data.deployment_mode ?? '',
       licenseCount: data.license_count ?? '',
-      version: '',
+      version: data.version ?? '',
       missing: data.missing_fields ?? [],
       questions: data.follow_up_questions ?? [],
     }

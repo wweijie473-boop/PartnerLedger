@@ -63,15 +63,26 @@ func opportunities(tx *gorm.DB, actor data.User) *gorm.DB {
 }
 
 func loadPartners(tx *gorm.DB, organizationID uint64) ([]channelPartner, error) {
+	return loadPartnersInCategory(tx, organizationID, "")
+}
+
+func loadPartnersInCategory(tx *gorm.DB, organizationID uint64, category string) ([]channelPartner, error) {
+	query := func() *gorm.DB {
+		candidates := tx.Model(&channelPartner{}).Where("organization_id = ?", organizationID)
+		if category != "" {
+			candidates = candidates.Where("category = ?", category)
+		}
+		return candidates
+	}
 	partners := []channelPartner{}
-	if err := tx.Where("organization_id = ?", organizationID).Order("id DESC").Find(&partners).Error; err != nil {
+	if err := query().Order("id DESC").Find(&partners).Error; err != nil {
 		return nil, err
 	}
 	if len(partners) == 0 {
 		return partners, nil
 	}
 	var records []channelPartnerCase
-	ids := tx.Model(&channelPartner{}).Select("id").Where("organization_id = ?", organizationID)
+	ids := query().Select("id")
 	if err := tx.Where("partner_id IN (?)", ids).Order("opportunity_id").Find(&records).Error; err != nil {
 		return nil, err
 	}
@@ -90,6 +101,38 @@ func loadPartners(tx *gorm.DB, organizationID uint64) ([]channelPartner, error) 
 		}
 	}
 	return partners, nil
+}
+
+func (s Service) RecommendPartners(ctx context.Context, actor data.User, id uint64, capability Capability) (OpportunityRecommendation, error) {
+	if !dealer(actor) {
+		return OpportunityRecommendation{}, ErrForbidden
+	}
+	if !capability.valid(false) {
+		return OpportunityRecommendation{}, ErrInvalid
+	}
+	item := channelOpportunity{OpportunityInput: OpportunityInput{Capability: capability}}
+	if id == 0 && len(questionsFor(capability)) > 0 {
+		return recommendationFor(item, nil), nil
+	}
+	var result OpportunityRecommendation
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if id != 0 {
+			if err := opportunities(tx, actor).Where("pl_channel_opportunities.id = ?", id).Take(&item).Error; err != nil {
+				return err
+			}
+		}
+		var partners []channelPartner
+		if len(questionsFor(item.Capability)) == 0 {
+			var err error
+			partners, err = loadPartnersInCategory(tx, actor.OrganizationID, item.Category)
+			if err != nil {
+				return err
+			}
+		}
+		result = recommendationFor(item, partners)
+		return nil
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	return result, err
 }
 
 func (s Service) Desk(ctx context.Context, actor data.User) (OpportunityDesk, error) {

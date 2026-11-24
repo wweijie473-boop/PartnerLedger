@@ -14,6 +14,8 @@
    go run ./cmd/partnerledger migrate
    ```
 
+   `migrate` 会应用正式业务和表格工作台的两个 MySQL 迁移序列。`/readyz` 同时检查两套迁移与 Redis。只维护表格迁移时可运行 `tables-migrate`。
+
 3. 创建厂家、代理商和客户开发账号。每次先在当前进程设置 `PARTNERLEDGER_BOOTSTRAP_PASSWORD`（12–72 字节），按需替换示例名称与用户名。记录命令输出的组织 ID。
 
    ```powershell

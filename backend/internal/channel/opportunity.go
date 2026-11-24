@@ -168,9 +168,13 @@ type OpportunityView struct {
 	ContactReviews  map[string]contactReview `json:"contactReviews"`
 	Rejections      []rejection              `json:"rejections"`
 	History         []opportunityHistory     `json:"history"`
-	Questions       []string                 `json:"questions"`
-	Matches         []matchView              `json:"matches"`
-	Brief           string                   `json:"brief"`
+	OpportunityRecommendation
+}
+
+type OpportunityRecommendation struct {
+	Questions []string    `json:"questions"`
+	Matches   []matchView `json:"matches"`
+	Brief     string      `json:"brief"`
 }
 
 func idString(id uint64) string {
@@ -288,6 +292,12 @@ func opportunityView(item channelOpportunity, partners []channelPartner, history
 		OpportunityInput: item.OpportunityInput, Revision: item.Revision, Stage: item.Stage, PartnerID: optionalID(item.PartnerID),
 		FollowUp: item.FollowUp, FollowReason: item.FollowReason, FeeAmount: fee, FeeTerms: item.FeeTerms, Outcome: item.Outcome,
 		KnownPartnerIDs: known, ContactReviews: item.ContactReviews, Rejections: item.Rejections, History: history,
+		OpportunityRecommendation: recommendationFor(item, partners),
+	}
+}
+
+func recommendationFor(item channelOpportunity, partners []channelPartner) OpportunityRecommendation {
+	return OpportunityRecommendation{
 		Questions: questionsFor(item.Capability), Matches: matchesFor(item, partners), Brief: safeBrief(item.Capability),
 	}
 }

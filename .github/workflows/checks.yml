@@ -62,3 +62,4 @@ jobs:
       - run: go test -count=1 ./...
         env:
           PARTNERLEDGER_INTEGRATION_TEST: '1'
+          PARTNERLEDGER_TABLES_INTEGRATION_TEST: '1'

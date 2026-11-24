@@ -56,6 +56,21 @@ func (s server) getChannelProject(c *gin.Context) {
 	channelResult(c, http.StatusOK, view, err)
 }
 
+func (s server) listProjectOpportunities(c *gin.Context) {
+	id, ok := channelResourceID(c)
+	if !ok {
+		return
+	}
+	before, beforeErr := strconv.ParseUint(c.DefaultQuery("before", "0"), 10, 64)
+	limit, limitErr := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if beforeErr != nil || limitErr != nil {
+		channelResult(c, http.StatusOK, nil, channel.ErrInvalid)
+		return
+	}
+	page, err := s.channel.ProjectOpportunities(c.Request.Context(), principal(c), id, before, limit)
+	channelResult(c, http.StatusOK, page, err)
+}
+
 func (s server) actOnChannelProject(c *gin.Context) {
 	id, ok := channelResourceID(c)
 	if !ok {

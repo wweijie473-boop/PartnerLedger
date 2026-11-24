@@ -4,7 +4,10 @@ import { requestApi } from '../api.js'
 import { UiBadge, UiButton, UiCard, UiMetricCard, UiState } from '../ui/index.js'
 import { formatCents, quoteCents } from '../channel/quoteMoney.js'
 import { demoStore } from './retailDemo.js'
-import { customerOrderLink, pendingRetailOrder, readRetailCatalog, retailApi as api } from './retailRequest.js'
+import {
+  clearRetailCheckout, customerOrderLink, pendingRetailOrder, readRetailCatalog, readRetailCheckout,
+  retailApi as api, retailCheckoutStorageKey, saveRetailCheckout, withRetailCheckoutLock,
+} from './retailRequest.js'
 
 const props = defineProps({ mode: String, title: String, role: String, request: Function, identity: String, demo: Boolean })
 const emit = defineEmits(['navigate'])
@@ -20,6 +23,11 @@ const vendor = props.role === 'vendor'
 const dealer = props.role === 'dealer'
 const capable = /^[a-f0-9]{32}$/.test(code)
 const storefront = '/retail-store?' + new URLSearchParams({ code })
+const checkoutMode = assisted || props.mode === 'retail-orders' && dealer ? 'assisted' : 'checkout'
+const orderJournalKey = 'partnerledger-retail-checkout:' + props.identity + ':' + checkoutMode
+const recoverable = !props.demo && (assisted || checkout || props.mode === 'retail-orders' && !vendor)
+const pendingCheckout = ref(recoverable ? readRetailCheckout(orderJournalKey) : null)
+const rejectedCheckout = ref(false)
 const controller = new AbortController()
 const read = (path) => (props.request ?? requestApi)(path, { signal: controller.signal })
 const write = (path, body, method = 'POST') => props.request(api + path, { method, body })
@@ -107,15 +115,27 @@ async function load() {
   }
 }
 function refreshOnFocus() {
+  refreshPendingCheckout()
   if (!busy.value && !loading.value) load()
+}
+function refreshPendingCheckout() {
+  if (!recoverable) return
+  const current = readRetailCheckout(orderJournalKey)
+  if (pendingCheckout.value?.request_id !== current?.request_id) rejectedCheckout.value = false
+  pendingCheckout.value = current
+}
+function checkoutStorageChanged(event) {
+  if (event.key === null || event.key === retailCheckoutStorageKey(orderJournalKey)) refreshPendingCheckout()
 }
 onMounted(() => {
   load()
   if (ledger) window.addEventListener('focus', refreshOnFocus)
+  if (recoverable) window.addEventListener('storage', checkoutStorageChanged)
 })
 onUnmounted(() => {
   controller.abort()
   window.removeEventListener('focus', refreshOnFocus)
+  window.removeEventListener('storage', checkoutStorageChanged)
 })
 
 async function run(task) {
@@ -182,13 +202,78 @@ function submitOrder() {
     if (!item || !Number.isInteger(quantity.value) || quantity.value < 1 || quantity.value > 10000) return
     const draft = { product_id:item.product_id, quantity:quantity.value, expected_unit_cents:item.unit_cents,
       ...(assisted ? { customer_id:customer.value } : { code }) }
-    // Preserve the request ID on a lost response, including after a reload in this tab.
-    const key = 'partnerledger-retail-checkout:' + props.identity + ':' + props.mode
-    const result = await write('/orders', pendingRetailOrder(key, draft, item))
-    sessionStorage.removeItem(key)
-    if (props.demo) emit('navigate', 'retail-orders')
-    else emit('navigate', 'retail-orders', { order_id: result.id })
+    if (props.demo) {
+      await write('/orders', pendingRetailOrder(orderJournalKey, draft, item))
+      sessionStorage.removeItem(orderJournalKey)
+      emit('navigate', 'retail-orders')
+      return
+    }
+    await withRetailCheckoutLock(orderJournalKey, async () => {
+      refreshPendingCheckout()
+      if (pendingCheckout.value) return
+      const saved = saveRetailCheckout(orderJournalKey, draft, item)
+      pendingCheckout.value = saved
+      await sendSavedOrder(saved)
+    })
   })
+}
+
+function openSavedOrder(result, saved) {
+  if (typeof result?.id !== 'string' || !/^[1-9]\d*$/.test(result.id)) throw new Error('无法识别订单编号，请重新核对。')
+  pendingCheckout.value = clearRetailCheckout(orderJournalKey, saved.request_id)
+  emit('navigate', 'retail-orders', { order_id: result.id })
+}
+
+async function sendSavedOrder(saved) {
+  try {
+    openSavedOrder(await write('/orders', saved), saved)
+  } catch (cause) {
+    if (['retail_conflict', 'not_found', 'invalid_request'].includes(cause.code)) {
+      const existing = await lookupSavedOrder(saved)
+      if (existing) {
+        openSavedOrder(existing, saved)
+        return
+      }
+      rejectedCheckout.value = true
+    }
+    throw cause
+  }
+}
+
+async function lookupSavedOrder(saved) {
+  try {
+    return await read(api + '/orders/requests/' + encodeURIComponent(saved.request_id))
+  } catch (cause) {
+    if (cause.status === 404 && cause.code === 'not_found') return null
+    throw cause
+  }
+}
+
+function recoverOrder() {
+  run(() => withRetailCheckoutLock(orderJournalKey, async () => {
+    refreshPendingCheckout()
+    const saved = pendingCheckout.value
+    if (!saved) return
+    const result = await lookupSavedOrder(saved)
+    if (result) openSavedOrder(result, saved)
+    else if (!rejectedCheckout.value) await sendSavedOrder(saved)
+  }))
+}
+
+function discardRejectedOrder() {
+  run(() => withRetailCheckoutLock(orderJournalKey, async () => {
+    refreshPendingCheckout()
+    if (!rejectedCheckout.value || !pendingCheckout.value) return
+    const saved = pendingCheckout.value
+    const result = await lookupSavedOrder(saved)
+    if (result) {
+      openSavedOrder(result, saved)
+      return
+    }
+    pendingCheckout.value = clearRetailCheckout(orderJournalKey, saved.request_id)
+    rejectedCheckout.value = false
+    await load()
+  }))
 }
 function advance(row, action, refValue) {
   run(async () => {
@@ -208,6 +293,17 @@ function advance(row, action, refValue) {
     <p v-if="notice" role="status">{{ notice }}</p>
     <UiButton v-if="orderID !== null" compact @click="emit('navigate', 'retail-orders')">查看全部订单</UiButton>
     <p v-if="checkout && capable"><a :href="storefront">返回厂商商城</a></p>
+    <UiCard v-if="pendingCheckout" title="待核对订单提交">
+      <p class="muted">
+        原订单商品编号 {{ pendingCheckout.product_id }} · {{ pendingCheckout.quantity }} 份 · 单价 {{ money(pendingCheckout.expected_unit_cents) }}
+      </p>
+      <p v-if="rejectedCheckout" role="status">服务端未接受原请求。可清除记录，重新核对当前订购信息。</p>
+      <p v-else>本次核对沿用原订单的价格、数量和请求编号。</p>
+      <div class="retail-actions">
+        <UiButton variant="primary" :loading="busy" @click="recoverOrder">{{ rejectedCheckout ? '再次查询原订单' : '核对并重试原请求' }}</UiButton>
+        <UiButton v-if="rejectedCheckout" :disabled="busy" @click="discardRejectedOrder">清除记录并重新核对</UiButton>
+      </div>
+    </UiCard>
     <UiState v-if="loading" state="loading" title="正在读取业务记录" />
 
     <UiCard v-else-if="promotion" title="厂商专属推广码">
@@ -239,14 +335,14 @@ function advance(row, action, refValue) {
 
     <UiCard v-else-if="assisted || checkout" :title="assisted ? '创建代客订单' : '核对订购信息'">
       <p class="muted">{{ demo ? '选定客户和产品后，在订单列表打开客户确认链接，交给客户确认并模拟付款。' : assisted ? '创建订单后，把确认链接发给关联客户。客户登录后确认订单并向厂商付款。' : '提交后请按厂商提供的方式付款，由厂商核对并登记收款。' }}</p>
-      <form v-if="offers.length && (!assisted || customers.length)" class="retail-form" @submit.prevent="submitOrder">
+      <form v-if="!pendingCheckout && offers.length && (!assisted || customers.length)" class="retail-form" @submit.prevent="submitOrder">
         <label v-if="assisted">关联客户<select v-model="customer" required><option value="">选择客户</option><option v-for="item in customers" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
         <label>订购产品<select v-model="product" required><option value="">选择产品</option><option v-for="item in offers" :key="item.product_id" :value="item.product_id">{{ item.manufacturer }} · {{ item.name }} · {{ item.version }} · {{ money(item.unit_cents) }}</option></select></label>
         <label>订购数量<input v-model.number="quantity" required type="number" min="1" max="10000" step="1"></label>
         <p v-if="selected">订单金额 <strong>{{ money(total) }}</strong><span v-if="selected.annual"> · 年度授权</span></p>
         <UiButton type="submit" variant="primary" :loading="busy">{{ assisted ? '提交客户确认' : '确认并下单' }}</UiButton>
       </form>
-      <UiState v-else :title="assisted && !customers.length ? '暂无关联客户' : '该入口暂无可订购产品'" />
+      <UiState v-else-if="!pendingCheckout" :title="assisted && !customers.length ? '暂无关联客户' : '该入口暂无可订购产品'" />
     </UiCard>
 
     <template v-else-if="ledger">

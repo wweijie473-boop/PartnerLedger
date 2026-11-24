@@ -20,6 +20,14 @@ func testProjectCommercial(t *testing.T, db *gorm.DB, request func(string, strin
 	t.Helper()
 	var project channel.View
 	request(http.MethodGet, path, dealer, "", 200, &project)
+	if project.Product == "" || project.ProductName != "ERP integration" {
+		t.Fatalf("dealer product snapshot missing: %q %q", project.Product, project.ProductName)
+	}
+	var hiddenProduct channel.View
+	request(http.MethodGet, path, customer, "", 200, &hiddenProduct)
+	if hiddenProduct.Product != "" || hiddenProduct.ProductName != "" {
+		t.Fatal("customer can see an upstream product before a sales quote")
+	}
 	key := func(n int) string { return fmt.Sprintf("dddddddd-0000-4000-8000-%012d", n) }
 	body := func(n int, revision uint32, payload string) string {
 		return fmt.Sprintf(`{"requestId":%q,"revision":%d,"payload":%s}`, key(n), revision, payload)
@@ -49,7 +57,7 @@ func testProjectCommercial(t *testing.T, db *gorm.DB, request func(string, strin
 	act(vendor, "channelQuote", 1, start, draft("125.05", "2020-01-01", "渠道内部说明"), 400)
 	act(vendor, "channelQuote", 1, start, draft("125.05", today, "渠道内部说明"), 200)
 	if project.Stage != "channel_wait" || len(*project.Channel) != 1 || (*project.Channel)[0].Total != "375.15" ||
-		project.Sales != nil {
+		project.Sales != nil || project.ProductName != "ERP integration" {
 		t.Fatalf("unexpected channel quote: %+v", project)
 	}
 	firstChannel := (*project.Channel)[0].ID
@@ -57,7 +65,7 @@ func testProjectCommercial(t *testing.T, db *gorm.DB, request func(string, strin
 	firstSales := (*project.Sales)[0].ID
 	quoteID := func(id string) string { return fmt.Sprintf(`{"quoteId":%q}`, id) }
 	act(customer, "confirmSales", 3, project.Revision, quoteID(firstSales), 200)
-	if project.Order != nil || project.Channel != nil || project.Inquiry != nil {
+	if project.Order != nil || project.Channel != nil || project.Inquiry != nil || project.ProductName != "ERP integration" {
 		t.Fatal("confirming a sale created an order or exposed the channel price")
 	}
 	if err := db.Exec("UPDATE pl_channel_quotes SET valid_until = '2020-01-01' WHERE id = ? AND project_id = ?", firstChannel, project.ID).Error; err != nil {

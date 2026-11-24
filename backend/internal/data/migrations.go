@@ -32,10 +32,16 @@ func MigrateNamespace(db *sql.DB, files fs.FS, historyTable string) error {
 	if err != nil {
 		return err
 	}
-	driver, err := migratemysql.WithInstance(db, &migratemysql.Config{
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("open migration connection: %w", err)
+	}
+	driver, err := migratemysql.WithConnection(ctx, conn, &migratemysql.Config{
 		MigrationsTable: historyTable,
 	})
 	if err != nil {
+		_ = conn.Close()
 		return fmt.Errorf("initialize migration driver: %w", err)
 	}
 	runner, err := migrate.NewWithInstance("iofs", source, "mysql", driver)

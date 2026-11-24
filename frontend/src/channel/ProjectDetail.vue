@@ -49,6 +49,7 @@ const stageOwner = computed(() => projectHandlerLabel(props.project, props.role)
         </div>
         <UiButton icon="add" @click="$emit('capture')">记录走访与补充需求</UiButton>
       </UiCard>
+      <slot name="related" />
       <UiCard v-if="live && project.inquiry?.gapNote" title="厂商能力缺口"><p>{{ project.inquiry.gapNote }}</p></UiCard>
       <QuoteBook v-if="project.channelQuotes && (!live || project.channelQuotes.length)" title="厂商渠道报价" subtitle="厂商与代理商之间的采购条件" :quotes="project.channelQuotes" />
       <QuoteBook v-if="project.salesQuotes && (!live || project.salesQuotes.length)" title="对客销售报价" subtitle="代理商向客户提供的软件授权与实施方案" :quotes="project.salesQuotes" />

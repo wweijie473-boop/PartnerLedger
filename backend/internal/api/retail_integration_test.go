@@ -60,6 +60,16 @@ func testRetailWorkflow(t *testing.T, db *gorm.DB, request func(string, string, 
 	}
 	request("POST", base+"/orders", otherDealer, assisted, 404, nil)
 	request("POST", base+"/orders", dealer, assisted, 200, &proxy)
+	byRequest := base + "/orders/requests/"
+	request("GET", byRequest+"not-a-request", dealer, "", 400, nil)
+	request("GET", byRequest+second, otherDealer, "", 404, nil)
+	request("GET", byRequest+second, customer, "", 404, nil)
+	request("GET", byRequest+first, dealer, "", 404, nil)
+	request("GET", byRequest+second, vendor, "", 403, nil)
+	request("GET", byRequest+second, dealer, "", 200, &replay)
+	if replay.ID != proxy.ID {
+		t.Fatal("unexpected assisted order recovery result")
+	}
 	const ops = base + "/operations"
 	var renewals struct{ Items []renewalEntry }
 	request("GET", ops+"/renewals", dealer, "", 200, &renewals)
@@ -70,7 +80,15 @@ func testRetailWorkflow(t *testing.T, db *gorm.DB, request func(string, string, 
 	request("POST", row(proxy.ID, "receipt"), vendor, `{"reference":"fixture-early"}`, 409, nil)
 	request("POST", row(proxy.ID, "confirm"), customer, `{}`, 200, nil)
 	request("POST", row(self.ID, "receipt"), otherVendor, `{"reference":"fixture-receipt"}`, 404, nil)
-	request("PUT", offerURL, vendor, `{"unit_cents":101,"commission_bps":3000,"active":true,"annual":false}`, 200, nil)
+	request("PUT", offerURL, vendor, `{"unit_cents":202,"commission_bps":3000,"active":false,"annual":false}`, 200, nil)
+	request("POST", base+"/orders", customer, direct, 200, &replay)
+	if replay.ID != self.ID {
+		t.Fatal("replaying the original order after withdrawal must return the committed order")
+	}
+	request("GET", byRequest+first, customer, "", 200, &replay)
+	if replay.ID != self.ID {
+		t.Fatal("committed customer order must remain discoverable after offer withdrawal")
+	}
 	receipt := fmt.Sprintf(`{"reference":"fixture-receipt-%d"}`, customerID)
 	request("POST", row(self.ID, "receipt"), vendor, receipt, 200, nil)
 	request("POST", row(self.ID, "receipt"), vendor, receipt, 200, nil)

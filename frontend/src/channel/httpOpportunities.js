@@ -6,6 +6,8 @@ export function createHttpOpportunityRepository(request) {
   }
   return {
     opportunityDesk: () => request(base + '/desk'),
+    previewPartners: (capability, signal) => request(base + '/preview', { method: 'POST', body: capability, signal }),
+    opportunityRecommendation: (id, signal) => request(base + '/' + encodeURIComponent(id) + '/recommendation', { signal }),
     captureOpportunity: (projectId, payload, requestId) => write(base, { projectId, payload }, requestId),
     addPartner: (payload, requestId) => write(base + '/partners', { payload }, requestId),
     actOpportunity: (id, action, payload, revision, requestId) =>

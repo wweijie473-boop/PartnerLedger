@@ -355,7 +355,9 @@ function openOpportunity(id = '', projectId = '') {
       </LiveProjects>
       <WorkspaceShortcuts :pages="shortcuts" @navigate="navigate" />
     </template>
-    <LiveProjects v-else-if="view === 'projects'" :key="navigationRevision" :request="authenticated" :role="entry" :organization-id="organization.id" :user-id="user.id" @capture-opportunity="id => openOpportunity('',id)" />
+    <LiveProjects v-else-if="view === 'projects'" :key="navigationRevision" :request="authenticated" :role="entry"
+      :organization-id="organization.id" :user-id="user.id" @capture-opportunity="id => openOpportunity('',id)"
+      @open-opportunity="id => openOpportunity(id)" />
     <LiveVisits v-else-if="view === 'visits' && isDealer" :request="authenticated" :scope="organization.id + ':' + user.id" @project="openProject" @opportunity="id => openOpportunity(id)" />
     <LiveOpportunities v-else-if="view === 'opportunities' && isDealer" :key="navigationRevision" :request="authenticated" :scope="organization.id + ':' + user.id" :project-id="captureProject" :capture="!!captureProject" @project="openProject" />
     <ProductCatalog v-else-if="view === 'catalog' && entry !== 'customer'" :request="authenticated" :is-manufacturer="isManufacturer" />

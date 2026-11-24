@@ -97,6 +97,26 @@ func testDealerFieldwork(t *testing.T, db *gorm.DB, cache *redis.Client, request
 	}
 	registered := partner(4, "登记团队", "")
 	proven := partner(5, "有记录的团队", "测试合作案例")
+	const previewPath = base + "/preview"
+	linkedPreview := base + "/" + item.ID + "/recommendation"
+	request(http.MethodPost, previewPath, customer, capability, 403, nil)
+	request(http.MethodPost, previewPath, dealer, `{"category":"unsupported"}`, 400, nil)
+	request(http.MethodPost, previewPath, dealer, `{"category":"integration","note":"must stay local"}`, 400, nil)
+	request(http.MethodGet, linkedPreview, otherDealer, "", 404, nil)
+	var preview channel.OpportunityRecommendation
+	request(http.MethodPost, previewPath, dealer, `{"category":"integration","source":"erp"}`, 200, &preview)
+	if len(preview.Questions) != 1 || len(preview.Matches) != 0 {
+		t.Fatalf("incomplete preview should request clarification: %+v", preview)
+	}
+	request(http.MethodPost, previewPath, otherDealer, capability, 200, &preview)
+	if len(preview.Matches) != 0 {
+		t.Fatal("preview exposed another dealer's partners")
+	}
+	request(http.MethodPost, previewPath, dealer, capability, 200, &preview)
+	if len(preview.Matches) != 2 || preview.Matches[0].PartnerID != proven.ID ||
+		strings.Contains(preview.Brief, "13800000000") {
+		t.Fatalf("preview returned unexpected matches or private notes: %+v", preview)
+	}
 	desk := func(token string) channel.OpportunityDesk {
 		t.Helper()
 		var result channel.OpportunityDesk
@@ -123,6 +143,10 @@ func testDealerFieldwork(t *testing.T, db *gorm.DB, cache *redis.Client, request
 	action(dealer, "rejectPartner", 7, item.Revision, fmt.Sprintf(`{"partnerId":%q,"reason":"测试冲突"}`, registered.ID), 200, &item)
 	if len(item.Matches) != 1 || len(item.Rejections) != 1 {
 		t.Fatal("rejected partner remained in the candidate list")
+	}
+	request(http.MethodGet, linkedPreview, dealer, "", 200, &preview)
+	if len(preview.Matches) != 1 || preview.Matches[0].PartnerID != proven.ID {
+		t.Fatalf("linked recommendation did not preserve opportunity rejections: %+v", preview)
 	}
 	action(dealer, "contactReview", 8, item.Revision, fmt.Sprintf(`{"partnerId":%q,"checks":{"region":"blocked"}}`, proven.ID), 200, &item)
 	intro := fmt.Sprintf(`{"partnerId":%q,"consent":true,"followUp":"2020-01-01","feeAmount":"1500.5","feeTerms":"验收后"}`, proven.ID)
@@ -182,5 +206,28 @@ func testDealerFieldwork(t *testing.T, db *gorm.DB, cache *redis.Client, request
 	request(http.MethodGet, path, dealer, "", 404, nil)
 	if len(desk(dealer).Items) != 2 {
 		t.Fatal("removing a visit also removed a confirmed opportunity")
+	}
+	related := projectPath + projectID + "/opportunities"
+	request(http.MethodGet, related, customer, "", 403, nil)
+	request(http.MethodGet, related, manufacturer, "", 403, nil)
+	request(http.MethodGet, related, otherDealer, "", 404, nil)
+	request(http.MethodGet, related+"?limit=51", dealer, "", 400, nil)
+	request(http.MethodGet, related+"?before=bogus", dealer, "", 400, nil)
+	var first, last channel.ProjectOpportunityPage
+	request(http.MethodGet, related+"?limit=1", peer.Token, "", 200, &first)
+	if len(first.Items) != 1 || fmt.Sprint(first.Items[0].ID) != visit.OpportunityID || first.NextCursor == nil ||
+		first.Items[0].Note != "另外需要培训" {
+		t.Fatalf("latest team opportunity missing from project: %+v", first)
+	}
+	request(http.MethodGet, related+"?limit=1&before="+*first.NextCursor, dealer, "", 200, &last)
+	if len(last.Items) != 1 || fmt.Sprint(last.Items[0].ID) != item.ID || last.Items[0].Stage != "settled" || last.NextCursor != nil {
+		t.Fatalf("earlier team opportunity missing from project: %+v", last)
+	}
+	var unrelated channel.View
+	request(http.MethodPost, "/api/channel/v1/projects", customer,
+		fmt.Sprintf(`{"requestId":%q,"title":"无附加商机项目","requirement":"普通采购需求"}`, key(24)), 201, &unrelated)
+	request(http.MethodGet, projectPath+unrelated.ID+"/opportunities", dealer, "", 200, &last)
+	if last.Items == nil || len(last.Items) != 0 || last.NextCursor != nil {
+		t.Fatalf("project opportunities carried over to an unrelated project: %+v", last)
 	}
 }

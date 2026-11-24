@@ -134,6 +134,17 @@ func TestSheetStorage(t *testing.T) {
 	if err != nil || first.Revision != 4 || len(first.Matches) != maxSearchResult || first.NextCursor == nil {
 		t.Fatalf("first search page: %+v %v", first, err)
 	}
+	if _, err := svc.Search(ctx, member, sheet.ID, SearchInput{Text: strings.Repeat("字", maxSearchText)}); err != nil {
+		t.Fatalf("valid multibyte search text: %v", err)
+	}
+	if _, err := svc.Search(ctx, member, sheet.ID, SearchInput{Text: strings.Repeat("字", maxSearchText+1)}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("overlong search text: %v", err)
+	}
+	longReplacement := strings.Repeat("字", 400)
+	preview, err := svc.Search(ctx, member, sheet.ID, SearchInput{Text: "测试", Replacement: &longReplacement})
+	if err != nil || len(preview.Matches) == 0 || !preview.Matches[0].Invalid {
+		t.Fatalf("overlong cell replacement should be invalid in the preview: %+v %v", preview, err)
+	}
 	query.After, query.Revision = *first.NextCursor, first.Revision
 	second, err := svc.Search(ctx, member, sheet.ID, query)
 	if err != nil || len(second.Matches) != maxSearchResult || second.Matches[0].Row <= first.Matches[len(first.Matches)-1].Row {

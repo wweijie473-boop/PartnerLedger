@@ -12,7 +12,7 @@ import './visits.css'
 const props = defineProps({ request: Function, scope: String })
 const emit = defineEmits(['project','opportunity'])
 const remote = createHttpVisitRepository(props.request)
-const { opportunityDesk } = createHttpOpportunityRepository(props.request)
+const { previewPartners, opportunityRecommendation } = createHttpOpportunityRepository(props.request)
 const projectRepo = createHttpProjectRepository(props.request)
 const local = createVisitDraftStore('live:' + props.scope)
 const rows = ref([])
@@ -156,7 +156,8 @@ onMounted(async () => { readLocal(); await refresh() })
             </template>
           </fieldset>
         </form>
-        <VisitPartnerFinder v-if="partnerNote || form.opportunityId" :key="form.id" :note="partnerNote" :opportunity-id="form.opportunityId" :load-desk="opportunityDesk" @criteria="criteria = $event" />
+        <VisitPartnerFinder v-if="partnerNote || form.opportunityId" :key="form.id" :note="partnerNote" :opportunity-id="form.opportunityId"
+          :preview-partners="previewPartners" :load-recommendation="opportunityRecommendation" @criteria="criteria = $event" />
         <p v-if="form.opportunityId">已关联正式商机 {{ form.opportunityId }}。</p>
         <div class="modal-actions"><UiButton v-if="form.projectId" :disabled="locked" @click="$emit('project',form.projectId)">打开关联项目</UiButton><UiButton v-if="form.opportunityId" :disabled="locked" @click="$emit('opportunity',form.opportunityId)">查看正式商机</UiButton></div>
         <p v-if="error" role="alert">{{ error }}</p><p v-if="message" role="status">{{ message }}</p>

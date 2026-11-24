@@ -12,6 +12,24 @@ func (s server) opportunityDesk(c *gin.Context) {
 	channelResult(c, http.StatusOK, record, err)
 }
 
+func (s server) previewOpportunity(c *gin.Context) {
+	var capability channel.Capability
+	if !decodeWithLimit(c, &capability, 2048) {
+		return
+	}
+	result, err := s.channel.RecommendPartners(c.Request.Context(), principal(c), 0, capability)
+	channelResult(c, http.StatusOK, result, err)
+}
+
+func (s server) opportunityRecommendation(c *gin.Context) {
+	id, ok := channelResourceID(c)
+	if !ok {
+		return
+	}
+	result, err := s.channel.RecommendPartners(c.Request.Context(), principal(c), id, channel.Capability{})
+	channelResult(c, http.StatusOK, result, err)
+}
+
 func (s server) captureOpportunity(c *gin.Context) {
 	var input channel.CaptureInput
 	if !decode(c, &input) {

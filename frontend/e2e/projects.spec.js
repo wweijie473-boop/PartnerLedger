@@ -19,6 +19,7 @@ function projectView(project, role) {
     isTodo: Boolean(action), nextStep: labels[publicStage], timeline: [],
     ...(role === 'vendor' ? {} : { requirement, customerName: organizations.customer.name }),
     ...(role === 'customer' || !summary ? {} : { inquiry: { summary } }),
+    ...(role === 'customer' || !summary ? {} : { product: '51', productName: '示例 ERP' }),
   }
 }
 
@@ -45,6 +46,12 @@ async function mockProjectAPI(context, initial = []) {
     if (pathname === '/api/auth/logout') return reply(null)
     if (pathname === '/api/channel/v1/organization-links') return reply({ items: [organizations[role === 'dealer' ? 'customer' : 'dealer']] })
     if (pathname === '/api/products') return reply({ items: [{ id: '51', name: '示例 ERP', published: true }], next_cursor: null })
+    if (pathname === '/api/channel/v1/opportunities/desk' && role === 'dealer') {
+      const items = projects.flatMap(project => (project.opportunities ?? []).map(item => ({
+        ...item, projectId: project.id, projectTitle: project.title, questions: [], matches: [], history: [],
+      })))
+      return reply({ items, partners: [], gaps: [], reverseMatches: [], tasks: [] })
+    }
     if (pathname === projectsPath + '/workspace') {
       const visible = projects.filter(item => role !== 'vendor' || item.stage !== 'requested').map(item => projectView(item, role))
       const counts = { all: visible.length, mine: visible.filter(item => item.isTodo).length, partners: visible.filter(item => !item.isTodo).length }
@@ -70,10 +77,20 @@ async function mockProjectAPI(context, initial = []) {
       if (dropNextCreate) { dropNextCreate = false; return route.abort('failed') }
       return reply(projectView(project, role), 201)
     }
+    if (pathname === projectsPath && method === 'GET') {
+      const items = projects.filter(item => role !== 'vendor' || item.stage !== 'requested').map(item => projectView(item, role))
+      return reply({ items, next_cursor: null })
+    }
     if (pathname.startsWith(projectsPath + '/')) {
       const [id, section, action] = pathname.slice(projectsPath.length + 1).split('/')
       const project = projects.find(item => item.id === id)
       if (!project || section === 'inquiry-draft' || role === 'vendor' && project.stage === 'requested') return reply(null, 404, 'not_found')
+      if (section === 'opportunities') {
+        if (role !== 'dealer') return reply(null, 403, 'forbidden')
+        const before = searchParams.get('before')
+        const matches = (project.opportunities ?? []).filter(item => !before || Number(item.id) < Number(before))
+        return reply({ items: matches.slice(0, 1), next_cursor: matches.length > 1 ? matches[0].id : null })
+      }
       if (section === 'actions') {
         const input = request.postDataJSON()
         if (input.revision !== project.revision) return reply(null, 409, 'revision_conflict')
@@ -146,6 +163,8 @@ test('customer, dealer and vendor work on the same project through their own vie
   await dealer.getByRole('checkbox', { name: /已核对产品与摘要/ }).check()
   await dealer.getByRole('button', { name: '确认并提交询价' }).click()
   await expect(dealer.getByText('办理结果已保存，协作方可在关联项目中查看。')).toBeVisible()
+  await dealer.reload()
+  await expect(dealer.getByText('示例 ERP', { exact: true })).toBeVisible()
 
   const vendor = await context.newPage()
   await login(vendor, 'vendor_a')
@@ -162,6 +181,26 @@ test('customer, dealer and vendor work on the same project through their own vie
   await expect(page.getByText('仅给厂商的模块需求')).toHaveCount(0)
   expect(api.projects).toHaveLength(1)
   expect(api.projects[0].revision).toBe(3)
+})
+
+test('the reseller can page project opportunities and open an existing record', async ({ page, context }) => {
+  await mockProjectAPI(context, [{
+    id: '31', title: '现有采购项目', stage: 'requested', revision: 1,
+    opportunities: [
+      { id: '52', note: '需要库存接口', stage: 'open' },
+      { id: '51', note: '历史培训需求', stage: 'settled' },
+    ],
+  }])
+  await login(page, 'dealer_a')
+  await page.getByRole('button', { name: /现有采购项目.*去处理/ }).click()
+  await expect(page.getByRole('heading', { name: '项目附加商机' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '需要库存接口 待跟进' })).toBeVisible()
+  await page.getByRole('button', { name: '加载更多' }).click()
+  await expect(page.getByRole('button', { name: '历史培训需求 介绍费已结清' })).toBeVisible()
+  await page.getByRole('button', { name: '历史培训需求 介绍费已结清' }).click()
+  await expect(page).toHaveURL(/view=opportunities&op=51$/)
+  await expect(page.getByRole('heading', { name: '商机跟进' })).toBeVisible()
+  await expect(page.getByText('历史培训需求', { exact: true })).toBeVisible()
 })
 
 test('workspace pages, filters and detail refresh fetch only the requested slice', async ({ page, context }) => {

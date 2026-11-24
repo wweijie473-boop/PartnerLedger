@@ -65,6 +65,7 @@ type View struct {
 	Requirement        *string      `json:"requirement,omitempty"`
 	DueDate            string       `json:"dueDate,omitempty"`
 	Product            string       `json:"product,omitempty"`
+	ProductName        string       `json:"productName,omitempty"`
 	Stage              string       `json:"stage"`
 	StageLabel         string       `json:"stageLabel"`
 	Revision           uint32       `json:"revision"`
@@ -180,6 +181,7 @@ func projectView(p channelProject, role string, events []channelEvent, state com
 	applyCommercialView(&v, role, state, today)
 	if p.ProductID != nil && (role != data.Customer || len(state.salesQuotes) != 0) {
 		v.Product = idString(*p.ProductID)
+		v.ProductName = p.ProductName
 	}
 	if role != data.Customer {
 		if p.InquiryID != "" && p.ProductID != nil {

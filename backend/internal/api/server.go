@@ -66,10 +66,13 @@ func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementPars
 	projects.GET("/projects/workspace", s.projectWorkspace)
 	projects.POST("/projects", s.createChannelProject)
 	projects.GET("/projects/:id", s.getChannelProject)
+	projects.GET("/projects/:id/opportunities", s.listProjectOpportunities)
 	projects.POST("/projects/:id/actions/:action", s.actOnChannelProject)
 	projects.GET("/projects/:id/inquiry-draft", s.latestInquiryDraft)
 	projects.POST("/projects/:id/inquiry-draft", s.createInquiryDraft)
 	projects.GET("/opportunities/desk", s.opportunityDesk)
+	projects.POST("/opportunities/preview", s.previewOpportunity)
+	projects.GET("/opportunities/:id/recommendation", s.opportunityRecommendation)
 	projects.POST("/opportunities", s.captureOpportunity)
 	projects.POST("/opportunities/partners", s.addOpportunityPartner)
 	projects.POST("/opportunities/:id/actions/:action", s.actOnOpportunity)
@@ -86,7 +89,7 @@ func New(db *gorm.DB, sqlDB *sql.DB, cache *redis.Client, parser RequirementPars
 func (s server) ready(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
 	defer cancel()
-	if !data.SchemaReady(ctx, s.sql) || s.cache.Ping(ctx).Err() != nil {
+	if !data.SchemaReady(ctx, s.sql) || !tables.SchemaReady(ctx, s.sql) || s.cache.Ping(ctx).Err() != nil {
 		respond(c, http.StatusServiceUnavailable, "dependencies_unavailable", nil)
 		return
 	}

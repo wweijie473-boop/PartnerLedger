@@ -5,11 +5,10 @@
 ```powershell
 cd backend
 go run ./cmd/partnerledger migrate
-go run ./cmd/partnerledger tables-migrate
 go run ./cmd/partnerledger serve
 ```
 
-另一个终端在 `frontend` 运行 `npm ci` 和 `npm run dev`，打开终端地址的 `/tables`。表格迁移使用 `pl_sheet_schema_migrations`，表格数据使用 `pl_sheet_*`。
+另一个终端在 `frontend` 运行 `npm ci` 和 `npm run dev`，打开终端地址的 `/tables`。`migrate` 同时应用正式业务和表格迁移。表格迁移使用 `pl_sheet_schema_migrations`，表格数据使用 `pl_sheet_*`。
 
 ## 使用
 
@@ -75,7 +74,7 @@ const source = createTableRepository(props.request).source(props.sheetId)
 
 列类型为 `auto`、`text`、`number`、`date`、`checkbox`。可见范围为 `private`、`org_read`、`org_edit`。表的最大可寻址范围是 100,000 行 × 128 列，空单元格不占存储记录。已存在的列类型和坐标保留，扩容时追加行列。413 代表请求过大，422 在 `data.index` 给出无效单元格的数组位置。读取不可见表格返回 404，能看表但无权修改时返回 403。
 
-查找按行列顺序分页，每次扫描最多 2,048 个非空单元格，最多返回 60 个结果。空结果页仍可能有 `nextCursor`，工作台会继续扫描直到找到一页匹配或到达表尾。`replacement` 为空字符串表示清除匹配内容，省略时只查找。替换预览含 `proposed`，不符合列类型或长度限制的结果标记为 `invalid`。用结果的 `revision` 调用 `changes` 保存所选格子。
+查找按行列顺序分页，每次扫描最多 2,048 个非空单元格，最多返回 60 个结果。空结果页仍可能有 `nextCursor`，工作台会继续扫描直到找到一页匹配或到达表尾。查找词最多 160 个字符。`replacement` 为空字符串表示清除匹配内容，省略时只查找。替换预览含 `proposed`，不符合列类型或 1,000 字节单元格上限的结果标记为 `invalid`。用结果的 `revision` 调用 `changes` 保存所选格子。
 
 ## 测试
 

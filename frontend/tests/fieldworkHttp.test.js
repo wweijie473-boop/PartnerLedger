@@ -1,12 +1,29 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHttpVisitRepository } from '../src/live/httpVisits.js'
+import { createHttpOpportunityRepository } from '../src/channel/httpOpportunities.js'
 import { createWriteJournal } from '../src/live/writeJournal.js'
 
 function memoryStorage() {
   const entries = new Map()
   return { getItem:key => entries.get(key) || null, setItem:(key,value) => entries.set(key,value), removeItem:key => entries.delete(key) }
 }
+
+test('拜访推荐使用独立的组织范围接口，只发送结构化条件', async () => {
+  const calls = []
+  const repo = createHttpOpportunityRepository(async (path, options) => {
+    calls.push({ path, ...options })
+    return { questions: [], matches: [], brief: '公开确认摘要' }
+  })
+  const criteria = { category: 'integration', source: 'erp', target: 'mes' }
+  const signal = new AbortController().signal
+  await repo.previewPartners(criteria, signal)
+  await repo.opportunityRecommendation('41', signal)
+  assert.deepEqual(calls, [
+    { path: '/api/channel/v1/opportunities/preview', method: 'POST', body: criteria, signal },
+    { path: '/api/channel/v1/opportunities/41/recommendation', signal },
+  ])
+})
 
 test('拜访创建、编辑、确认和删除使用真实接口的版本与显式确认字段', async () => {
   const calls = []

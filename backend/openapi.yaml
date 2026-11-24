@@ -16,7 +16,7 @@ paths:
           $ref: '#/components/responses/Success'
   /readyz:
     get:
-      summary: Check that the MySQL schema and Redis are ready
+      summary: Check both the application and table workspace MySQL schemas and Redis
       security: []
       responses:
         '200':
@@ -229,7 +229,7 @@ paths:
               properties:
                 text: { type: string, minLength: 1, maxLength: 2000 }
             example:
-              text: 我们是 120 人的制造公司，需要财务库存和私有化部署。
+              text: 我们是 120 人的制造公司，需要 5.1 版本、财务库存和私有化部署。
       responses:
         '200':
           description: Structured extraction for human confirmation
@@ -241,6 +241,31 @@ paths:
                   - properties:
                       data:
                         $ref: '#/components/schemas/Requirement'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/orders/requests/{requestId}:
+    get:
+      summary: Recover a committed retail order by its original submission ID
+      description: The authenticated reseller or customer must be the original submitting account.
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Committed order ID, even if the offer is no longer available
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [id]
+                        properties:
+                          id: { $ref: '#/components/schemas/ID' }
         default:
           $ref: '#/components/responses/Error'
   /api/retail/v1/operations/partners:
@@ -637,6 +662,47 @@ paths:
           $ref: '#/components/responses/ChannelProject'
         default:
           $ref: '#/components/responses/Error'
+  /api/channel/v1/projects/{id}/opportunities:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ID' }
+    get:
+      summary: List opportunities associated with a project in the current reseller organization
+      parameters:
+        - name: before
+          in: query
+          description: Use the next_cursor from the previous page.
+          schema: { $ref: '#/components/schemas/ID' }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Page of linked opportunities, newest first
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [items, next_cursor]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              required: [id, note, stage]
+                              properties:
+                                id: { $ref: '#/components/schemas/ID' }
+                                note: { type: string }
+                                stage: { type: string, enum: [open, introduced, won, lost, settled] }
+                          next_cursor: { type: [string, 'null'] }
+        default:
+          $ref: '#/components/responses/Error'
   /api/channel/v1/projects/{id}/inquiry-draft:
     parameters:
       - name: id
@@ -741,6 +807,29 @@ paths:
                   - $ref: '#/components/schemas/Envelope'
                   - properties:
                       data: { $ref: '#/components/schemas/OpportunityDesk' }
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/opportunities/preview:
+    post:
+      summary: Preview recommendations from the reseller's partner directory without saving an opportunity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FieldworkCapability' }
+      responses:
+        '200':
+          $ref: '#/components/responses/OpportunityRecommendation'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/channel/v1/opportunities/{id}/recommendation:
+    get:
+      summary: Get the recommendations and clarification questions for an accessible opportunity
+      parameters:
+        - $ref: '#/components/parameters/FieldworkID'
+      responses:
+        '200':
+          $ref: '#/components/responses/OpportunityRecommendation'
         default:
           $ref: '#/components/responses/Error'
   /api/channel/v1/opportunities:
@@ -958,12 +1047,172 @@ paths:
           $ref: '#/components/responses/Visit'
         default:
           $ref: '#/components/responses/Error'
+  /api/tables/v1/sheets:
+    get:
+      summary: List sheets accessible by the signed-in member
+      parameters:
+        - name: after
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Visible sheets and their pagination cursor
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: object
+                        required: [items, nextCursor]
+                        properties:
+                          items: { type: array, items: { $ref: '#/components/schemas/Sheet' } }
+                          nextCursor: { type: [string, 'null'] }
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create a sheet with an idempotent request ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SheetSettings'
+                - type: object
+                  required: [requestId]
+                  properties:
+                    requestId: { type: string, format: uuid }
+      responses:
+        '201':
+          $ref: '#/components/responses/Sheet'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/tables/v1/sheets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SheetID'
+    get:
+      summary: Read sheet settings and edit permissions
+      responses:
+        '200':
+          $ref: '#/components/responses/Sheet'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/tables/v1/sheets/{id}/window:
+    parameters:
+      - $ref: '#/components/parameters/SheetID'
+    get:
+      summary: Read raw cells from a zero-based rectangle of at most 2,048 cells
+      parameters:
+        - name: row
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 99999 }
+        - name: col
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 127 }
+        - name: height
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - name: width
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Sheet revision and nonempty cells from the same snapshot
+        default:
+          $ref: '#/components/responses/Error'
+  /api/tables/v1/sheets/{id}/search:
+    parameters:
+      - $ref: '#/components/parameters/SheetID'
+    post:
+      summary: Search a sheet or preview a replacement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 160 }
+                matchCase: { type: boolean }
+                wholeCell: { type: boolean }
+                includeFormulas: { type: boolean }
+                replacement: { type: string, maxLength: 1000 }
+                revision: { type: integer, minimum: 1 }
+                after:
+                  type: string
+                  description: Continue with the returned cursor and the same revision and search terms.
+      responses:
+        '200':
+          description: Matching cells, replacement previews, scanned count, revision and cursor
+        default:
+          $ref: '#/components/responses/Error'
+  /api/tables/v1/sheets/{id}/changes:
+    parameters:
+      - $ref: '#/components/parameters/SheetID'
+    post:
+      summary: Atomically save cell edits and optional sheet settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, revision, cells]
+              properties:
+                requestId: { type: string, format: uuid }
+                revision: { type: integer, minimum: 1 }
+                cells:
+                  type: array
+                  maxItems: 250
+                  items: { $ref: '#/components/schemas/SheetCell' }
+                settings: { $ref: '#/components/schemas/SheetSettings' }
+      responses:
+        '200':
+          description: Applied revision, including a replay for the same request ID and edits
+        '409':
+          description: Stale revision or a reused request ID with different edits
+        '422':
+          description: Invalid cell input. The zero-based position in the request is reported in data.index.
+        default:
+          $ref: '#/components/responses/Error'
+  /api/tables/v1/sheets/{id}/csv:
+    parameters:
+      - $ref: '#/components/parameters/SheetID'
+    get:
+      summary: Download up to 10,000 rows from a visible sheet as CSV
+      parameters:
+        - name: start
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 99999, default: 0 }
+        - name: count
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10000, default: 10000 }
+      responses:
+        '200':
+          description: UTF-8 CSV attachment
+          content:
+            text/csv:
+              schema: { type: string }
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
   parameters:
+    SheetID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     FinanceKind:
       name: kind
       in: path
@@ -1013,6 +1262,15 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ProductInput' }
   responses:
+    Sheet:
+      description: Sheet metadata and permissions for the current member
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/Sheet' }
     ProductKnowledge:
       description: Product matching and licensing information
       content:
@@ -1031,6 +1289,15 @@ components:
               - $ref: '#/components/schemas/Envelope'
               - properties:
                   data: { $ref: '#/components/schemas/InquiryDraft' }
+    OpportunityRecommendation:
+      description: Clarification questions, eligible matches and a brief based on the capability fields
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/OpportunityRecommendation' }
     Opportunity:
       description: Opportunity visible to its dealer team
       content:
@@ -1082,6 +1349,41 @@ components:
             message: authentication_required
             data: null
   schemas:
+    SheetSettings:
+      type: object
+      required: [name, visibility, rowCount, columns]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        visibility: { type: string, enum: [private, org_read, org_edit] }
+        rowCount: { type: integer, minimum: 1, maximum: 100000 }
+        columns:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            type: object
+            required: [label, kind]
+            properties:
+              label: { type: string, minLength: 1, maxLength: 80 }
+              kind: { type: string, enum: [auto, text, number, date, checkbox] }
+    Sheet:
+      allOf:
+        - $ref: '#/components/schemas/SheetSettings'
+        - type: object
+          required: [id, revision, canEdit, isOwner, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            revision: { type: integer, minimum: 1 }
+            canEdit: { type: boolean }
+            isOwner: { type: boolean }
+            updatedAt: { type: string, format: date-time }
+    SheetCell:
+      type: object
+      required: [row, col, input]
+      properties:
+        row: { type: integer, minimum: 0, maximum: 99999 }
+        col: { type: integer, minimum: 0, maximum: 127 }
+        input: { type: string, description: At most 1,000 UTF-8 bytes. An empty string clears the cell. }
     FieldworkRevision:
       type: object
       required: [requestId, revision]
@@ -1117,9 +1419,29 @@ components:
     CheckState:
       type: string
       enum: ['', unknown, confirmed, blocked]
+    OpportunityRecommendation:
+      type: object
+      required: [brief, questions, matches]
+      properties:
+        brief: { type: string }
+        questions: { type: array, items: { type: string } }
+        matches:
+          type: array
+          items:
+            type: object
+            properties:
+              partnerId: { $ref: '#/components/schemas/ID' }
+              name: { type: string }
+              owner: { type: string }
+              evidence: { type: string }
+              reason: { type: string }
+              caveat: { type: string }
+              checks: { $ref: '#/components/schemas/ContactChecks' }
+              reviewNote: { type: string }
     Opportunity:
       allOf:
         - $ref: '#/components/schemas/FieldworkCapability'
+        - $ref: '#/components/schemas/OpportunityRecommendation'
         - type: object
           properties:
             id: { $ref: '#/components/schemas/ID' }
@@ -1134,8 +1456,6 @@ components:
             feeAmount: { type: string }
             feeTerms: { type: string }
             outcome: { type: string }
-            brief: { type: string }
-            questions: { type: array, items: { type: string } }
             knownPartnerIds: { type: array, items: { $ref: '#/components/schemas/ID' } }
             contactReviews:
               type: object
@@ -1153,19 +1473,6 @@ components:
                   name: { type: string }
                   reason: { type: string }
                   at: { type: string, format: date-time }
-            matches:
-              type: array
-              items:
-                type: object
-                properties:
-                  partnerId: { $ref: '#/components/schemas/ID' }
-                  name: { type: string }
-                  owner: { type: string }
-                  evidence: { type: string }
-                  reason: { type: string }
-                  caveat: { type: string }
-                  checks: { $ref: '#/components/schemas/ContactChecks' }
-                  reviewNote: { type: string }
             history:
               type: array
               items:
@@ -1301,6 +1608,7 @@ components:
         requirement: { type: string, description: Visible to the customer and reseller }
         dueDate: { type: string, format: date }
         product: { $ref: '#/components/schemas/ID' }
+        productName: { type: string, description: Product name at inquiry submission. Returned only when the product ID is visible. }
         stage:
           type: string
           enum: [requested, customer_info, inquired, vendor_info, processing, channel_quoted, channel_revision, channel_wait, sales_quoted, sales_revision, confirmed, ordered, supplied, shipped, acceptance, rectification, completed]
@@ -1443,13 +1751,14 @@ components:
         createdAt: { type: string, format: date-time }
     Requirement:
       type: object
-      required: [enterprise_type, employee_count, required_modules, deployment_mode, license_count, missing_fields, follow_up_questions, need_user_confirmation]
+      required: [enterprise_type, employee_count, required_modules, deployment_mode, license_count, version, missing_fields, follow_up_questions, need_user_confirmation]
       properties:
-        enterprise_type: { type: string }
-        employee_count: { type: [integer, 'null'], minimum: 1 }
-        required_modules: { type: array, items: { type: string } }
-        deployment_mode: { type: string }
-        license_count: { type: [integer, 'null'], minimum: 1 }
-        missing_fields: { type: array, items: { type: string } }
-        follow_up_questions: { type: array, items: { type: string } }
+        enterprise_type: { type: string, maxLength: 120 }
+        employee_count: { type: [integer, 'null'], minimum: 1, maximum: 1000000 }
+        required_modules: { type: array, maxItems: 30, items: { type: string, minLength: 1, maxLength: 70 } }
+        deployment_mode: { type: string, maxLength: 80 }
+        license_count: { type: [integer, 'null'], minimum: 1, maximum: 1000000 }
+        version: { type: string, maxLength: 100, description: Version requested in the input, or empty when unknown. }
+        missing_fields: { type: array, maxItems: 30, items: { type: string, minLength: 1, maxLength: 100 } }
+        follow_up_questions: { type: array, maxItems: 30, items: { type: string, minLength: 1, maxLength: 200 } }
         need_user_confirmation: { const: true }

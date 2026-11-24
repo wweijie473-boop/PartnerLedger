@@ -48,6 +48,17 @@ export function createHttpProjectRepository(request) {
       }
     },
     get: (id, { signal } = {}) => request(base + '/' + encodeURIComponent(id), signal ? { signal } : undefined),
+    async opportunities(id, { before, signal } = {}) {
+      const query = before ? '?before=' + encodeURIComponent(before) : ''
+      const page = await request(base + '/' + encodeURIComponent(id) + '/opportunities' + query, { signal })
+      const key = value => typeof value === 'string' && /^[1-9]\d*$/.test(value)
+      if (!Array.isArray(page?.items) ||
+          !page.items.every(item => item && key(item.id) && typeof item.note === 'string' && typeof item.stage === 'string') ||
+          (page.next_cursor !== null && (!key(page.next_cursor) || page.next_cursor === before))) {
+        throw new Error('项目附加商机响应无效。')
+      }
+      return page
+    },
     create(payload, requestId = crypto.randomUUID()) {
       return post(base, payload, requestId)
     },

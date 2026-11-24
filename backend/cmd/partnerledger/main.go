@@ -68,12 +68,13 @@ func run(args []string) error {
 		if err := sqlDB.PingContext(ctx); err != nil {
 			return fmt.Errorf("MySQL connection failed: %w", err)
 		}
-		migrate := data.Migrate
-		if command == "tables-migrate" {
-			migrate = tables.Migrate
+		if command == "migrate" {
+			if err := data.Migrate(sqlDB); err != nil {
+				return fmt.Errorf("migrate application schema: %w", err)
+			}
 		}
-		if err := migrate(sqlDB); err != nil {
-			return fmt.Errorf("migrate MySQL: %w", err)
+		if err := tables.Migrate(sqlDB); err != nil {
+			return fmt.Errorf("migrate table workspace schema: %w", err)
 		}
 		fmt.Println("MySQL migrations are up to date")
 		return nil

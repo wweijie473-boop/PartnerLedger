@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wweijie473-boop/PartnerLedger/backend/internal/data"
 )
@@ -42,8 +43,8 @@ type SearchPage struct {
 
 func (s Service) Search(ctx context.Context, actor data.User, id string, query SearchInput) (SearchPage, error) {
 	page := SearchPage{Matches: []Match{}}
-	if len(query.Text) == 0 || len(query.Text) > maxSearchText ||
-		query.Replacement != nil && len(*query.Replacement) > MaxInputBytes {
+	if query.Text == "" || utf8.RuneCountInString(query.Text) > maxSearchText ||
+		query.Replacement != nil && utf8.RuneCountInString(*query.Replacement) > MaxInputBytes {
 		return page, ErrInvalid
 	}
 	args := []any{id}

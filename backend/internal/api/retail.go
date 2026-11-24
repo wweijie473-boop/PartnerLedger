@@ -117,6 +117,7 @@ func (s server) registerRetail(api, signedIn *gin.RouterGroup) {
 	retail.POST("/promotion", s.makeRetailPromotion)
 	retail.GET("/orders", s.listRetailOrders)
 	retail.POST("/orders", s.createRetailOrder)
+	retail.GET("/orders/requests/:requestId", s.retailOrderByRequest)
 	retail.POST("/orders/:id/:action", s.advanceRetailOrder)
 	s.registerDealerOperations(retail.Group("/operations"))
 	s.registerChannelOperations(retail.Group("/operations"))
@@ -393,6 +394,24 @@ type retailOrderInput struct {
 	RequestID         string `json:"request_id"`
 }
 
+func (s server) retailOrderByRequest(c *gin.Context) {
+	actor := principal(c)
+	if actor.Organization.Kind != data.Customer && actor.Organization.Kind != data.Reseller {
+		respond(c, http.StatusForbidden, "forbidden", nil)
+		return
+	}
+	requestID := c.Param("requestId")
+	if !retailRequest.MatchString(requestID) {
+		respond(c, http.StatusBadRequest, "invalid_request", nil)
+		return
+	}
+	var row RetailOrder
+	err := s.db.WithContext(c.Request.Context()).Select("id").
+		Where("created_by = ? AND request_id = ? AND "+retailScope(actor)+" = ?", actor.ID, requestID, actor.OrganizationID).
+		Take(&row).Error
+	retailRespond(c, gin.H{"id": strconv.FormatUint(row.ID, 10)}, err)
+}
+
 func (s server) createRetailOrder(c *gin.Context) {
 	actor := principal(c)
 	var input retailOrderInput
@@ -417,13 +436,20 @@ func (s server) createRetailOrder(c *gin.Context) {
 	db := s.db.WithContext(c.Request.Context())
 	var row RetailOrder
 	lookup := func(tx *gorm.DB) error {
-		err := tx.Where("created_by = ? AND request_id = ?", actor.ID, input.RequestID).First(&row).Error
+		err := tx.Where("created_by = ? AND request_id = ? AND "+retailScope(actor)+" = ?", actor.ID, input.RequestID, actor.OrganizationID).First(&row).Error
 		if err == nil && row.RequestHash != fingerprint {
 			return retailConflict
 		}
 		return err
 	}
 	err := db.Transaction(func(tx *gorm.DB) error {
+		// Serialize attempts before reading the order or current terms. A retry must see
+		// an earlier committed order even if the manufacturer has since changed the offer.
+		var creator data.User
+		if err := tx.Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("organization_id = ?", actor.OrganizationID).Take(&creator, actor.ID).Error; err != nil {
+			return err
+		}
 		if err := lookup(tx); !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}

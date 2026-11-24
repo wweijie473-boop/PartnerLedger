@@ -6,6 +6,7 @@ import ProjectDetail from '../channel/ProjectDetail.vue'
 import ProjectFilters from '../channel/ProjectFilters.vue'
 import ProjectList from '../channel/ProjectList.vue'
 import ProjectPriority from '../channel/ProjectPriority.vue'
+import ProjectRelatedOpportunities from './ProjectRelatedOpportunities.vue'
 import ChannelAction from '../channel/ChannelAction.vue'
 import { actionLabels, projectScopeLabels } from '../channel/domain.js'
 import { createHttpProjectRepository } from '../channel/httpProjects.js'
@@ -15,7 +16,7 @@ import { vPageFade } from '../ui/pageFade.js'
 import '../channel/workspace.css'
 
 const props = defineProps({ request: Function, role: String, organizationId: String, userId: String, overview: Boolean })
-const emit = defineEmits(['capture-opportunity', 'open-project', 'open-list'])
+const emit = defineEmits(['capture-opportunity', 'open-opportunity', 'open-project', 'open-list'])
 const repo = createHttpProjectRepository(props.request)
 const journal = createProjectWriteJournal(repo, props.organizationId, props.userId)
 const pending = computed(() => journal.state.job)
@@ -28,6 +29,7 @@ const projectParams = () => new URLSearchParams(location.search)
 const selected = ref(props.overview ? '' : projectParams().get('project') || '')
 const detailError = ref(null)
 const detailLoading = ref(false)
+const relatedRevision = ref(0)
 const dialog = ref('')
 const formError = ref('')
 const notice = ref(journal.state.error)
@@ -175,7 +177,10 @@ async function backgroundRefresh() {
   else await loadWorkspace()
 }
 function refreshProgress() {
-  if (selected.value) return loadDetail()
+  if (selected.value) {
+    relatedRevision.value++
+    return loadDetail()
+  }
   return loadWorkspace({ foreground: true })
 }
 async function openAction(action) {
@@ -353,6 +358,10 @@ onUnmounted(() => {
         <template #toolbar>
           <UiButton variant="text" :disabled="busy" @click="refreshProgress">刷新协作进度</UiButton>
           <UiButton v-if="role === 'dealer'" variant="text" @click="$emit('capture-opportunity', detail.id)">记录附加商机</UiButton>
+        </template>
+        <template v-if="role === 'dealer'" #related>
+          <ProjectRelatedOpportunities :key="detail.id + ':' + relatedRevision" :project-id="detail.id" :repository="repo"
+            @open="id => emit('open-opportunity', id)" />
         </template>
       </ProjectDetail>
     </div>
