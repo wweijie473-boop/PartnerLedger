@@ -59,3 +59,59 @@ test('the scrollbar gutter and blue all-functions button stay stable across page
   await expect(page.getByRole('heading', { name: '代理商工作台' })).toBeVisible()
   expect(await readWidth()).toEqual(initial)
 })
+
+test('site search fits its full placeholder before and after focus', async ({ page }) => {
+  const search = page.getByRole('searchbox', { name: '搜索站内功能' })
+  for (const path of ['/', '/experience/dealer']) {
+    for (const width of [1440, 1021, 941, 761, 320]) {
+      await page.setViewportSize({ width, height: 850 })
+      await page.goto(path)
+      await expect(search).toHaveCSS('font-size', '12px')
+      const { available, required } = await search.evaluate(field => {
+        const style = getComputedStyle(field)
+        const context = document.createElement('canvas').getContext('2d')
+        context.font = `${style.fontSize} ${style.fontFamily}`
+        return {
+          available: field.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+          required: context.measureText(field.placeholder).width,
+        }
+      })
+      expect(available, `${path} at ${width}px`).toBeGreaterThan(required)
+      const before = await search.boundingBox()
+      await search.focus()
+      expect(await search.boundingBox()).toEqual(before)
+      await search.blur()
+    }
+  }
+})
+
+test('the full directory packs groups within each column and fits a narrow viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 850 })
+  await page.goto('/experience/dealer')
+  const trigger = page.getByRole('button', { name: '全部功能' })
+  const directory = page.getByRole('navigation', { name: '全部工作台功能' })
+  await trigger.click()
+  const columns = () => directory.locator('.workspace-menu-group').evaluateAll(groups => {
+    const byColumn = new Map()
+    for (const group of groups) {
+      const { left, top, bottom } = group.getBoundingClientRect()
+      const column = byColumn.get(left) ?? []
+      column.push({ top, bottom })
+      byColumn.set(left, column)
+    }
+    return [...byColumn.values()]
+  })
+  const desktop = await columns()
+  expect(desktop).toHaveLength(2)
+  for (const column of desktop) {
+    for (let index = 1; index < column.length; index++) {
+      expect(column[index].top - column[index - 1].bottom).toBeLessThanOrEqual(1)
+    }
+  }
+  await page.setViewportSize({ width: 320, height: 630 })
+  expect(await columns()).toHaveLength(1)
+  expect(await directory.evaluate(panel => panel.scrollWidth - panel.clientWidth)).toBe(0)
+  const lastEntry = directory.getByRole('button').last()
+  await lastEntry.scrollIntoViewIfNeeded()
+  await expect(lastEntry).toBeInViewport()
+})

@@ -69,8 +69,7 @@ body:has(.pl-header) { min-width: 0; }
 .pl-popover strong, .pl-popover small { display: block; }
 .pl-popover strong { font-size: 13px; font-weight: 500; }
 .pl-popover small { color: var(--ui-ink-muted); font-size: 12px; line-height: 1.5; }
-.pl-search { grid-area: search; justify-self: end; width: min(100%,122px); }
-.pl-search:focus-within { width: min(100%,196px); }
+.pl-search { grid-area: search; justify-self: end; width: min(100%,188px); }
 .pl-search-field {
   display: flex;
   align-items: center;
@@ -82,7 +81,7 @@ body:has(.pl-header) { min-width: 0; }
 .pl-search-field:focus-within { border-color: var(--ui-link); box-shadow: 0 0 0 2px var(--ui-accent-bg); }
 .pl-search-field button { display: grid; align-self: stretch; place-items: center; flex: 0 0 32px; padding: 0; color: var(--ui-ink); border: 0; border-radius: var(--ui-radius-sm); background: transparent; }
 .pl-search-field button:hover { background: var(--ui-accent-bg); }
-.pl-search-field input { flex: 1; min-width: 0; padding: 5px 0 5px 9px; color: var(--ui-ink); border: 0; outline: 0; background: transparent; font-size: 13px; }
+.pl-search-field input { flex: 1; min-width: 0; padding: 5px 4px 5px 9px; color: var(--ui-ink); border: 0; outline: 0; background: transparent; font-size: 12px; }
 .pl-search-field input::placeholder { color: var(--ui-ink-muted); }
 .pl-search-panel { left: auto; right: 0; width: min(354px, calc(100vw - 32px)); }
 .pl-search-panel ul { list-style: none; padding: 0; margin: 0; }
@@ -103,7 +102,7 @@ body:has(.pl-header) { min-width: 0; }
     to { opacity: 1; transform: translateY(0); }
   }
 }
-@media(max-width:940px) { .pl-product-name { display: none; } }
+@media(max-width:1020px) { .pl-product-name { display: none; } }
 @media(max-width:760px) {
   .pl-header { position: relative; }
   .pl-bar {
@@ -115,7 +114,7 @@ body:has(.pl-header) { min-width: 0; }
   .pl-main-nav .pl-menu { position: static; }
   .pl-main-nav .pl-nav-button { padding-inline: 8px; }
   .pl-utility { justify-self: end; }
-  .pl-search, .pl-search:focus-within { width: 100%; }
+  .pl-search { width: 100%; }
   .pl-search-field { border-color: var(--ui-border); }
   .pl-search-panel { width: 100%; }
 }

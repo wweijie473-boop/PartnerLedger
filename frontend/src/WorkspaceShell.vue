@@ -96,13 +96,15 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
                 全部功能 <UiIcon name="chevron-down" :size="13" />
               </button>
               <nav v-show="menuOpen" id="workspace-directory" ref="directory" class="workspace-directory" aria-label="全部工作台功能">
-                <section v-for="group in groups" :key="group.id" class="workspace-menu-group">
-                  <h2 v-if="role && (group.pages.length > 1 || group.label !== group.pages[0].label)">{{ group.label }}</h2>
-                  <button v-for="page in group.pages" :key="page.id" type="button"
-                    :aria-current="view === page.id ? 'page' : undefined" @click="navigateFromMenu(page.id)">
-                    {{ page.label }}
-                  </button>
-                </section>
+                <div class="workspace-directory-groups">
+                  <section v-for="group in groups" :key="group.id" class="workspace-menu-group">
+                    <h2 v-if="role && (group.pages.length > 1 || group.label !== group.pages[0].label)">{{ group.label }}</h2>
+                    <button v-for="page in group.pages" :key="page.id" type="button"
+                      :aria-current="view === page.id ? 'page' : undefined" @click="navigateFromMenu(page.id)">
+                      {{ page.label }}
+                    </button>
+                  </section>
+                </div>
               </nav>
             </div>
             <span class="workspace-environment"><UiIcon name="permission" :size="14" />{{ environment }}</span>
@@ -186,11 +188,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
   position: absolute;
   z-index: 2;
   inset: 100% 0 auto auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(135px, 100%), 1fr));
-  align-items: start;
-  gap: 12px;
-  width: min(440px, calc(100vw - 32px));
+  width: min(440px, 100%);
   max-height: min(62vh, 480px);
   overflow-y: auto;
   padding: 12px;
@@ -199,6 +197,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow-dialog);
 }
+.workspace-directory-groups { columns: 2 140px; column-gap: 12px; }
+.workspace-menu-group { break-inside: avoid; padding-bottom: 8px; }
 .workspace-menu-group h2 { margin: 0 0 4px; color: var(--ui-ink-muted); font-size: 12px; font-weight: 500; }
 .workspace-menu-group button {
   display: block;
