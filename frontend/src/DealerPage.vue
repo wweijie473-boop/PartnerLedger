@@ -55,7 +55,7 @@ const endpoints = [
 ]
 </script>
 <template>
-  <header v-enter class="page-heading"><h1>{{ title }}</h1></header>
+  <header class="page-heading"><h1>{{ title }}</h1></header>
   <section v-if="queues.includes(view)" class="dealer-panel">
     <p v-if="view === 'finance'">按订单锁定的报价版本核对渠道采购额与对客销售额，实际收付款以财务凭证为准。</p>
     <p v-if="view === 'tickets'">按项目当前阶段列出需要本方处理的事项，打开项目即可办理。</p>

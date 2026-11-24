@@ -280,7 +280,7 @@ function openOpportunity(id = '', projectId = '') {
 
 <template>
   <main v-if="!session" class="access-page">
-    <header v-enter class="access-header">
+    <header class="access-header">
       <a class="access-brand" href="/">
         <img class="brand-mark" src="/brand/partnerledger-logo.png" width="30" height="30" alt="" />
         渠智链 AI
@@ -288,8 +288,8 @@ function openOpportunity(id = '', projectId = '') {
       <a href="/" class="access-back"><UiIcon name="back" :size="14" /> 返回首页</a>
     </header>
     <section class="access-form-wrap" aria-labelledby="access-title">
-      <h1 v-enter id="access-title">{{ accessTitle }}</h1>
-      <UiCard v-enter="1" class="access-panel">
+      <h1 id="access-title">{{ accessTitle }}</h1>
+      <UiCard class="access-panel">
         <form class="form-grid" aria-labelledby="access-title" @input="animateTyping" @submit.prevent="isRegister ? signUp() : signIn()">
           <fieldset class="access-roles" :disabled="signingIn">
             <legend>选择身份</legend>
@@ -317,7 +317,7 @@ function openOpportunity(id = '', projectId = '') {
           <div class="access-actions"><UiButton type="submit" variant="primary" compact :loading="signingIn">{{ isRegister ? '注册' : '登录' }}</UiButton></div>
         </form>
       </UiCard>
-      <div v-enter="2" class="access-links">
+      <div class="access-links">
         <a :href="identityLink(isRegister ? 'login' : 'register')">{{ isRegister ? '已有账号？登录' : '没有账号？注册' }}</a>
         <a :href="'/experience/' + (entry || 'dealer')">体验演示</a>
       </div>
@@ -325,7 +325,7 @@ function openOpportunity(id = '', projectId = '') {
   </main>
 
   <main v-else-if="!user || !organization" class="login-screen live-login">
-    <UiCard v-enter>
+    <UiCard>
       <UiState v-if="identityError" state="error" title="暂时无法加载账号信息" :description="identityError">
         <UiButton @click="loadIdentity">重试</UiButton>
         <UiButton variant="text" :loading="signingOut" @click="signOut">退出登录</UiButton>
@@ -350,7 +350,7 @@ function openOpportunity(id = '', projectId = '') {
           </div>
         </template>
       </LiveProjects>
-      <WorkspaceShortcuts v-enter="3" :pages="shortcuts" @navigate="navigate" />
+      <WorkspaceShortcuts :pages="shortcuts" @navigate="navigate" />
     </template>
     <LiveProjects v-else-if="view === 'projects'" :key="navigationRevision" :request="authenticated" :role="entry" :organization-id="organization.id" :user-id="user.id" @capture-opportunity="id => openOpportunity('',id)" />
     <LiveVisits v-else-if="view === 'visits' && isDealer" :request="authenticated" :scope="organization.id + ':' + user.id" @project="openProject" @opportunity="id => openOpportunity(id)" />
@@ -359,8 +359,8 @@ function openOpportunity(id = '', projectId = '') {
     <RequirementParser v-else-if="view === 'requirement' && isDealer" :request="authenticated"
       @open-inquiry="id => openProject(id)" @open-projects="navigate('projects')" />
     <template v-else>
-      <header v-enter class="page-heading"><h1>账号与组织</h1></header>
-      <section v-enter="1" class="workspace-section live-account" aria-labelledby="current-account">
+      <header class="page-heading"><h1>账号与组织</h1></header>
+      <section class="workspace-section live-account" aria-labelledby="current-account">
         <header class="workspace-section-heading">
           <h2 id="current-account">当前账号</h2>
           <UiButton icon="sign-out" variant="text" :loading="signingOut" @click="signOut">退出登录</UiButton>
@@ -374,7 +374,7 @@ function openOpportunity(id = '', projectId = '') {
         <p v-if="logoutError" class="form-error live-feedback" role="alert">{{ logoutError }}</p>
       </section>
     </template>
-    <footer v-enter="4" class="live-links"><a href="/">平台首页</a><a :href="'/experience/' + entry">{{ kindLabel }}演示</a></footer>
+    <footer class="live-links"><a href="/">平台首页</a><a :href="'/experience/' + entry">{{ kindLabel }}演示</a></footer>
   </WorkspaceShell>
 </template>
 

@@ -230,7 +230,7 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
 
 <template>
   <div class="ch-space">
-    <WorkspaceShell demo :role="role" :nav="nav" :view="view" :organization="org.company" :account-label="names[role] + ' · 演示身份'" environment="本地演示空间" @navigate="navigate" @account="openDialog('roles')">
+    <WorkspaceShell demo :role="role" :nav="nav" :view="view" :detail-key="selected" :organization="org.company" :account-label="names[role] + ' · 演示身份'" environment="本地演示空间" @navigate="navigate" @account="openDialog('roles')">
       <RetailDemoPanel v-if="retailView" :role="role" :view="view" :title="currentPage.label" :operations="currentPage.source === 'operations'" @navigate="navigate" />
       <UiState v-else-if="loading" state="loading" title="正在载入工作台" />
       <UiState v-else-if="loadError" state="error" title="工作台暂时不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton><UiButton @click="openDialog('reset')">恢复演示数据</UiButton></UiState>
@@ -243,20 +243,20 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
       <VisitDrafts v-else-if="role === 'dealer' && view === 'visits'" :scope="'demo:' + org.orgId" :load-projects="repo.list" :load-desk="repo.opportunityDesk" :capture="captureVisit" @project="id => { navigate('ledger'); openProject({id}) }" @opportunity="openOpportunity" />
       <OpportunityDesk v-else-if="role === 'dealer' && view === 'opportunities'" :desk="desk" :repo="repo" :projects="projects" :selected="opportunity" :capture-for="captureFor" :refresh="refresh" @select="openOpportunity" @capture-opened="captureFor = ''" @project="record => { navigate('ledger'); openProject(record) }" @notice="toast" />
       <template v-else>
-        <section class="page-heading ch-head"><div v-enter :key="view"><p v-if="view === 'overview'" class="workspace-kicker">{{ org.company }}</p><h1>{{ view === 'overview' ? copy.title : currentPage?.label }}</h1><p class="muted">{{ view === 'overview' ? copy.intro : view === 'delivery' ? '从订单追溯报价，跟进供货、实施及客户验收。' : '按编号、项目名称和状态查找协作记录。' }}</p></div>
+        <section class="page-heading ch-head"><div :key="view"><p v-if="view === 'overview'" class="workspace-kicker">{{ org.company }}</p><h1>{{ view === 'overview' ? copy.title : currentPage?.label }}</h1><p class="muted">{{ view === 'overview' ? copy.intro : view === 'delivery' ? '从订单追溯报价，跟进供货、实施及客户验收。' : '按编号、项目名称和状态查找协作记录。' }}</p></div>
           <UiButton v-if="copy.add && view !== 'delivery'" icon="add" variant="primary" @click="openDialog('create')">{{ copy.add }}</UiButton>
         </section>
         <template v-if="view === 'overview'">
-          <section v-enter:children="1" class="metric-grid workspace-overview-metrics" aria-label="协作数据">
+          <section class="metric-grid workspace-overview-metrics" aria-label="协作数据">
             <UiMetricCard v-for="metric in metrics" :key="metric.id" :icon="metric.icon" :label="metric.label" :value="projects.filter(item => metric.stages.includes(item.stage)).length" :description="metric.description" interactive @click="navigate('ledger', { metric: metric.id })" />
           </section>
-          <ProjectPriority v-enter="2" :projects="todos" :show-customer="role === 'dealer'" @open="openProjectFromList" @show-all="navigate('ledger', { scope: 'mine' })" />
-          <UiCard v-if="role === 'dealer' && desk.tasks?.length" v-enter="3" title="商机待跟进">
+          <ProjectPriority :projects="todos" :show-customer="role === 'dealer'" @open="openProjectFromList" @show-all="navigate('ledger', { scope: 'mine' })" />
+          <UiCard v-if="role === 'dealer' && desk.tasks?.length" title="商机待跟进">
             <div class="op-records"><button v-for="task in desk.tasks.slice(0, 5)" :key="task.opportunityId" @click="openOpportunity(task.opportunityId)"><span><b>{{ task.reason }}</b><small>{{ task.projectTitle }}</small></span><span>{{ task.action }}</span></button></div>
           </UiCard>
-          <WorkspaceShortcuts v-enter="3" :pages="shortcuts" @navigate="navigate" />
+          <WorkspaceShortcuts :pages="shortcuts" @navigate="navigate" />
         </template>
-        <section v-else v-enter="1" class="workspace-section" aria-labelledby="project-list">
+        <section v-else class="workspace-section" aria-labelledby="project-list">
           <h2 id="project-list" class="ch-sr">协作项目</h2>
           <ProjectFilters :scope="scope" :counts="counts" :keyword="search" :stage="stage" :stages="stateOptions"
             @scope="chooseScope" @keyword="event => search = event.target.value" @stage="event => stage = event.target.value">

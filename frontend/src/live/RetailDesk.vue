@@ -199,7 +199,7 @@ function advance(row, action, refValue) {
 </script>
 
 <template>
-    <header v-enter class="page-heading"><h1>{{ title }}</h1><UiButton compact variant="text" :disabled="loading || busy" @click="load">刷新</UiButton></header>
+    <header class="page-heading"><h1>{{ title }}</h1><UiButton compact variant="text" :disabled="loading || busy" @click="load">刷新</UiButton></header>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <UiButton v-if="orderID !== null" compact @click="emit('navigate', 'retail-orders')">查看全部订单</UiButton>

@@ -8,6 +8,7 @@ import { portalMenus } from './portal-navigation.js'
 import { accountPath } from './auth-session.js'
 import { useSessionAccount } from './useSessionAccount.js'
 import { retailDemoEnabled, retailDemoLocation } from './live/retailDemo.js'
+import { entrance as vEnter } from './ui/entrance.js'
 import './portal.css'
 
 const phase = ref(0)

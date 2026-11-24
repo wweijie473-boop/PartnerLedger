@@ -1,6 +1,7 @@
 <script setup>
 import { computed, markRaw, onMounted, ref, shallowRef } from 'vue'
 import { requestApi } from '../api.js'
+import { vPageFade } from '../ui/pageFade.js'
 import { accountPath, currentSession, saveSession, sessionFromCredentials } from '../auth-session.js'
 import { columnName, MAX_COLS, MAX_ROWS } from './cells.js'
 import DataGrid from './DataGrid.vue'
@@ -187,7 +188,7 @@ onMounted(async () => {
 
 <template>
   <div class="studio-page">
-    <header class="studio-top"><div v-enter class="studio-top-inner">
+    <header class="studio-top"><div class="studio-top-inner">
       <a href="/" class="studio-brand">渠智链</a><span class="studio-crumb">表格工作台</span>
       <template v-if="user">
         <a class="studio-identity" :href="accountPath">{{ user.organization.name }} · {{ user.username }}</a>
@@ -195,7 +196,7 @@ onMounted(async () => {
       </template>
     </div></header>
     <p v-if="initializing" class="table-message" role="status">正在核验会话…</p>
-    <main v-else-if="!user" v-enter class="studio-auth">
+    <main v-else-if="!user" class="studio-auth">
       <h1>登录表格工作台</h1>
       <p>使用你的 PartnerLedger 账号管理表格。</p>
       <form @submit.prevent="signin">
@@ -206,7 +207,7 @@ onMounted(async () => {
       </form>
     </main>
     <main v-else class="studio-content">
-      <aside v-enter class="studio-list">
+      <aside class="studio-list">
         <h2>我的表格与共享表格</h2>
         <button type="button" class="studio-primary" :disabled="busy" @click="openDialog('create')">新建表格</button>
         <nav v-if="sheets.length" aria-label="表格列表">
@@ -215,18 +216,18 @@ onMounted(async () => {
         </nav>
         <button v-if="nextCursor" type="button" :disabled="busy" @click="more">加载更多</button>
       </aside>
-      <article class="studio-work">
+      <article v-page-fade.changes="selected?.id" class="studio-work">
         <p v-if="error" role="alert" class="studio-alert">{{ error }}</p>
         <template v-if="selected">
-          <div v-enter="1" class="studio-title"><div><h1>{{ selected.name }}</h1><p>{{ labels[selected.visibility] }}</p></div>
+          <div class="studio-title"><div><h1>{{ selected.name }}</h1><p>{{ labels[selected.visibility] }}</p></div>
             <div class="studio-actions">
               <button type="button" v-if="selected.isOwner" :disabled="busy" @click="openDialog('settings')">表格设置</button>
               <button type="button" :disabled="busy" title="导出前 10,000 行内有数据的区域" @click="exportSheet">导出 CSV</button>
             </div>
           </div>
-          <DataGrid v-enter="2" :key="selected.id" ref="grid" :source="source" :recovery-key="recoveryKey" @metadata="metadata" />
+          <DataGrid :key="selected.id" ref="grid" :source="source" :recovery-key="recoveryKey" @metadata="metadata" />
         </template>
-        <div v-else v-enter="1" class="studio-empty"><div class="studio-title"><h1>表格工作台</h1></div><p>创建空白表格，或从左侧打开共享表格。</p></div>
+        <div v-else class="studio-empty"><div class="studio-title"><h1>表格工作台</h1></div><p>创建空白表格，或从左侧打开共享表格。</p></div>
       </article>
     </main>
     <dialog ref="dialog" class="studio-dialog" @cancel.prevent="closeDialog">

@@ -6,6 +6,7 @@ import OpportunityForm from './OpportunityForm.vue'
 import PartnerRecommendation from './PartnerRecommendation.vue'
 import { categoryLabels, contactFields, opportunityStages, systemLabels } from './opportunities.js'
 import { statusTone } from '../ui/statusTone.js'
+import { vPageFade } from '../ui/pageFade.js'
 
 const props = defineProps({ desk:Object, repo:Object, projects:Array, selected:String, captureFor:String, refresh:Function, live:Boolean, locked:Boolean })
 const emit = defineEmits(['select','capture-opened','project','notice'])
@@ -76,21 +77,21 @@ async function save(payload) {
 </script>
 
 <template>
-  <div class="op-desk">
+  <div v-page-fade.changes="selected || tab" class="op-desk">
     <template v-if="!selected">
-      <header v-enter class="page-heading ch-head"><div><p class="ch-kicker">代理商团队 · {{ live ? '正式商机' : '本地演示' }}</p><h1>商机拾遗</h1><p class="muted">客户额外提的需求，团队里谁能接？从一条走访记录找到有合作依据的伙伴。</p></div>
+      <header class="page-heading ch-head"><div><p class="ch-kicker">代理商团队 · {{ live ? '正式商机' : '本地演示' }}</p><h1>商机拾遗</h1><p class="muted">客户额外提的需求，团队里谁能接？从一条走访记录找到有合作依据的伙伴。</p></div>
         <UiButton variant="primary" icon="add" @click="open('capture')">记录附加需求</UiButton>
       </header>
-      <section v-enter:children="1" class="metric-grid" aria-label="商机概况">
+      <section class="metric-grid" aria-label="商机概况">
         <UiMetricCard label="待承接需求" :value="stats.open" icon="request" interactive @click="choose('ledger', 'open')" />
         <UiMetricCard label="今天需跟进" :value="stats.due" description="含逾期" icon="time" interactive @click="choose('ledger', 'due')" />
         <UiMetricCard label="已促成合作" :value="stats.won" icon="check" interactive @click="choose('ledger', 'successful')" />
       </section>
-      <UiCard v-if="desk.tasks?.length" v-enter="2" title="今天从这里接着办">
+      <UiCard v-if="desk.tasks?.length" title="今天从这里接着办">
         <div class="op-records"><button v-for="task in desk.tasks" :key="task.opportunityId" @click="$emit('select',task.opportunityId)"><span><b>{{ task.reason }}</b><small>{{ task.projectTitle }}</small></span><span>{{ task.action }}</span></button></div>
       </UiCard>
       <nav class="op-tabs" aria-label="商机视图"><button v-for="[key,label] in [['ledger','商机台账'],['partners','团队伙伴'],['gaps','能力缺口']]" :key="key" :aria-pressed="tab === key" @click="choose(key)">{{ label }}</button></nav>
-      <UiCard v-if="tab === 'ledger'" v-enter="3" title="商机台账">
+      <UiCard v-if="tab === 'ledger'" title="商机台账">
         <div class="op-tools"><input v-model="search" aria-label="搜索商机" placeholder="搜索需求、项目或编号"><select v-model="filter" aria-label="商机阶段"><option value="">全部阶段</option><option v-for="(label,key) in opportunityStages" :key="key" :value="key">{{ label }}</option><option value="due">今天需跟进</option><option value="successful">全部已促成</option></select>
           <UiButton v-if="returningFor" compact @click="returningFor = ''">清除伙伴回访筛选</UiButton></div>
         <p v-if="returningFor" class="op-inset">可请「{{ desk.partners.find(p => p.id === returningFor)?.name }}」协助的待承接需求（{{ rows.length }}）</p>
@@ -99,20 +100,20 @@ async function save(payload) {
           <UiBadge :tone="statusTone(item.stage)" dot>{{ opportunityStages[item.stage] }}</UiBadge>
         </button></div><p v-else class="op-muted">暂无符合条件的商机。</p>
       </UiCard>
-      <UiCard v-else-if="tab === 'partners'" v-enter title="团队伙伴" description="记录合作能力与内部引荐人。先找同事核实，不公开私人通讯录。">
+      <UiCard v-else-if="tab === 'partners'" title="团队伙伴" description="记录合作能力与内部引荐人。先找同事核实，不公开私人通讯录。">
         <template #actions><UiButton compact icon="add" @click="open('partner')">登记伙伴</UiButton></template>
         <article v-for="partner in desk.partners" :key="partner.id" class="op-line"><h3>{{ partner.name }}</h3><p>{{ categoryLabels[partner.category] }} · 内部引荐人：{{ partner.owner }}</p>
           <p class="op-muted">{{ partner.evidence || '尚无经授权的合作案例。' }}</p><UiButton compact @click="revisit(partner.id)">可回访商机（{{ linksFor(partner.id).length }}）</UiButton></article>
       </UiCard>
-      <UiCard v-else v-enter title="团队能力缺口" description="按待承接商机聚合。用于决定下次找哪类伙伴，不向厂商公开客户信息。">
+      <UiCard v-else title="团队能力缺口" description="按待承接商机聚合。用于决定下次找哪类伙伴，不向厂商公开客户信息。">
         <p v-if="!desk.gaps.length" class="op-muted">暂无已分类的待承接需求。</p>
         <div v-for="gap in desk.gaps" :key="gap.category" class="op-count"><span>{{ gap.label }}</span><b>{{ gap.count }} 条</b></div>
       </UiCard>
     </template>
     <template v-else-if="current">
       <UiButton compact variant="text" icon="back" @click="$emit('select','')">返回商机台账</UiButton>
-      <header v-enter class="ch-project-head"><p class="ch-kicker">附加需求 · {{ current.id }}</p><h1>商机跟进</h1><div class="ch-project-meta"><UiBadge :tone="statusTone(current.stage)" dot>{{ opportunityStages[current.stage] }}</UiBadge><button v-if="sourceProject" class="op-link" @click="$emit('project',sourceProject)">{{ current.projectTitle }} · 查看主单</button></div></header>
-      <div class="op-columns"><div v-enter:children="1" class="ch-stack">
+      <header class="ch-project-head"><p class="ch-kicker">附加需求 · {{ current.id }}</p><h1>商机跟进</h1><div class="ch-project-meta"><UiBadge :tone="statusTone(current.stage)" dot>{{ opportunityStages[current.stage] }}</UiBadge><button v-if="sourceProject" class="op-link" @click="$emit('project',sourceProject)">{{ current.projectTitle }} · 查看主单</button></div></header>
+      <div class="op-columns"><div class="ch-stack">
         <UiCard title="客户还需要什么"><p class="op-note">{{ current.note }}</p><p>{{ categoryLabels[current.category] || '承接类型待澄清' }} · {{ [systemLabels[current.source],systemLabels[current.target]].filter(Boolean).join(' → ') || '系统待确认' }}</p>
           <ul v-if="current.questions.length"><li v-for="q in current.questions" :key="q">{{ q }}</li></ul>
           <template v-if="current.stage === 'open'" #footer><UiButton compact @click="open('clarify')">澄清需求</UiButton></template>
@@ -131,7 +132,7 @@ async function save(payload) {
         <UiCard v-if="current.rejections?.length" title="已排除的伙伴"><article v-for="entry in current.rejections" :key="entry.partnerId" class="op-line"><h3>{{ entry.name }}</h3><p>{{ entry.reason }}</p></article></UiCard>
         <UiCard v-if="activePartner" title="引荐与介绍费"><dl class="ch-facts"><dt>伙伴 / 引荐人</dt><dd>{{ activePartner.name }} / {{ activePartner.owner }}</dd><dt>跟进日期</dt><dd>{{ current.followUp }}</dd><dt>约定金额</dt><dd>{{ current.feeAmount ? '¥' + current.feeAmount : '未约定' }}</dd><dt>条件</dt><dd>{{ current.feeTerms || '未约定' }}</dd></dl></UiCard>
         <UiCard v-if="current.outcome" title="跟进结果"><p>{{ current.outcome }}</p></UiCard>
-      </div><div v-enter:children="1" class="ch-stack">
+      </div><div class="ch-stack">
         <UiCard>
           <details>
             <summary>商机跟进与记录</summary>

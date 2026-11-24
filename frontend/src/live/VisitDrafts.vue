@@ -76,9 +76,9 @@ onMounted(async () => {
 
 <template>
   <div class="visit-page">
-    <header v-enter="0" class="page-heading"><div><h1>记拜访</h1><p class="muted">记下客户提到的附加需求，当场看看团队里谁能引荐。</p></div></header>
-    <p v-enter="1" class="visit-hint">草稿保存在此设备。<template v-if="!capture">附加商机同步接口待开放，核对结果可继续留在草稿中。</template></p>
-    <div class="visit-layout"><UiCard v-enter="2" title="这次客户提了什么">
+    <header class="page-heading"><div><h1>记拜访</h1><p class="muted">记下客户提到的附加需求，当场看看团队里谁能引荐。</p></div></header>
+    <p class="visit-hint">草稿保存在此设备。<template v-if="!capture">附加商机同步接口待开放，核对结果可继续留在草稿中。</template></p>
+    <div class="visit-layout"><UiCard title="这次客户提了什么">
       <form class="form-grid" @submit.prevent="finish">
         <UiField label="拜访记录" required v-slot="{control}"><textarea v-bind="control" v-model="form.text" rows="4" maxlength="2000" placeholder="例如：ERP 已定，客户还想把 ERP 工单同步到 MES。" :readonly="saving || !!form.opportunityId" @input="review=false; confirmed=false"></textarea></UiField>
         <VisitPartnerFinder v-if="loadDesk && (partnerNote || form.opportunityId)" :key="form.id" :note="partnerNote" :opportunity-id="form.opportunityId" :load-desk="loadDesk" @criteria="criteria = $event" />
@@ -94,7 +94,7 @@ onMounted(async () => {
         <UiButton v-if="form.projectId && projects.some(project => project.id === form.projectId)" @click="$emit('project',form.projectId)">打开关联项目</UiButton>
         <p v-if="error" role="alert">{{ error }}</p><p v-if="message" role="status">{{ message }}</p>
       </form>
-    </UiCard><UiCard v-enter="3" title="接着整理">
+    </UiCard><UiCard title="接着整理">
       <template #actions><UiButton compact @click="open()">新记一条</UiButton></template>
       <p v-if="!drafts.length" class="muted">保存后，草稿会出现在这里。</p>
       <article v-for="draft in drafts" :key="draft.id" class="visit-draft"><button @click="open(draft)">{{ draft.text }}</button><small>{{ new Date(draft.updatedAt).toLocaleDateString('zh-CN') }} · {{ draft.opportunityId ? '已记录商机' : draft.reviewed ? '已核对' : '待核对' }}</small><UiButton compact variant="text" @click="remove(draft.id)">删除草稿</UiButton></article>

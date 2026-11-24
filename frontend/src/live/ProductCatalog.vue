@@ -135,13 +135,13 @@ async function saveProduct() {
 </script>
 
 <template>
-  <section v-enter="0" class="page-heading">
+  <section class="page-heading">
     <div><h1>产品目录</h1><p class="muted">{{ isManufacturer ? '维护本组织产品及其发布状态。' : '查看厂商已发布的软件和版本。' }}</p></div>
     <UiButton v-if="isManufacturer" variant="primary" icon="add" :disabled="loading" @click="openEditor()">新增产品</UiButton>
   </section>
 
   <p v-if="notice" class="catalog-feedback" role="status">{{ notice }}</p>
-  <div v-enter="1">
+  <div>
     <div v-if="products.length" class="catalog-filters">
       <label>查找已加载产品 <input v-model="searchText" type="search" placeholder="名称、版本或说明" /></label>
       <label v-if="isManufacturer">发布状态 <select v-model="publication"><option value="all">全部</option><option value="published">已发布</option><option value="draft">未发布</option></select></label>

@@ -37,7 +37,7 @@ function colorValue(token) {
 <template>
   <div class="ui-gallery">
     <header class="gallery-top">
-      <div v-enter class="gallery-top-inner">
+      <div class="gallery-top-inner">
         <a href="/" class="gallery-back"><UiIcon name="back" :size="16" /> 返回平台首页</a>
         <span class="gallery-brand">
           <img class="brand-mark" src="/brand/partnerledger-logo.png" width="24" height="24" alt="" />
@@ -45,7 +45,7 @@ function colorValue(token) {
         </span>
       </div>
     </header>
-    <main v-enter:children class="gallery-content">
+    <main class="gallery-content">
       <div class="gallery-heading">
         <h1>UI 组件库</h1>
         <p>渠智链 AI 的基础样式和可复用组件。</p>

@@ -11,6 +11,7 @@ import { actionLabels, projectScopeLabels } from '../channel/domain.js'
 import { createHttpProjectRepository } from '../channel/httpProjects.js'
 import { createProjectWriteJournal } from './projectWrites.js'
 import { useProjectWorkspace } from './useProjectWorkspace.js'
+import { vPageFade } from '../ui/pageFade.js'
 import '../channel/workspace.css'
 
 const props = defineProps({ request: Function, role: String, organizationId: String, userId: String, overview: Boolean })
@@ -316,8 +317,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section>
-    <header v-if="overview || !selected" v-enter class="page-heading">
+  <section v-page-fade.changes="selected">
+    <header v-if="overview || !selected" class="page-heading">
       <slot v-if="overview" name="heading" />
       <div v-else-if="!selected">
         <h1>{{ role === 'vendor' ? '渠道询价' : role === 'customer' ? '我的采购项目' : '客户项目' }}</h1>
@@ -334,12 +335,12 @@ onUnmounted(() => {
       <UiState v-if="loading" state="loading" title="正在读取项目待办" />
       <UiState v-else-if="loadError" state="error" title="项目待办暂不可用" :description="loadError"><UiButton @click="refreshProgress">重新载入</UiButton></UiState>
       <template v-else>
-        <section v-enter:children="1" class="metric-grid workspace-overview-metrics" aria-label="协作数据">
+        <section class="metric-grid workspace-overview-metrics" aria-label="协作数据">
           <UiMetricCard :label="overviewMetrics[role][0]" :value="counts.all" icon="request" interactive @click="$emit('open-list', 'all')" />
           <UiMetricCard :label="overviewMetrics[role][1]" :value="counts.mine" icon="activity" tone="brand" interactive @click="$emit('open-list', 'mine')" />
           <UiMetricCard :label="overviewMetrics[role][2]" :value="counts.partners" icon="time" interactive @click="$emit('open-list', 'partners')" />
         </section>
-        <ProjectPriority v-enter="2" :projects="rows" :show-customer="role === 'dealer'"
+        <ProjectPriority :projects="rows" :show-customer="role === 'dealer'"
           @open="item => $emit('open-project', item.id, 'mine')" @show-all="$emit('open-list', 'mine')" />
       </template>
     </template>
@@ -356,7 +357,7 @@ onUnmounted(() => {
       </ProjectDetail>
     </div>
     <template v-else>
-      <section v-enter="1" ref="list" class="workspace-section" aria-labelledby="project-list" :aria-busy="loading">
+      <section ref="list" class="workspace-section" aria-labelledby="project-list" :aria-busy="loading">
         <h2 id="project-list" class="ch-sr">协作项目</h2>
         <ProjectFilters :scope="scope" :counts="counts" :keyword="keyword" :stage="stage" :stages="stages"
           @scope="chooseScope" @keyword="changeKeyword" @stage="changeStage" />

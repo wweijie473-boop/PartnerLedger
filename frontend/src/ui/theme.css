@@ -62,6 +62,7 @@
   --ui-radius-pill: 999px;
   --ui-control-height: 40px;
   --ui-motion-fast: 140ms;
+  --ui-page-entry-opacity: .82;
   --ui-motion-standard: 240ms;
   --ui-ease-out: cubic-bezier(.2, .8, .2, 1);
   --ui-shadow-card: 0 2px 6px #102a4308, 0 8px 24px #102a4304;

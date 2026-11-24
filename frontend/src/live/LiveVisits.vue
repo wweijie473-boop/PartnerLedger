@@ -134,7 +134,7 @@ onMounted(async () => { readLocal(); await refresh() })
 
 <template>
   <section class="visit-page">
-    <header v-enter="0" class="page-heading"><div><h1>记拜访</h1><p class="muted">记下客户提到的附加需求，当场看看团队里谁能引荐。同步草稿仅自己可读。</p></div><UiButton :disabled="locked" @click="refresh">刷新</UiButton></header>
+    <header class="page-heading"><div><h1>记拜访</h1><p class="muted">记下客户提到的附加需求，当场看看团队里谁能引荐。同步草稿仅自己可读。</p></div><UiButton :disabled="locked" @click="refresh">刷新</UiButton></header>
     <UiCard v-if="state.job" title="核对尚未确认的提交">
       <p>{{ state.error || '已保留本次请求，请先检查服务端记录。' }}</p>
       <div class="modal-actions"><UiButton :disabled="state.busy" @click="refresh">检查最新记录</UiButton><UiButton :loading="state.busy" @click="retry">用原请求确认结果</UiButton></div>
@@ -142,7 +142,7 @@ onMounted(async () => { readLocal(); await refresh() })
     <UiState v-if="loading" state="loading" title="正在读取拜访草稿" />
     <UiState v-else-if="loadError" state="error" title="无法访问拜访草稿" :description="loadError"><UiButton @click="refresh">重试</UiButton></UiState>
     <div v-else class="visit-layout">
-      <UiCard v-enter="1" title="本次拜访">
+      <UiCard title="本次拜访">
         <form class="form-grid" @submit.prevent="save(true)">
           <fieldset class="visit-inputs" :disabled="readonly">
             <UiField label="拜访记录" required v-slot="{control}"><textarea v-bind="control" v-model="form.text" rows="4" maxlength="2000" placeholder="例如：ERP 已定，客户还想把 ERP 工单同步到 MES。" required @input="reviewed=false; confirmed=false"></textarea></UiField>
@@ -162,7 +162,7 @@ onMounted(async () => { readLocal(); await refresh() })
         <p v-if="error" role="alert">{{ error }}</p><p v-if="message" role="status">{{ message }}</p>
       </UiCard>
       <div class="visit-lists">
-        <UiCard v-enter="2" title="我的已同步草稿">
+        <UiCard title="我的已同步草稿">
           <template #actions><UiButton compact :disabled="locked" @click="open()">新记一条</UiButton></template>
           <p v-if="!rows.length" class="muted">保存后，可用同一账号在其他浏览器继续整理。</p>
           <article v-for="draft in rows" :key="draft.id" class="visit-draft">
@@ -170,7 +170,7 @@ onMounted(async () => { readLocal(); await refresh() })
             <UiButton compact variant="text" :disabled="locked" @click="perform('remove',{id:draft.id,revision:draft.revision})">删除草稿</UiButton>
           </article>
         </UiCard>
-        <UiCard v-if="localRows.length" v-enter="3" title="原有本机草稿" description="选择一条记录，再保存到当前账号。原本机内容保留。">
+        <UiCard v-if="localRows.length" title="原有本机草稿" description="选择一条记录，再保存到当前账号。原本机内容保留。">
           <article v-for="draft in localRows" :key="draft.id" class="visit-draft"><p>{{ draft.text }}</p><UiButton compact :disabled="locked" @click="openLocal(draft)">{{ draft.serverVisitId ? '打开已同步记录' : '选择同步此草稿' }}</UiButton></article>
         </UiCard>
       </div>

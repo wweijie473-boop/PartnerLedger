@@ -180,10 +180,10 @@ const checkLabels = { met: '符合', unknown: '待核实', missing: '不符' }
 </script>
 
 <template>
-  <section v-enter="0" class="page-heading"><div><h1>需求整理</h1><p class="muted">使用 AI 提取关键字段，或手工填写已知的采购需求。</p></div></section>
+  <section class="page-heading"><div><h1>需求整理</h1><p class="muted">使用 AI 提取关键字段，或手工填写已知的采购需求。</p></div></section>
 
   <div class="requirement-layout">
-    <UiCard v-enter="1" title="原始需求">
+    <UiCard title="原始需求">
       <form class="form-grid" @submit.prevent="parse">
         <UiField label="需求描述" hint="使用脱敏示例，最多 2000 字。" required v-slot="{ control }">
           <textarea v-bind="control" v-model="text" :disabled="parsing || savingDraft" rows="7" maxlength="2000" required
@@ -196,7 +196,7 @@ const checkLabels = { met: '符合', unknown: '待核实', missing: '不符' }
       </form>
     </UiCard>
 
-    <UiCard v-enter="2" :title="manual ? '手工需求字段' : '解析结果'">
+    <UiCard :title="manual ? '手工需求字段' : '解析结果'">
       <template v-if="confirmed" #actions><UiBadge tone="success" dot>已确认</UiBadge></template>
       <UiState v-if="parsing" state="loading" title="正在解析需求" />
       <UiState v-else-if="!result" title="暂无解析结果" description="提交描述后，核对提取的字段和待补充信息。" />

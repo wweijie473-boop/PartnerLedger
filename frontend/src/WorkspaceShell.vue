@@ -5,11 +5,13 @@ import WorkspaceAccount from './WorkspaceAccount.vue'
 import { useSessionAccount } from './useSessionAccount.js'
 import { groupWorkspacePages } from './workspaceNavigation.js'
 import { UiButton, UiIcon } from './ui/index.js'
+import { vPageFade } from './ui/pageFade.js'
 import './workspace.css'
 
 const props = defineProps({
   nav: { type: Array, required: true },
   view: { type: String, required: true },
+  detailKey: { type: String, default: '' },
   organization: { type: String, required: true },
   accountLabel: { type: String, required: true },
   environment: { type: String, required: true },
@@ -127,7 +129,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
         <slot name="actions" />
         <UiButton v-if="demo && signedIn" variant="text" compact @click="emit('account')">切换演示身份</UiButton>
       </div>
-      <slot />
+      <div v-page-fade="view + ':' + detailKey" class="workspace-view"><slot /></div>
     </main>
   </div>
 </template>
