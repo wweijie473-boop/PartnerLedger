@@ -12,6 +12,7 @@ const apiMessages = {
   invalid_request: '请检查输入后再试。',
   retail_conflict: '订单状态、订购规则或凭证已变化。请刷新核对后再办理。',
   customer_profile_conflict: '企业名称已变化，或已有同名档案。请刷新核对后再保存。',
+  insufficient_service_allowance: '额度不足或低于已申请金额，请核对该合作方的额度。',
   revision_conflict: '项目已被协作方更新，请重新核对后办理。',
   idempotency_conflict: '此请求的内容已变更，请重新核对后提交。',
   invalid_transition: '项目状态已变化，当前操作暂不可办理。',

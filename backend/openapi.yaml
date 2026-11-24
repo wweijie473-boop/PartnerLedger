@@ -243,6 +243,152 @@ paths:
                         $ref: '#/components/schemas/Requirement'
         default:
           $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/partners:
+    get:
+      summary: List counterparts with direct-purchase history and their service allowance balances
+      parameters:
+        - $ref: '#/components/parameters/OperationsCursor'
+      responses:
+        '200':
+          description: Page of partners with limit_cents, pending_cents and paid_cents serialized as decimal strings
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/finance:
+    get:
+      summary: List deposits, invoice requests and service claims visible to the signed-in organization
+      parameters:
+        - $ref: '#/components/parameters/OperationsCursor'
+      responses:
+        '200':
+          description: Page of finance records with amount_cents serialized as a decimal string
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/finance/{kind}:
+    post:
+      summary: Open a finance request as a reseller
+      parameters:
+        - $ref: '#/components/parameters/FinanceKind'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  description: For a deposit or service claim
+                  required: [manufacturer_id, reference, amount_cents]
+                  properties:
+                    manufacturer_id: { $ref: '#/components/schemas/ID' }
+                    reference: { type: string, minLength: 1, maxLength: 80 }
+                    amount_cents: { type: integer, minimum: 1, maximum: 100000000 }
+                - type: object
+                  description: For an invoice on a paid order
+                  required: [order_id, title]
+                  properties:
+                    order_id: { $ref: '#/components/schemas/ID' }
+                    title: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/finance/{kind}/{id}/complete:
+    post:
+      summary: Record the result of offline processing as the authorized manufacturer
+      parameters:
+        - $ref: '#/components/parameters/FinanceKind'
+        - $ref: '#/components/parameters/OperationsID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [result_reference]
+              properties:
+                result_reference: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/allowances/{id}:
+    put:
+      summary: Set the service allowance for a reseller with direct-purchase history
+      parameters:
+        - $ref: '#/components/parameters/OperationsID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [limit_cents]
+              properties:
+                limit_cents: { type: integer, minimum: 0, maximum: 100000000 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/tickets:
+    get:
+      summary: List service tickets and replies for the current organization
+      parameters:
+        - $ref: '#/components/parameters/OperationsCursor'
+      responses:
+        '200':
+          description: Page of tickets with chronological replies
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Submit a service ticket to the manufacturer of an order or a known counterpart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, subject, detail, request_id]
+              oneOf:
+                - required: [order_id]
+                - required: [manufacturer_id]
+              properties:
+                order_id: { $ref: '#/components/schemas/ID' }
+                manufacturer_id: { $ref: '#/components/schemas/ID' }
+                category: { type: string, enum: ['产品使用', '授权与交付', '订单与结算'] }
+                subject: { type: string, minLength: 1, maxLength: 80 }
+                detail: { type: string, minLength: 1, maxLength: 500 }
+                request_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Ticket ID, including replay of a previously saved submission
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/tickets/{id}/{action}:
+    post:
+      summary: Resolve as the manufacturer, or reopen or close as the reseller
+      parameters:
+        - $ref: '#/components/parameters/OperationsID'
+        - name: action
+          in: path
+          required: true
+          schema: { type: string, enum: [resolve, reopen, close] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: { type: integer, minimum: 1 }
+                reply: { type: string, maxLength: 500, description: Required for resolve and reopen. }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        default:
+          $ref: '#/components/responses/Error'
   /api/retail/v1/operations/overview:
     get:
       summary: Get the signed-in reseller's customer and retail totals
@@ -818,6 +964,16 @@ components:
       type: http
       scheme: bearer
   parameters:
+    FinanceKind:
+      name: kind
+      in: path
+      required: true
+      schema: { type: string, enum: [topups, invoices, claims] }
+    OperationsID:
+      name: id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ID' }
     OperationsCursor:
       name: after
       in: query

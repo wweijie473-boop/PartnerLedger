@@ -6,7 +6,7 @@ export default defineConfig({
   testDir: './e2e',
   use: { baseURL, browserName: 'chromium', reducedMotion: 'reduce' },
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 4179 --strictPort',
+    command: 'npm run dev -- --mode retail-demo --host 127.0.0.1 --port 4179 --strictPort',
     url: baseURL,
   },
 })

@@ -119,6 +119,7 @@ func (s server) registerRetail(api, signedIn *gin.RouterGroup) {
 	retail.POST("/orders", s.createRetailOrder)
 	retail.POST("/orders/:id/:action", s.advanceRetailOrder)
 	s.registerDealerOperations(retail.Group("/operations"))
+	s.registerChannelOperations(retail.Group("/operations"))
 }
 
 func publishedOffers(db *gorm.DB) *gorm.DB {

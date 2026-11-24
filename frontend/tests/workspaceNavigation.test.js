@@ -27,6 +27,9 @@ test('direct checkout and demo operations keep their original role and environme
   assert.ok(workspacePages('dealer', { demo: true, retailDemo: true }).some(page => page.id === 'renewals'))
   assert.ok(workspacePages('vendor', { demo: true, retailDemo: true }).some(page => page.id === 'vendor-tickets'))
   assert.deepEqual(workspacePages('dealer').filter(page => page.source === 'dealer-operations').map(page => page.id),
-    ['business-overview', 'customers', 'renewals'])
-  assert.ok(workspacePages('vendor').every(page => page.source !== 'dealer-operations'))
+    ['business-overview', 'customers', 'renewals', 'funds-overview', 'funds-transactions', 'funds-invoices',
+      'funds-claims', 'application-queue', 'service-tickets'])
+  assert.deepEqual(workspacePages('vendor').filter(page => page.source === 'dealer-operations').map(page => page.id),
+    ['vendor-finance', 'vendor-tickets'])
+  assert.ok(workspacePages('customer').every(page => page.source !== 'dealer-operations'))
 })

@@ -63,6 +63,7 @@ type operationsTotals struct {
 	PromotionOrders        uint64 `json:"promotion_orders"`
 	Renewals30Days         uint64 `json:"renewals_30_days" gorm:"column:renewals_30_days"`
 	PendingCommissionCents uint64 `json:"pending_commission_cents,string"`
+	OpenTickets            uint64 `json:"open_tickets"`
 }
 
 func (s server) registerDealerOperations(group *gin.RouterGroup) {
@@ -101,9 +102,10 @@ func (s server) dealerOverview(c *gin.Context) {
 			+ (SELECT COUNT(*) FROM pl_dealer_customer_profiles WHERE reseller_id = ? AND customer_id IS NULL) AS customers,
 			COUNT(*) AS orders, COUNT(CASE WHEN source = 'promotion' THEN 1 END) AS promotion_orders,
 			COUNT(CASE WHEN renewal_due_on BETWEEN ? AND DATE_ADD(?, INTERVAL 30 DAY) THEN 1 END) AS renewals_30_days,
-			COALESCE(SUM(CASE WHEN status = 'settlement' THEN `+retailCommissionCents+` ELSE 0 END), 0) AS pending_commission_cents
+			COALESCE(SUM(CASE WHEN status = 'settlement' THEN `+retailCommissionCents+` ELSE 0 END), 0) AS pending_commission_cents,
+			(SELECT COUNT(*) FROM pl_channel_service_tickets WHERE reseller_id = ? AND status <> 'closed') AS open_tickets
 		FROM pl_retail_orders WHERE reseller_id = ?`,
-		dealer, dealer, dealer, today, today, dealer).Scan(&totals).Error
+		dealer, dealer, dealer, today, today, dealer, dealer).Scan(&totals).Error
 	retailRespond(c, totals, err)
 }
 

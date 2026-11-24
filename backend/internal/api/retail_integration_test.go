@@ -161,6 +161,7 @@ func testRetailWorkflow(t *testing.T, db *gorm.DB, request func(string, string, 
 		totals.PendingCommissionCents != 0 || totals.Renewals30Days != 0 {
 		t.Fatalf("unexpected operations totals: %+v", totals)
 	}
+	testChannelFinanceAndSupport(t, db, request, product.ManufacturerID, dealerID, self.ID, proxy.ID, dealer, vendor, customer, otherDealer, otherVendor)
 }
 
 func TestAnnualExpiryUsesLocalCalendar(t *testing.T) {

@@ -100,6 +100,57 @@ test('mobile transactions and tickets show state, preserve fields, and complete 
   ])
 })
 
+test('the live manufacturer saves allowances and resolves tickets through Go API paths', async ({ page }) => {
+  const organization = { id: '81', name: '示例厂商', kind: 'MANUFACTURER' }
+  const peer = { id: '82', name: '示例代理商', limit_cents: '0', pending_cents: '0', paid_cents: '0' }
+  const ticket = { id: '83', reseller_id: peer.id, subject: '补充授权说明', category: '授权与交付', detail: '请确认。',
+    created_at: '2026-11-20T02:00:00Z', status: 'open', revision: 1, replies: [] }
+  const actions = []
+  const ops = '/api/retail/v1/operations'
+  await page.addInitScript(() => {
+    sessionStorage.setItem('partnerledger-api-session', JSON.stringify({ token: 'test-session', expiresAt: Date.now() + 60_000 }))
+  })
+  await page.route('**/api/**', async route => {
+    const req = route.request()
+    const endpoint = new URL(req.url()).pathname
+    const method = req.method()
+    if (method !== 'GET') {
+      const body = req.postDataJSON()
+      actions.push({ method, endpoint, body })
+      if (endpoint === ops + '/allowances/82') peer.limit_cents = String(body.limit_cents)
+      if (endpoint === ops + '/tickets/83/resolve') {
+        ticket.status = 'resolved'
+        ticket.revision += 1
+      }
+    }
+    let data = { items: [], next_cursor: null }
+    if (endpoint === '/api/user/profile') data = { id: '84', username: 'vendor_demo', organization }
+    if (endpoint === '/api/org/current') data = organization
+    if (endpoint === ops + '/partners') data.items = [peer]
+    if (endpoint === ops + '/tickets') data.items = [ticket]
+    await route.fulfill({ json: { code: 200, message: 'success', data } })
+  })
+
+  await page.goto('/login/vendor?view=vendor-finance')
+  await page.getByRole('button', { name: '服务费额度', exact: true }).click()
+  await page.getByRole('button', { name: '设置额度', exact: true }).click()
+  await page.getByLabel('金额（元）').fill('123.45')
+  await page.getByRole('button', { name: '保存额度' }).click()
+  await expect(page.getByRole('row').filter({ hasText: peer.name })).toContainText('¥123.45')
+  await page.goto('/login/vendor?view=vendor-tickets')
+  const summary = page.locator('summary').filter({ hasText: ticket.subject })
+  await expect(summary).toContainText(peer.name)
+  await summary.click()
+  await page.getByRole('button', { name: '填写处理结果' }).click()
+  await page.getByLabel('处理结果').fill('授权已核对。')
+  await page.getByRole('button', { name: '提交处理结果' }).click()
+  await expect(summary).toContainText('待代理商确认')
+  expect(actions).toEqual([
+    { method: 'PUT', endpoint: ops + '/allowances/82', body: { limit_cents: 12345 } },
+    { method: 'POST', endpoint: ops + '/tickets/83/resolve', body: { reply: '授权已核对。', revision: 1 } },
+  ])
+})
+
 test('a customer checkout deep link resolves inside its section without becoming a general menu entry', async ({ page }) => {
   const code = 'a'.repeat(32)
   const organization = { id: '71', name: '示例客户', kind: 'CUSTOMER' }

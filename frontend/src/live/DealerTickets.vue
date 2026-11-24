@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { UiBadge, UiButton, UiCard, UiIcon, UiState } from '../ui/index.js'
 import { pendingRetailRequest } from './retailRequest.js'
 
-const props = defineProps({ state: Object, role: String, identity: String, busy: Boolean, submit: Function })
+const props = defineProps({ state: Object, role: String, identity: String, busy: Boolean, submit: Function, demo: Boolean })
 const vendor = props.role === 'vendor'
 const newTicket = ref(null)
 const response = ref(null)
@@ -15,12 +15,15 @@ const rows = computed(() => props.state.tickets.filter(row => !status.value || r
 const time = value => new Date(value).toLocaleString('zh-CN')
 
 function create() {
-  newTicket.value = { subject: '', category: '产品使用', order_id: '', detail: '' }
+  newTicket.value = { subject: '', category: '产品使用', order_id: '', detail: '',
+    manufacturer_id: props.state.partners?.length === 1 ? props.state.partners[0].id : '' }
 }
 
 async function submitTicket() {
-  const body = newTicket.value
-  const key = 'partnerledger-demo-ticket:' + props.identity
+  const { manufacturer_id, ...demoBody } = newTicket.value
+  const { order_id, ...fields } = demoBody
+  const body = props.demo ? demoBody : { ...fields, ...(order_id ? { order_id } : { manufacturer_id }) }
+  const key = (props.demo ? 'partnerledger-demo-ticket:' : 'partnerledger-live-ticket:') + props.identity
   const id = pendingRetailRequest(key, body)
   if (await props.submit('tickets', { ...body, request_id: id }, '工单已提交，等待厂商处理。')) {
     sessionStorage.removeItem(key)
@@ -31,10 +34,15 @@ async function submitTicket() {
 
 async function sendReply() {
   const item = response.value
-  if (await props.submit('tickets/' + item.id + '/' + (vendor ? 'resolve' : 'reopen'), { reply: item.reply }, vendor ? '处理结果已提交。' : '补充说明已提交。')) {
+  const body = props.demo ? { reply: item.reply } : { reply: item.reply, revision: item.revision }
+  if (await props.submit('tickets/' + item.id + '/' + (vendor ? 'resolve' : 'reopen'), body, vendor ? '处理结果已提交。' : '补充说明已提交。')) {
     response.value = null
     status.value = ''
   }
+}
+
+function closeTicket(row) {
+  return props.submit('tickets/' + row.id + '/close', props.demo ? {} : { revision: row.revision }, '工单已关闭。')
 }
 </script>
 
@@ -46,6 +54,11 @@ async function sendReply() {
       <label>关联订单<select v-model="newTicket.order_id"><option value="">无需关联</option>
         <option v-for="order in state.orders" :key="order.id" :value="order.id">订单 {{ order.id }} · {{ order.product_name }}</option>
       </select></label>
+      <label v-if="!demo && !newTicket.order_id">办理厂商
+        <select v-model="newTicket.manufacturer_id" required><option value="">选择已有直购订单的厂商</option>
+          <option v-for="partner in state.partners" :key="partner.id" :value="partner.id">{{ partner.name }}</option>
+        </select>
+      </label>
       <label>问题描述<textarea v-autogrow v-model.trim="newTicket.detail" maxlength="500" required /></label>
       <div class="operations-actions"><UiButton type="submit" variant="primary" :loading="busy">提交工单</UiButton><UiButton :disabled="busy" @click="newTicket = null">取消</UiButton></div>
     </form>
@@ -55,12 +68,12 @@ async function sendReply() {
       <h2 id="ticket-records">工单列表</h2>
       <div class="workspace-record-controls">
         <label class="ticket-filter">工单状态 <select v-model="status"><option value="">全部</option><option v-for="(label, key) in labels" :key="key" :value="key">{{ label }}</option></select></label>
-        <UiButton v-if="!vendor && !newTicket" variant="primary" :disabled="busy" @click="create">新建工单</UiButton>
+        <UiButton v-if="!vendor && !newTicket" variant="primary" :disabled="busy || (!demo && !state.partners.length)" @click="create">新建工单</UiButton>
       </div>
     </header>
     <details v-for="row in rows" :key="row.id" class="ticket-record">
       <summary>
-        <span><strong>{{ row.subject }}</strong><small>{{ row.category }}<template v-if="row.order_id"> · 订单 {{ row.order_id }}</template></small></span>
+        <span><strong>{{ row.subject }}</strong><small>{{ row.category }}<template v-if="row.partner"> · {{ row.partner }}</template><template v-if="row.order_id"> · 订单 {{ row.order_id }}</template></small></span>
         <UiBadge :tone="tones[row.status]" dot>{{ labels[row.status] }}</UiBadge>
         <UiIcon name="chevron-down" :size="14" />
       </summary>
@@ -75,12 +88,13 @@ async function sendReply() {
         <div class="operations-actions"><UiButton type="submit" variant="primary" :loading="busy">{{ vendor ? '提交处理结果' : '提交补充说明' }}</UiButton><UiButton :disabled="busy" @click="response = null">取消</UiButton></div>
       </form>
       <div v-else-if="vendor ? row.status === 'open' : row.status === 'resolved'" class="operations-actions">
-        <UiButton v-if="!vendor" :disabled="busy" @click="submit('tickets/' + row.id + '/close', {}, '工单已关闭。')">确认关闭</UiButton>
-        <UiButton :disabled="busy" @click="response = { id: row.id, reply: '' }">{{ vendor ? '填写处理结果' : '补充并重新打开' }}</UiButton>
+        <UiButton v-if="!vendor" :disabled="busy" @click="closeTicket(row)">确认关闭</UiButton>
+        <UiButton v-if="vendor || demo || row.revision &lt; 20" :disabled="busy" @click="response = { id: row.id, revision: row.revision, reply: '' }">{{ vendor ? '填写处理结果' : '补充并重新打开' }}</UiButton>
       </div>
       </div>
     </details>
-    <UiState v-if="!rows.length" title="暂无符合条件的工单" />
+    <UiState v-if="!rows.length" title="暂无符合条件的工单"
+      :description="!demo && !vendor && !state.partners.length ? '完成首次直购下单后，可选择合作厂商提交工单。' : ''" />
   </section>
 </template>
 

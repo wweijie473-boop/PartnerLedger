@@ -4,9 +4,9 @@ import { fileURLToPath } from 'node:url'
 
 const demoDatabase = fileURLToPath(new URL('./var/retail-demo.sqlite', import.meta.url))
 
-export default defineConfig(async ({ command, isPreview, mode }) => {
+export default defineConfig(async ({ mode }) => {
   const plugins = [vue()]
-  if (mode === 'retail-demo' || (command === 'serve' && !isPreview)) {
+  if (mode === 'retail-demo') {
     const { retailDemo } = await import('./demo/retailServer.js')
     plugins.push(retailDemo({ database: demoDatabase }))
   }

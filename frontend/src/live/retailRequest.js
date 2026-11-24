@@ -8,12 +8,12 @@ export function customerOrderLink(orderID) {
   return '/login/customer?' + new URLSearchParams({ view: 'retail-orders', order_id: orderID })
 }
 
-export async function readRetailCatalog(read, path) {
+export async function readRetailCatalog(read, path, cursorParam = 'after') {
   const items = []
   const cursors = new Set()
   let cursor = ''
   do {
-    const page = await read(path + (cursor ? (path.includes('?') ? '&' : '?') + 'after=' + encodeURIComponent(cursor) : ''))
+    const page = await read(path + (cursor ? (path.includes('?') ? '&' : '?') + cursorParam + '=' + encodeURIComponent(cursor) : ''))
     items.push(...page.items)
     cursor = page.next_cursor
     if (cursor && cursors.has(cursor)) throw new Error('列表分页无效，请刷新。')
