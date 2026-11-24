@@ -84,9 +84,10 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
           <div class="pl-wrap workspace-subbar-inner">
             <nav class="workspace-tabs" aria-label="工作台栏目">
               <button v-for="group in topGroups" :key="group.id" type="button"
-                :class="{ 'mobile-tab': group === currentGroup || group.id === (role ? 'overview' : 'home') }"
+                :class="{ 'mobile-tab': group.featured || group === currentGroup || group.id === (role ? 'overview' : 'home'), 'workspace-featured-tab': group.featured }"
                 :aria-current="group === currentGroup ? (showGroupPages ? 'true' : 'page') : undefined"
                 @click="emit('navigate', group.pages[0].id)">
+                <UiIcon v-if="group.featured" :name="group.icon" :size="19" />
                 <span>{{ group.label }}</span>
               </button>
             </nav>
@@ -184,6 +185,12 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
 .workspace-tabs button:hover, .workspace-subpages button:hover {
   background: var(--ui-surface-hover); color: var(--ui-link);
 }
+.workspace-tabs .workspace-featured-tab {
+  color: var(--ui-link);
+  background: var(--ui-accent-bg);
+  font-weight: 650;
+}
+.workspace-tabs .workspace-featured-tab:hover { background: var(--ui-accent-border); }
 .workspace-directory {
   position: absolute;
   z-index: 2;

@@ -1,5 +1,6 @@
 import { actOnProject, createProject, demoActor, listProducts, projectList, saveProduct, seedState, viewProject } from './domain.js'
 import { actOpportunity, addPartner, captureOpportunity, ensureOpportunityMemory, opportunityDesk } from './opportunities.js'
+import { inquirySummary } from '../live/aiInquiry.js'
 
 export const demoStorageKey = 'partnerledger-channel-demo-v1'
 const changeEvent = demoStorageKey + ':changed'
@@ -44,6 +45,32 @@ export function createDemoRepository(role, options = {}) {
     create: payload => mutate((state, now) => createProject(state, actor, payload, now)),
     act: (id, action, payload, revision) => mutate((state, now) => actOnProject(state, actor, id, action, payload, revision, now)),
     async listProducts() { return listProducts(read(), actor) },
+    getInquiryDraft(id) {
+      if (role !== 'reseller') return null
+      const state = read()
+      const project = viewProject(state.projects.find(item => item.id === id), actor, clock())
+      const draft = state.inquiryDrafts?.[project.id]
+      return project.actions.includes('submitInquiry') && draft?.projectRevision === project.revision &&
+        state.products.some(item => item.id === draft.productId && item.published) ? structuredClone(draft) : null
+    },
+    saveInquiryDraft: (id, payload, sample) => mutate((state, now) => {
+      if (role !== 'reseller') throw new Error('当前身份无法保存询价草稿。')
+      const product = state.products.find(item => item.id === payload.productId && item.published)
+      if (!product) throw new Error('产品已不可用，请重新匹配。')
+      const project = id
+        ? viewProject(state.projects.find(item => item.id === id), actor, now)
+        : createProject(state, actor, sample, now)
+      if (!project.actions.includes('submitInquiry') || (id && project.revision !== payload.revision)) {
+        throw Object.assign(new Error('项目状态已变化，请重新选择项目。'), { status: 409 })
+      }
+      const draft = {
+        projectId: project.id, projectRevision: project.revision, productId: product.id,
+        requirement: payload.requirement, summary: inquirySummary(payload.requirement),
+      }
+      state.inquiryDrafts ??= {}
+      state.inquiryDrafts[project.id] = draft
+      return draft
+    }),
     saveProduct: payload => mutate(state => saveProduct(state, actor, payload)),
     async opportunityDesk() { return opportunityDesk(read(), actor, clock()) },
     captureOpportunity: (id, payload) => mutate((state, now) => captureOpportunity(state, actor, id, payload, now)),

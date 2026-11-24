@@ -16,6 +16,7 @@ import ProjectPriority from './ProjectPriority.vue'
 import DemoCatalog from './DemoCatalog.vue'
 import OpportunityDesk from './OpportunityDesk.vue'
 import VisitDrafts from '../live/VisitDrafts.vue'
+import AiWorkspace from '../live/AiWorkspace.vue'
 import { createVisitDraftStore } from '../live/visitDrafts.js'
 import { retailDemoCounterpart, retailDemoEnabled, retailDemoLocation } from '../live/retailDemo.js'
 import './workspace.css'
@@ -44,9 +45,11 @@ const view = ref('overview')
 const currentPage = computed(() => nav.find(item => item.id === view.value))
 const retailView = computed(() => currentPage.value && isRetailDemoPage(currentPage.value))
 const selected = ref(params().get('project') || '')
+const aiProject = ref('')
 const project = computed(() => projects.value.find(item => item.id === selected.value))
 const mode = ref('')
 const recordAtOpen = ref(null)
+const inquiryDraft = ref(null)
 const working = ref(false)
 const loading = ref(true)
 const loadError = ref('')
@@ -110,6 +113,8 @@ function restoreUrl() {
   selected.value = params().get('project') || ''
   const target = params().get('view')
   view.value = nav.some(item => item.id === target) ? target : selected.value ? 'ledger' : 'overview'
+  aiProject.value = view.value === 'requirement' ? selected.value : ''
+  if (view.value === 'requirement') selected.value = ''
   opportunity.value = view.value === 'opportunities' ? params().get('op') || '' : ''
   captureFor.value = ''
   closeDialog()
@@ -135,7 +140,8 @@ function restoreUrl() {
 function syncUrl(state = null, replace = false) {
   const url = new URL(location.href)
   if (view.value === 'overview') url.searchParams.delete('view'); else url.searchParams.set('view', view.value)
-  if (selected.value) url.searchParams.set('project', selected.value); else url.searchParams.delete('project')
+  const projectId = view.value === 'requirement' ? aiProject.value : selected.value
+  if (projectId) url.searchParams.set('project', projectId); else url.searchParams.delete('project')
   if (opportunity.value && view.value === 'opportunities') url.searchParams.set('op', opportunity.value); else url.searchParams.delete('op')
   if (['ledger', 'delivery'].includes(view.value) && scope.value !== 'all') url.searchParams.set('scope', scope.value); else url.searchParams.delete('scope')
   if (view.value === 'ledger' && group.value) url.searchParams.set('metric', group.value); else url.searchParams.delete('metric')
@@ -151,6 +157,7 @@ function clearListFilters() {
 }
 function navigate(target, filters = {}) {
   view.value = target; selected.value = ''; opportunity.value = ''; captureFor.value = ''; clearFilters()
+  aiProject.value = target === 'requirement' ? filters.project || '' : ''
   scope.value = filters.scope || 'all'
   group.value = filters.metric || ''
   syncUrl()
@@ -173,6 +180,11 @@ function openOpportunity(id = '', captureProjectId = '') {
 function openProject(record) {
   selected.value = record.id; syncUrl(); window.scrollTo(0,0)
 }
+async function openAiProject(id) {
+  await refresh()
+  navigate('ledger')
+  openProject({ id })
+}
 function openProjectFromList(record) {
   const demoProjectList = { search: search.value, stage: stage.value, scope: scope.value, group: group.value, top: window.scrollY, id: record.id }
   history.replaceState({ demoProjectList }, '', location.href)
@@ -186,6 +198,15 @@ function returnToProjects() {
 }
 function openDialog(action) {
   formError.value = ''; recordAtOpen.value = project.value; mode.value = action
+  inquiryDraft.value = null
+  if (action === 'submitInquiry' && recordAtOpen.value) {
+    try {
+      const draft = repo.getInquiryDraft(recordAtOpen.value.id)
+      if (draft?.projectRevision === recordAtOpen.value.revision) inquiryDraft.value = draft
+    } catch {
+      formError.value = '暂时无法带入询价草稿，可以手工填写。'
+    }
+  }
 }
 function closeDialog() { if (!working.value) { mode.value = ''; recordAtOpen.value = null; formError.value = '' } }
 function roleHref(key) {
@@ -235,9 +256,15 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
       <UiState v-else-if="loading" state="loading" title="正在载入工作台" />
       <UiState v-else-if="loadError" state="error" title="工作台暂时不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton><UiButton @click="openDialog('reset')">恢复演示数据</UiButton></UiState>
       <template v-else-if="selected">
-        <ProjectDetail v-if="project" :project="project" :role="role" :products="products" :opportunities="role === 'dealer' ? desk.items.filter(item => item.projectId === project.id) : []" @action="openDialog" @back="returnToProjects" @capture="openOpportunity('', project.id)" @opportunity="openOpportunity" />
+        <ProjectDetail v-if="project" :project="project" :role="role" :products="products" :opportunities="role === 'dealer' ? desk.items.filter(item => item.projectId === project.id) : []" @action="openDialog" @back="returnToProjects" @capture="openOpportunity('', project.id)" @opportunity="openOpportunity">
+          <template v-if="role === 'dealer' && project.actions.includes('submitInquiry')" #toolbar>
+            <UiButton compact variant="text" icon="ai" @click="navigate('requirement', { project: project.id })">用 AI 整理需求</UiButton>
+          </template>
+        </ProjectDetail>
         <UiState v-else state="denied" title="当前身份无法查看此项目" description="项目不存在、尚未提交给当前组织，或已撤回。"><UiButton @click="navigate('ledger')">查看我的工作列表</UiButton></UiState>
       </template>
+      <AiWorkspace v-else-if="view === 'requirement' && role === 'dealer'" :key="aiProject" :demo-repository="repo" :initial-project="aiProject"
+        @open-project="openAiProject" />
       <DealerPage v-else-if="currentPage?.source === 'utility'" :key="view" :view="view" :title="currentPage.label" :projects="projects" :organization="org.company" :account="names[role] + ' · 演示身份'" @project="id => openProjectFromList({ id })" @navigate="navigate" @account="openDialog('roles')" />
       <DemoCatalog v-else-if="view === 'catalog'" :items="products" :role="role" :save="saveProduct" />
       <VisitDrafts v-else-if="role === 'dealer' && view === 'visits'" :scope="'demo:' + org.orgId" :load-projects="repo.list" :load-desk="repo.opportunityDesk" :capture="captureVisit" @project="id => { navigate('ledger'); openProject({id}) }" @opportunity="openOpportunity" />
@@ -274,7 +301,7 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
     <ElDialog :model-value="!!mode" :title="dialogTitle" width="min(94vw, 610px)" :close-on-click-modal="false" :show-close="!working" @update:model-value="value => { if (!value) closeDialog() }">
       <div v-if="mode === 'roles'" class="role-options"><p class="ch-callout">切换演示身份以处理下一步。正式账号和演示记录相互独立。</p><a v-for="(label,key) in names" :key="key" :href="roleHref(key)" class="role-option ch-role-option"><UiIcon :name="key === 'customer' ? 'request' : key" /><span><strong>{{ label }}工作台</strong><small>{{ roles[roleKeys[key]].company }}</small></span><UiIcon :name="role === key ? 'check' : 'forward'" :size="16" /></a></div>
       <div v-else-if="mode === 'reset'"><p>恢复初始项目、报价和产品目录。三个演示身份新增的记录将从此浏览器移除。</p><p v-if="formError" class="form-error" role="alert">{{ formError }}</p><div class="modal-actions"><UiButton :disabled="working" @click="closeDialog">取消</UiButton><UiButton variant="primary" :loading="working" @click="perform({})">确认重置</UiButton></div></div>
-      <ChannelAction v-else-if="mode" :key="mode" :action="mode" :role="role" :project="recordAtOpen" :products="products" :error="formError" :busy="working" @submit="perform" @cancel="closeDialog" />
+      <ChannelAction v-else-if="mode" :key="mode" :action="mode" :role="role" :project="recordAtOpen" :products="products" :inquiry-draft="inquiryDraft" :error="formError" :busy="working" @submit="perform" @cancel="closeDialog" />
     </ElDialog>
     <div v-if="success" class="notice" role="status"><UiIcon name="check" :size="16" />{{ success }}</div>
   </div>

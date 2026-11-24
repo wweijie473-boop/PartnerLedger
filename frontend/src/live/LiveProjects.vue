@@ -16,7 +16,7 @@ import { vPageFade } from '../ui/pageFade.js'
 import '../channel/workspace.css'
 
 const props = defineProps({ request: Function, role: String, organizationId: String, userId: String, overview: Boolean })
-const emit = defineEmits(['capture-opportunity', 'open-opportunity', 'open-project', 'open-list'])
+const emit = defineEmits(['capture-opportunity', 'open-opportunity', 'open-project', 'open-list', 'prepare-inquiry'])
 const repo = createHttpProjectRepository(props.request)
 const journal = createProjectWriteJournal(repo, props.organizationId, props.userId)
 const pending = computed(() => journal.state.job)
@@ -356,6 +356,8 @@ onUnmounted(() => {
       </UiState>
       <ProjectDetail v-else-if="detail" :project="detail" :role="role" :products="products" live @back="returnToList" @action="openAction">
         <template #toolbar>
+          <UiButton v-if="role === 'dealer' && detail.actions.includes('submitInquiry')" variant="text" icon="ai" :disabled="busy"
+            @click="$emit('prepare-inquiry', detail.id)">用 AI 整理需求</UiButton>
           <UiButton variant="text" :disabled="busy" @click="refreshProgress">刷新协作进度</UiButton>
           <UiButton v-if="role === 'dealer'" variant="text" @click="$emit('capture-opportunity', detail.id)">记录附加商机</UiButton>
         </template>

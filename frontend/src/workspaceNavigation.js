@@ -1,5 +1,6 @@
 export const workspaceGroups = [
   { id: 'overview', label: '工作总览', icon: 'overview', pinned: ['customer', 'dealer', 'vendor'] },
+  { id: 'ai', label: 'AI 工作台', icon: 'ai', pinned: ['dealer'], featured: true },
   { id: 'clients', label: '客户经营', icon: 'customer', pinned: ['dealer'] },
   { id: 'projects', label: { customer: '采购项目', dealer: '项目协作', vendor: '渠道询价' }, icon: 'request', pinned: ['customer', 'dealer', 'vendor'] },
   { id: 'products', label: '产品管理', icon: 'catalog', pinned: ['vendor'] },
@@ -19,7 +20,7 @@ const pages = [
   { id: 'promotion', label: '推广获客二维码', icon: 'workflow', group: 'clients', roles: ['dealer'], source: 'retail' },
   { id: 'projects', label: { customer: '我的采购项目', dealer: '客户项目', vendor: '渠道询价' }, icon: 'request', group: 'projects', mode: 'live', shortcut: ['customer', 'vendor'] },
   { id: 'ledger', label: { customer: '我的采购项目', dealer: '客户项目台账', vendor: '渠道询价队列' }, icon: 'request', group: 'projects', mode: 'demo', shortcut: ['customer', 'vendor'] },
-  { id: 'requirement', label: 'AI 需求解析', icon: 'request', group: 'projects', roles: ['dealer'], mode: 'live', shortcut: ['dealer'] },
+  { id: 'requirement', label: 'AI 工作台', icon: 'ai', group: 'ai', roles: ['dealer'], shortcut: ['dealer'] },
   { id: 'tickets', label: '项目待办', icon: 'request', group: 'projects', roles: ['dealer'], source: 'utility' },
   { id: 'catalog', label: '产品目录', demoLabel: '软件目录', icon: 'catalog', group: 'products', roles: ['dealer', 'vendor'], shortcut: ['vendor'] },
   { id: 'pricing', label: '订购价格与佣金', icon: 'catalog', group: 'products', roles: ['vendor'], source: 'retail', mode: 'live' },

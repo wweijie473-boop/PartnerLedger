@@ -7,7 +7,7 @@ import WorkspaceShortcuts from './WorkspaceShortcuts.vue'
 import DealerPage from './DealerPage.vue'
 import { workspacePages, workspaceShortcuts } from './workspaceNavigation.js'
 import ProductCatalog from './live/ProductCatalog.vue'
-import RequirementParser from './live/RequirementParser.vue'
+import AiWorkspace from './live/AiWorkspace.vue'
 import LiveProjects from './live/LiveProjects.vue'
 import LiveVisits from './live/LiveVisits.vue'
 import LiveOpportunities from './live/LiveOpportunities.vue'
@@ -43,6 +43,7 @@ const logoutError = ref('')
 const entryParams = new URLSearchParams(location.search)
 const view = ref(entryParams.get('view') || (entryParams.has('project') ? 'projects' : 'overview'))
 const captureProject = ref(entryParams.get('captureProject') || '')
+const aiProject = ref(entryParams.get('project') || '')
 const navigationRevision = ref(0)
 const isManufacturer = computed(() => organization.value?.kind === 'MANUFACTURER')
 const isDealer = computed(() => organization.value?.kind === 'RESELLER')
@@ -248,9 +249,11 @@ function restoreWorkspaceView() {
   const params = new URLSearchParams(location.search)
   const target = params.get('view') || (params.has('project') ? 'projects' : 'overview')
   const next = navigation.value.some(item => item.id === target) ? target : 'overview'
-  if (next !== view.value) {
+  const projectId = next === 'requirement' ? params.get('project') || '' : ''
+  if (next !== view.value || (next === 'requirement' && aiProject.value !== projectId)) {
     navigationRevision.value += 1
     view.value = next
+    aiProject.value = projectId
     captureProject.value = params.get('captureProject') || ''
   }
 }
@@ -258,6 +261,7 @@ function navigate(target, params = {}) {
   navigationRevision.value += 1
   view.value = target
   captureProject.value = ''
+  aiProject.value = target === 'requirement' ? params.project || '' : ''
   const url = new URL(location.href)
   const checkout = target === 'checkout'
     ? { code: entryParams.get('code') ?? '', product: entryParams.get('product') ?? '' }
@@ -357,12 +361,13 @@ function openOpportunity(id = '', projectId = '') {
     </template>
     <LiveProjects v-else-if="view === 'projects'" :key="navigationRevision" :request="authenticated" :role="entry"
       :organization-id="organization.id" :user-id="user.id" @capture-opportunity="id => openOpportunity('',id)"
-      @open-opportunity="id => openOpportunity(id)" />
+      @open-opportunity="id => openOpportunity(id)" @prepare-inquiry="id => navigate('requirement', { project: id })" />
     <LiveVisits v-else-if="view === 'visits' && isDealer" :request="authenticated" :scope="organization.id + ':' + user.id" @project="openProject" @opportunity="id => openOpportunity(id)" />
     <LiveOpportunities v-else-if="view === 'opportunities' && isDealer" :key="navigationRevision" :request="authenticated" :scope="organization.id + ':' + user.id" :project-id="captureProject" :capture="!!captureProject" @project="openProject" />
     <ProductCatalog v-else-if="view === 'catalog' && entry !== 'customer'" :request="authenticated" :is-manufacturer="isManufacturer" />
-    <RequirementParser v-else-if="view === 'requirement' && isDealer" :request="authenticated"
-      @open-inquiry="id => openProject(id)" @open-projects="navigate('projects')" />
+    <AiWorkspace v-else-if="view === 'requirement' && isDealer" :key="navigationRevision" :request="authenticated"
+      :initial-project="aiProject"
+      @open-project="id => openProject(id)" @open-projects="navigate('projects')" />
     <template v-else>
       <header class="page-heading"><h1>账号与组织</h1></header>
       <section class="workspace-section live-account" aria-labelledby="current-account">
