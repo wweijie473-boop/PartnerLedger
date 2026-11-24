@@ -11,11 +11,11 @@ export const workspaceGroups = [
 
 const pages = [
   { id: 'overview', label: '工作总览', icon: 'overview', group: 'overview' },
-  { id: 'business-overview', label: '经营看板', icon: 'overview', group: 'clients', roles: ['dealer'], source: 'operations' },
-  { id: 'customers', label: '客户档案', icon: 'customer', group: 'clients', roles: ['dealer'], source: 'operations' },
+  { id: 'business-overview', label: '经营看板', icon: 'overview', group: 'clients', roles: ['dealer'], source: 'operations', liveOperations: true },
+  { id: 'customers', label: '客户档案', icon: 'customer', group: 'clients', roles: ['dealer'], source: 'operations', liveOperations: true },
   { id: 'visits', label: '记拜访', icon: 'request', group: 'clients', roles: ['dealer'], shortcut: ['dealer'] },
   { id: 'opportunities', label: '商机拾遗', icon: 'workflow', group: 'clients', roles: ['dealer'], shortcut: ['dealer'] },
-  { id: 'renewals', label: '续费跟进', icon: 'time', group: 'clients', roles: ['dealer'], source: 'operations', shortcut: ['dealer'] },
+  { id: 'renewals', label: '续费跟进', icon: 'time', group: 'clients', roles: ['dealer'], source: 'operations', liveOperations: true, shortcut: ['dealer'] },
   { id: 'promotion', label: '推广获客二维码', icon: 'workflow', group: 'clients', roles: ['dealer'], source: 'retail' },
   { id: 'projects', label: { customer: '我的采购项目', dealer: '客户项目', vendor: '渠道询价' }, icon: 'request', group: 'projects', mode: 'live', shortcut: ['customer', 'vendor'] },
   { id: 'ledger', label: { customer: '我的采购项目', dealer: '客户项目台账', vendor: '渠道询价队列' }, icon: 'request', group: 'projects', mode: 'demo', shortcut: ['customer', 'vendor'] },
@@ -56,10 +56,14 @@ export function workspacePages(role, { demo = false, retailDemo = false, directV
     if (page.roles && !page.roles.includes(role)) return false
     if (page.mode && page.mode !== (demo ? 'demo' : 'live')) return false
     if (page.direct && page.id !== directView) return false
-    if (page.source === 'operations') return demo && retailDemo
+    if (page.source === 'operations') return demo ? retailDemo : page.liveOperations
     if (page.source === 'retail' && demo) return retailDemo && role !== 'customer'
     return true
-  }).map(page => ({ ...page, label: forRole(demo && page.demoLabel ? page.demoLabel : page.label, role) }))
+  }).map(page => ({
+    ...page,
+    source: !demo && page.liveOperations ? 'dealer-operations' : page.source,
+    label: forRole(demo && page.demoLabel ? page.demoLabel : page.label, role),
+  }))
 }
 
 export function groupWorkspacePages(navigation, role) {

@@ -243,6 +243,80 @@ paths:
                         $ref: '#/components/schemas/Requirement'
         default:
           $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/overview:
+    get:
+      summary: Get the signed-in reseller's customer and retail totals
+      responses:
+        '200':
+          description: Customer, order and renewal counts, plus pending commission in cents as a decimal string
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/customers:
+    get:
+      summary: List the reseller's prospects, linked customers, and retail customers
+      parameters:
+        - $ref: '#/components/parameters/OperationsCursor'
+      responses:
+        '200':
+          description: Page of customer profiles in data.items, with the continuation in data.next_cursor
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create a private prospect profile for the reseller
+      requestBody:
+        $ref: '#/components/requestBodies/OperationsCustomer'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/customers/{id}:
+    put:
+      summary: Update a private profile without granting customer access
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[op][1-9][0-9]*$' }
+      requestBody:
+        $ref: '#/components/requestBodies/OperationsCustomer'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/renewals:
+    get:
+      summary: List the reseller's paid annual retail orders with renewal follow-up
+      parameters:
+        - $ref: '#/components/parameters/OperationsCursor'
+      responses:
+        '200':
+          description: Page of renewals in data.items, with the continuation in data.next_cursor
+        default:
+          $ref: '#/components/responses/Error'
+  /api/retail/v1/operations/renewals/{id}:
+    put:
+      summary: Save the latest follow-up for a paid annual order of the reseller
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/ID' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, minLength: 1, maxLength: 300 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        default:
+          $ref: '#/components/responses/Error'
   /api/ai/match-products:
     post:
       summary: Match confirmed requirements against published product profiles as a reseller
@@ -744,12 +818,28 @@ components:
       type: http
       scheme: bearer
   parameters:
+    OperationsCursor:
+      name: after
+      in: query
+      schema: { type: string }
+      description: Use the previous response's next_cursor to read the next page.
     FieldworkID:
       name: id
       in: path
       required: true
       schema: { $ref: '#/components/schemas/ID' }
   requestBodies:
+    OperationsCustomer:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: A prospect requires its own name. An organization profile uses the existing organization name.
+            properties:
+              name: { type: string, maxLength: 120 }
+              contact: { type: string, maxLength: 40 }
+              note: { type: string, maxLength: 200 }
     VisitSave:
       required: true
       content:

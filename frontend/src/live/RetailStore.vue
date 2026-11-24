@@ -129,7 +129,7 @@ async function pay() {
           <article v-for="item in products" :key="item.product_id" class="store-product">
             <span v-if="item.category" class="product-category">{{ item.category }}</span>
             <h2>{{ item.name }}</h2>
-            <p class="product-version">{{ item.version }}</p>
+            <p class="product-version">{{ item.version }}{{ item.annual ? ' · 年度授权' : '' }}</p>
             <p v-if="item.summary || item.description">{{ item.summary || item.description }}</p>
             <div class="product-action"><strong>{{ money(item.unit_cents) }} <small>／份</small></strong>
               <UiButton v-if="demo" variant="primary" @click="choose(item)">订购{{ item.name }}</UiButton>

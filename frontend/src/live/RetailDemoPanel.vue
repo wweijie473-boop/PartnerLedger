@@ -62,7 +62,7 @@ async function request(path, options) {
     <a :href="retailDemoCounterpart(role, view)">{{ role === 'dealer' ? '切换到厂商后台' : '返回代理商中台' }}</a>
   </div>
   <DealerOperations v-if="session && operations" :key="view" :view="view" :title="title" :role="role" :request="request"
-    :identity="session.dealer" @navigate="emit('navigate', $event)" />
+    :identity="session.dealer" demo @navigate="emit('navigate', $event)" />
   <RetailDesk v-else-if="session" :key="view" :mode="view" :title="title" :role="role" :request="request"
     :identity="session.dealer" demo @navigate="emit('navigate', $event)" />
   <template v-else>

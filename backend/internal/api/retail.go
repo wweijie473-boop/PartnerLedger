@@ -24,12 +24,14 @@ var retailRequest = regexp.MustCompile("^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-
 var retailConflict = errors.New("retail order conflict")
 
 const maxRetailPrice = 100000000
+const retailCommissionCents = "((unit_cents * quantity * commission_bps + 5000) DIV 10000)"
 
 type retailOffer struct {
 	ProductID     uint64 `json:"product_id,string" gorm:"primaryKey"`
 	UnitCents     uint64 `json:"unit_cents"`
 	CommissionBPS uint32 `json:"commission_bps"`
 	Active        bool   `json:"active"`
+	Annual        bool   `json:"annual"`
 }
 
 func (retailOffer) TableName() string { return "pl_retail_offers" }
@@ -42,6 +44,7 @@ type offerCard struct {
 	Version        string `json:"version"`
 	Description    string `json:"description"`
 	UnitCents      uint64 `json:"unit_cents"`
+	Annual         bool   `json:"annual"`
 }
 
 type retailPromotion struct {
@@ -72,6 +75,7 @@ type RetailOrder struct {
 	ReceiptRef     *string    `json:"-"`
 	PayoutRef      *string    `json:"-"`
 	PaidAt         *time.Time `json:"paid_at"`
+	Annual         bool       `json:"annual"`
 	SettledAt      *time.Time `json:"-"`
 	RemindedAt     *time.Time `json:"-"`
 	ReminderCount  uint32     `json:"-"`
@@ -114,6 +118,7 @@ func (s server) registerRetail(api, signedIn *gin.RouterGroup) {
 	retail.GET("/orders", s.listRetailOrders)
 	retail.POST("/orders", s.createRetailOrder)
 	retail.POST("/orders/:id/:action", s.advanceRetailOrder)
+	s.registerDealerOperations(retail.Group("/operations"))
 }
 
 func publishedOffers(db *gorm.DB) *gorm.DB {
@@ -123,7 +128,7 @@ func publishedOffers(db *gorm.DB) *gorm.DB {
 		Where("offer.active = ? AND product.published = ?", true, true)
 }
 
-const offerFields = "product.id AS product_id, product.manufacturer_id, maker.name AS manufacturer, product.name, product.version, product.description, offer.unit_cents"
+const offerFields = "product.id AS product_id, product.manufacturer_id, maker.name AS manufacturer, product.name, product.version, product.description, offer.unit_cents, offer.annual"
 
 func retailRespond(c *gin.Context, value any, err error) {
 	switch {
@@ -206,6 +211,7 @@ func (s server) setRetailOffer(c *gin.Context) {
 		UnitCents     uint64 `json:"unit_cents"`
 		CommissionBPS uint32 `json:"commission_bps"`
 		Active        bool   `json:"active"`
+		Annual        *bool  `json:"annual"`
 	}
 	if !decode(c, &input) {
 		return
@@ -215,14 +221,24 @@ func (s server) setRetailOffer(c *gin.Context) {
 		return
 	}
 	db := s.db.WithContext(c.Request.Context())
-	row := retailOffer{id, input.UnitCents, input.CommissionBPS, input.Active}
+	row := retailOffer{ProductID: id, UnitCents: input.UnitCents, CommissionBPS: input.CommissionBPS, Active: input.Active}
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var product data.Product
-		if err := tx.Where("manufacturer_id = ?", actor.OrganizationID).First(&product, id).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("manufacturer_id = ?", actor.OrganizationID).First(&product, id).Error; err != nil {
 			return err
 		}
 		if input.Active && !product.Published {
 			return retailConflict
+		}
+		if input.Annual != nil {
+			row.Annual = *input.Annual
+		} else {
+			var current retailOffer
+			err := tx.Take(&current, "product_id = ?", id).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			row.Annual = current.Annual
 		}
 		return tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(&row).Error
 	})
@@ -356,11 +372,10 @@ func (s server) listRetailOrders(c *gin.Context) {
 	}
 	result := gin.H{"items": items, "next_cursor": next}
 	if commissionView {
-		const cents = "((unit_cents * quantity * commission_bps + 5000) DIV 10000)"
 		var summary retailSettlementSummary
 		err = db.Model(&RetailOrder{}).Where(scope+" = ? AND status IN ?", actor.OrganizationID, []string{"settlement", "settled"}).
-			Select("COALESCE(SUM(CASE WHEN status = 'settlement' THEN " + cents + " ELSE 0 END), 0) AS settlement_cents, " +
-				"COALESCE(SUM(CASE WHEN status = 'settled' THEN " + cents + " ELSE 0 END), 0) AS settled_cents, " +
+			Select("COALESCE(SUM(CASE WHEN status = 'settlement' THEN " + retailCommissionCents + " ELSE 0 END), 0) AS settlement_cents, " +
+				"COALESCE(SUM(CASE WHEN status = 'settled' THEN " + retailCommissionCents + " ELSE 0 END), 0) AS settled_cents, " +
 				"COUNT(CASE WHEN status = 'settlement' AND reminder_count > 0 THEN 1 END) AS reminded").Scan(&summary).Error
 		result["summary"] = summary
 	}
@@ -373,6 +388,7 @@ type retailOrderInput struct {
 	Code              string `json:"code,omitempty"`
 	Quantity          uint32 `json:"quantity"`
 	ExpectedUnitCents uint64 `json:"expected_unit_cents"`
+	ExpectedAnnual    *bool  `json:"expected_annual,omitempty"`
 	RequestID         string `json:"request_id"`
 }
 
@@ -414,7 +430,7 @@ func (s server) createRetailOrder(c *gin.Context) {
 		if err := publishedOffers(tx).Where("product.id = ?", input.ProductID).Select(offerFields).Take(&offer).Error; err != nil {
 			return err
 		}
-		if offer.UnitCents != input.ExpectedUnitCents {
+		if offer.UnitCents != input.ExpectedUnitCents || (input.ExpectedAnnual != nil && offer.Annual != *input.ExpectedAnnual) {
 			return retailConflict
 		}
 		var rate retailOffer
@@ -424,6 +440,7 @@ func (s server) createRetailOrder(c *gin.Context) {
 		row = RetailOrder{
 			ManufacturerID: offer.ManufacturerID, ProductID: offer.ProductID, ProductName: offer.Name, ProductVersion: offer.Version,
 			Quantity: input.Quantity, UnitCents: offer.UnitCents, CommissionBPS: rate.CommissionBPS,
+			Annual:    offer.Annual,
 			CreatedBy: actor.ID, RequestID: input.RequestID, RequestHash: fingerprint,
 		}
 		if assisted {
@@ -509,6 +526,9 @@ func (s server) advanceRetailOrder(c *gin.Context) {
 				changes["settled_at"] = now
 			}
 			changes["status"], changes["receipt_ref"], changes["paid_at"] = next, ref, now
+			if row.Annual {
+				changes["renewal_due_on"] = annualExpiry(now)
+			}
 		case "remind":
 			if row.Status != "settlement" {
 				return retailConflict

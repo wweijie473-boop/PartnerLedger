@@ -7,8 +7,30 @@ import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { retailDemo } from '../demo/retailServer.js'
+import { pendingRetailOrder } from '../src/live/retailRequest.js'
 
 const checkoutOrder = link => new URL(link, 'http://localhost').searchParams.get('order')
+
+test('订单重试沿用升级前的请求体和请求号', () => {
+  const savedStorage = globalThis.sessionStorage
+  const storage = new Map()
+  globalThis.sessionStorage = {
+    getItem: key => storage.get(key),
+    setItem: (key, value) => storage.set(key, value),
+  }
+  try {
+    const draft = { product_id: '9', quantity: 1, expected_unit_cents: 101, customer_id: '7' }
+    const id = randomUUID()
+    storage.set('legacy', JSON.stringify({ id, payload: JSON.stringify(draft) }))
+    assert.deepEqual(pendingRetailOrder('legacy', draft, { annual: true }), { ...draft, request_id: id })
+    const order = pendingRetailOrder('new', draft, { annual: true })
+    assert.equal(order.expected_annual, true)
+    assert.deepEqual(pendingRetailOrder('new', draft, { annual: true }), order)
+  } finally {
+    if (savedStorage) globalThis.sessionStorage = savedStorage
+    else delete globalThis.sessionStorage
+  }
+})
 
 async function demoAPI(t, options = { samples: false }) {
   let handle

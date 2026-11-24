@@ -4,7 +4,7 @@ import { requestApi } from '../api.js'
 import { UiBadge, UiButton, UiCard, UiMetricCard, UiState } from '../ui/index.js'
 import { formatCents, quoteCents } from '../channel/quoteMoney.js'
 import { demoStore } from './retailDemo.js'
-import { customerOrderLink, pendingRetailRequest, readRetailCatalog, retailApi as api } from './retailRequest.js'
+import { customerOrderLink, pendingRetailOrder, readRetailCatalog, retailApi as api } from './retailRequest.js'
 
 const props = defineProps({ mode: String, title: String, role: String, request: Function, identity: String, demo: Boolean })
 const emit = defineEmits(['navigate'])
@@ -40,6 +40,7 @@ const quantity = ref(1)
 const unit = ref('')
 const rate = ref('50')
 const active = ref(true)
+const annual = ref(false)
 const href = ref('')
 const qr = ref('')
 const status = ref('')
@@ -159,6 +160,7 @@ function choosePrice(id) {
   unit.value = row ? (row.unit_cents / 100).toFixed(2) : ''
   rate.value = row ? String(row.commission_bps / 100) : '50'
   active.value = row?.active ?? true
+  annual.value = row?.annual ?? false
 }
 function savePrice() {
   run(async () => {
@@ -167,7 +169,9 @@ function savePrice() {
     const unitCents = Number(quoteCents(unit.value))
     const rateBps = Number(quoteCents(rate.value))
     if (!(unitCents > 0 && unitCents <= 100000000 && rateBps <= 10000)) throw new Error('请填写有效单价和 0–100% 的分佣比例。')
-    const row = await write('/manufacturer-offers/' + product.value, { unit_cents:unitCents, commission_bps:rateBps, active:active.value },'PUT')
+    const row = await write('/manufacturer-offers/' + product.value, {
+      unit_cents: unitCents, commission_bps: rateBps, active: active.value, annual: annual.value,
+    }, 'PUT')
     offers.value = [...offers.value.filter(o=>o.product_id!==row.product_id),row]
     notice.value = '订购规则已保存。'
   })
@@ -180,7 +184,7 @@ function submitOrder() {
       ...(assisted ? { customer_id:customer.value } : { code }) }
     // Preserve the request ID on a lost response, including after a reload in this tab.
     const key = 'partnerledger-retail-checkout:' + props.identity + ':' + props.mode
-    const result = await write('/orders', { ...draft, request_id:pendingRetailRequest(key, draft) })
+    const result = await write('/orders', pendingRetailOrder(key, draft, item))
     sessionStorage.removeItem(key)
     if (props.demo) emit('navigate', 'retail-orders')
     else emit('navigate', 'retail-orders', { order_id: result.id })
@@ -219,13 +223,14 @@ function advance(row, action, refValue) {
       </div>
     </UiCard>
 
-    <UiCard v-else-if="pricing" title="厂商直购配置" description="正式下单时会锁定产品版本、价格和分佣比例。比例默认显示 50%，保存后生效。">
+    <UiCard v-else-if="pricing" title="厂商直购配置" description="下单时锁定产品版本、价格、分佣比例和授权周期。">
       <form class="retail-form" @submit.prevent="savePrice">
         <label>产品<select v-model="product" required @change="choosePrice(product)"><option value="">选择已发布产品</option><option v-for="item in products" :key="item.id" :value="item.id">{{ item.name }} · {{ item.version }}{{ item.published ? '' : '（未发布）' }}</option></select></label>
         <template v-if="product">
           <label>订购单价（元）<input v-model="unit" required inputmode="decimal"></label>
           <label>代理商分佣（%）<input v-model="rate" required inputmode="decimal"></label>
           <label class="retail-check"><input v-model="active" type="checkbox"> 开放直购</label>
+          <label class="retail-check"><input v-model="annual" type="checkbox"> 年度授权，收款后进入续费台账</label>
           <UiButton type="submit" variant="primary" :loading="busy">保存规则</UiButton>
         </template>
       </form>
@@ -238,7 +243,7 @@ function advance(row, action, refValue) {
         <label v-if="assisted">关联客户<select v-model="customer" required><option value="">选择客户</option><option v-for="item in customers" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
         <label>订购产品<select v-model="product" required><option value="">选择产品</option><option v-for="item in offers" :key="item.product_id" :value="item.product_id">{{ item.manufacturer }} · {{ item.name }} · {{ item.version }} · {{ money(item.unit_cents) }}</option></select></label>
         <label>订购数量<input v-model.number="quantity" required type="number" min="1" max="10000" step="1"></label>
-        <p v-if="selected">订单金额 <strong>{{ money(total) }}</strong></p>
+        <p v-if="selected">订单金额 <strong>{{ money(total) }}</strong><span v-if="selected.annual"> · 年度授权</span></p>
         <UiButton type="submit" variant="primary" :loading="busy">{{ assisted ? '提交客户确认' : '确认并下单' }}</UiButton>
       </form>
       <UiState v-else :title="assisted && !customers.length ? '暂无关联客户' : '该入口暂无可订购产品'" />

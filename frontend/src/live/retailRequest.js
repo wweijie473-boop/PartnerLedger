@@ -16,16 +16,28 @@ export async function readRetailCatalog(read, path) {
     const page = await read(path + (cursor ? (path.includes('?') ? '&' : '?') + 'after=' + encodeURIComponent(cursor) : ''))
     items.push(...page.items)
     cursor = page.next_cursor
-    if (cursor && cursors.has(cursor)) throw new Error('产品目录分页无效，请刷新。')
+    if (cursor && cursors.has(cursor)) throw new Error('列表分页无效，请刷新。')
     cursors.add(cursor)
   } while (cursor)
   return items
 }
 
-export function pendingRetailRequest(key, body) {
-  const payload = JSON.stringify(body)
+function readPendingRetailRequest(key) {
   let pending
   try { pending = JSON.parse(sessionStorage.getItem(key)) } catch {}
+  return pending
+}
+
+export function pendingRetailOrder(key, draft, offer) {
+  const previous = readPendingRetailRequest(key)
+  const preserveLegacyRetry = previous?.payload === JSON.stringify(draft)
+  const body = offer.annual === undefined || preserveLegacyRetry ? draft : { ...draft, expected_annual: offer.annual }
+  return { ...body, request_id: pendingRetailRequest(key, body) }
+}
+
+export function pendingRetailRequest(key, body) {
+  const payload = JSON.stringify(body)
+  const pending = readPendingRetailRequest(key)
   if (pending?.payload === payload) return pending.id
 
   // getRandomValues also works when the demo is reached over plain HTTP on a phone.

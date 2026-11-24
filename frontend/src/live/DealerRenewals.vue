@@ -30,7 +30,7 @@ async function save() {
       <div class="operations-actions"><UiButton type="submit" variant="primary" :loading="busy">保存跟进</UiButton><UiButton :disabled="busy" @click="draft = null">取消</UiButton></div>
     </form>
   </UiCard>
-  <UiCard title="年度授权到期" description="扫码购买和代客下单在确认收款后进入续费台账。">
+  <UiCard title="年度授权到期" description="按年度订购的订单在确认收款后进入续费台账。">
     <div class="operations-actions">
       <label class="operations-search">搜索订单<input v-model="search" type="search" placeholder="客户、产品、订单号或来源"></label>
       <label class="operations-search">到期范围<select v-model="range"><option value="all">全部</option><option value="7">7 天内</option><option value="30">30 天内</option><option value="90">90 天内</option><option value="overdue">已到期</option></select></label>

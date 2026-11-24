@@ -48,6 +48,7 @@ const isManufacturer = computed(() => organization.value?.kind === 'MANUFACTURER
 const isDealer = computed(() => organization.value?.kind === 'RESELLER')
 const kindLabel = computed(() => portal.value?.label || '')
 const RetailDesk = defineAsyncComponent(() => import('./live/RetailDesk.vue'))
+const DealerOperations = defineAsyncComponent(() => import('./live/DealerOperations.vue'))
 const navigation = computed(() => workspacePages(entry.value, { directView: entryParams.get('view') }))
 const currentPage = computed(() => navigation.value.find(page => page.id === view.value))
 const shortcuts = computed(() => workspaceShortcuts(navigation.value, entry.value))
@@ -338,6 +339,8 @@ function openOpportunity(id = '', projectId = '') {
   <WorkspaceShell v-else :role="entry" :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
     <RetailDesk v-if="currentPage?.source === 'retail'" :key="navigationRevision + ':' + view" :mode="view" :title="currentPage.label" :role="entry" :request="authenticated" :identity="user.id" @navigate="navigate" />
+    <DealerOperations v-else-if="currentPage?.source === 'dealer-operations'" :key="navigationRevision + ':' + view"
+      :view="view" :title="currentPage.label" :role="entry" :request="authenticated" @navigate="navigate" />
     <DealerPage v-else-if="currentPage?.source === 'utility'" :key="view" :view="view" :title="currentPage.label" :request="authenticated" @navigate="navigate" @project="openProject" />
     <template v-else-if="view === 'overview'">
       <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" :user-id="user.id"

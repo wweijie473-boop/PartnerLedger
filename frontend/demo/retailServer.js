@@ -234,8 +234,8 @@ export function retailDemo({ database = ':memory:', samples = true } = {}) {
   }
 
   function configureServer(server) {
-    const db = openRetailDatabase(database)
-    server.httpServer?.once('close', () => db.close())
+    let db
+    server.httpServer?.once('close', () => db?.close())
     server.middlewares.use(async (req, res, next) => {
       const url = new URL(req.url, 'http://localhost')
       if (!url.pathname.startsWith(prefix)) return next()
@@ -244,6 +244,7 @@ export function retailDemo({ database = ':memory:', samples = true } = {}) {
       try {
         const post = req.method === 'POST'
         const body = post ? await readBody(req) : undefined
+        db ??= openRetailDatabase(database)
         const data = post ? db.write(() => route(db, req, url, body)) : route(db, req, url, body)
         res.end(JSON.stringify({ code: 200, data }))
       } catch (error) {
