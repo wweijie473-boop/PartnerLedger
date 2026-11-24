@@ -1,12 +1,12 @@
-.dealer-operations { display:grid; gap:16px; min-width:0; }
+.dealer-operations { display:grid; gap:8px; min-width:0; }
 .dealer-operations .page-heading { margin:0; }
 .operations-notice { margin:0; color:var(--ui-success-ink); }
-.operations-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(175px,100%),1fr)); gap:12px; }
 .operations-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .operations-form { display:grid; gap:12px; max-width:560px; margin-block:14px; }
 .operations-form label,.operations-search { display:grid; gap:5px; }
 .operations-search { max-width:320px; margin-bottom:14px; }
 .dealer-operations :is(input,select,textarea) { width:100%; box-sizing:border-box; border:1px solid var(--ui-border-strong); border-radius:6px; padding:8px 10px; background:var(--ui-surface); color:var(--ui-ink); }
+.dealer-operations .workspace-record-controls :is(input,select) { width:auto; max-width:100%; min-height:var(--ui-control-height); padding:4px 8px; }
 .operations-check { display:flex; align-items:center; gap:6px; margin-bottom:14px; }
 .dealer-operations .operations-check input { width:auto; }
 .operations-form textarea { min-height:80px; resize:vertical; }

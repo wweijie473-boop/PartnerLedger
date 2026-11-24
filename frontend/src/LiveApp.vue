@@ -3,8 +3,9 @@ import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue
 import { requestApi } from './api.js'
 import { currentSession, saveSession, sessionFromCredentials } from './auth-session.js'
 import WorkspaceShell from './WorkspaceShell.vue'
+import WorkspaceShortcuts from './WorkspaceShortcuts.vue'
 import DealerPage from './DealerPage.vue'
-import { dealerPages } from './dealerNavigation.js'
+import { workspacePages, workspaceShortcuts } from './workspaceNavigation.js'
 import ProductCatalog from './live/ProductCatalog.vue'
 import RequirementParser from './live/RequirementParser.vue'
 import LiveProjects from './live/LiveProjects.vue'
@@ -47,42 +48,9 @@ const isManufacturer = computed(() => organization.value?.kind === 'MANUFACTURER
 const isDealer = computed(() => organization.value?.kind === 'RESELLER')
 const kindLabel = computed(() => portal.value?.label || '')
 const RetailDesk = defineAsyncComponent(() => import('./live/RetailDesk.vue'))
-const retailNavigation = computed(() => isDealer.value ? [
-  { id: 'promotion', label: '推广获客二维码', icon: 'workflow' },
-  { id: 'assisted', label: '代客下单', icon: 'order' },
-  { id: 'retail-orders', label: '厂商直收订单', icon: 'order' },
-  { id: 'commission', label: '佣金结算', icon: 'quote' },
-] : isManufacturer.value ? [
-  { id: 'pricing', label: '订购价格与佣金', icon: 'catalog' },
-  { id: 'manufacturer-receipts', label: '直收订单与收款', icon: 'order' },
-  { id: 'manufacturer-settlements', label: '代理商佣金结算', icon: 'quote' },
-] : entry.value === 'customer' ? [
-  { id: 'retail-orders', label: '厂商订购订单', icon: 'order' },
-  ...(entryParams.get('view') === 'checkout' ? [{ id: 'checkout', label: '确认厂商订单', icon: 'order' }] : []),
-] : [])
-const navigation = computed(() => [
-  ...(isDealer.value ? dealerPages.filter(item => item.id !== 'staff') : []),
-  { id: 'overview', label: '工作总览', icon: 'overview' },
-  { id: 'projects', label: entry.value === 'customer' ? '我的采购项目' : isManufacturer.value ? '渠道询价' : '客户项目', icon: 'request' },
-  ...(entry.value !== 'customer' ? [{ id: 'catalog', label: '产品目录', icon: 'catalog' }] : []),
-  ...(isDealer.value ? [{ id: 'requirement', label: 'AI 需求解析', icon: 'request' }] : []),
-  ...(isDealer.value ? [{ id: 'visits', label: '记拜访', icon: 'request' }] : []),
-  ...(isDealer.value ? [{ id: 'opportunities', label: '商机拾遗', icon: 'workflow' }] : []),
-  ...retailNavigation.value,
-  { id: 'account', label: '账号与组织', icon: portal.value?.icon || 'customer' },
-])
-const shortcuts = computed(() => [
-  ...(entry.value !== 'customer' ? [{
-    id: 'catalog', label: '产品目录', icon: 'catalog',
-    description: isManufacturer.value ? '新增、编辑与发布本组织的软件产品。' : '查看产品版本、说明与厂商发布信息。',
-  }] : []),
-  ...(isDealer.value ? [
-    { id: 'requirement', label: '需求整理', icon: 'request', description: '核对客户需要的授权数、模块和部署方式。' },
-    { id: 'visits', label: '记拜访', icon: 'activity', description: '记录主采购事项与附加需求，随时继续整理草稿。' },
-    { id: 'opportunities', label: '商机拾遗', icon: 'workflow', description: '跟进团队商机、伙伴引荐和介绍费条件。' },
-  ] : []),
-  { id: 'projects', label: '项目协作', icon: 'request', description: '查看项目进度，处理需求、询价和补充资料。' },
-])
+const navigation = computed(() => workspacePages(entry.value, { directView: entryParams.get('view') }))
+const currentPage = computed(() => navigation.value.find(page => page.id === view.value))
+const shortcuts = computed(() => workspaceShortcuts(navigation.value, entry.value))
 
 function accessPath(nextMode, role = entry.value) {
   return '/' + nextMode + (role ? '/' + role : '')
@@ -367,13 +335,13 @@ function openOpportunity(id = '', projectId = '') {
     </UiCard>
   </main>
 
-  <WorkspaceShell v-else :dealer="isDealer" :nav="navigation" :view="view" :organization="organization.name"
+  <WorkspaceShell v-else :role="entry" :nav="navigation" :view="view" :organization="organization.name"
     :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
-    <RetailDesk v-if="retailNavigation.some(item => item.id === view)" :key="navigationRevision + ':' + view" :mode="view" :role="entry" :request="authenticated" :identity="user.id" @navigate="navigate" />
-    <DealerPage v-else-if="isDealer && dealerPages.some(p => p.id === view)" :key="view" :view="view" :request="authenticated" @navigate="navigate" @project="openProject" />
+    <RetailDesk v-if="currentPage?.source === 'retail'" :key="navigationRevision + ':' + view" :mode="view" :title="currentPage.label" :role="entry" :request="authenticated" :identity="user.id" @navigate="navigate" />
+    <DealerPage v-else-if="currentPage?.source === 'utility'" :key="view" :view="view" :title="currentPage.label" :request="authenticated" @navigate="navigate" @project="openProject" />
     <template v-else-if="view === 'overview'">
       <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" :user-id="user.id"
-        @open-project="openProject" @open-list="scope => navigate('projects', { scope })">
+        @open-project="openProject" @open-list="(scope, create) => navigate('projects', create ? { scope, create: '1' } : { scope })">
         <template #heading>
           <div>
             <p class="workspace-kicker">{{ organization.name }}</p>
@@ -382,18 +350,7 @@ function openOpportunity(id = '', projectId = '') {
           </div>
         </template>
       </LiveProjects>
-      <section v-enter="3" class="workspace-section" aria-labelledby="workspace-shortcuts">
-        <header class="workspace-section-heading"><h2 id="workspace-shortcuts">常用工作</h2></header>
-        <ul class="live-shortcuts">
-          <li v-for="shortcut in [...shortcuts, ...retailNavigation.filter(item => item.id !== 'checkout')]" :key="shortcut.id">
-            <button type="button" @click="navigate(shortcut.id)">
-              <UiIcon :name="shortcut.icon" :size="17" />
-              <span><strong>{{ shortcut.label }}</strong><small v-if="shortcut.description">{{ shortcut.description }}</small></span>
-              <UiIcon name="chevron-right" :size="14" />
-            </button>
-          </li>
-        </ul>
-      </section>
+      <WorkspaceShortcuts v-enter="3" :pages="shortcuts" @navigate="navigate" />
     </template>
     <LiveProjects v-else-if="view === 'projects'" :key="navigationRevision" :request="authenticated" :role="entry" :organization-id="organization.id" :user-id="user.id" @capture-opportunity="id => openOpportunity('',id)" />
     <LiveVisits v-else-if="view === 'visits' && isDealer" :request="authenticated" :scope="organization.id + ':' + user.id" @project="openProject" @opportunity="id => openOpportunity(id)" />
@@ -427,32 +384,6 @@ function openOpportunity(id = '', projectId = '') {
 .live-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; font-size: 13px; }
 .live-links a { text-decoration: none; }
 .live-links a:hover { text-decoration: underline; }
-.live-shortcuts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
-  gap: 0 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.live-shortcuts button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 100%;
-  padding: 8px 6px;
-  border: 0;
-  border-top: 1px solid var(--ui-border);
-  background: transparent;
-  color: var(--ui-link);
-  text-align: left;
-}
-.live-shortcuts button:hover, .live-shortcuts button:focus-visible { background: var(--ui-accent-bg); }
-.live-shortcuts button > span { flex: 1; min-width: 0; }
-.live-shortcuts strong, .live-shortcuts small { display: block; }
-.live-shortcuts strong { font-size: 13px; font-weight: 500; }
-.live-shortcuts small { color: var(--ui-ink-muted); font-size: 12px; }
 .live-account { max-width: 720px; }
 .live-account-facts > div {
   display: grid;

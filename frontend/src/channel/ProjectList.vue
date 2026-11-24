@@ -15,7 +15,7 @@ defineEmits(['open'])
       <button type="button" class="project-row" :data-project-id="item.id" @click="$emit('open', item)">
         <span class="project-name">
           <strong>{{ item.title }}</strong>
-          <small>编号 {{ item.id }}<template v-if="showCustomer && item.customerName"> · {{ item.customerName }}</template><template v-if="item.dueDate"> · 目标日期 {{ item.dueDate }}</template></small>
+          <small>编号 {{ item.id }}<template v-if="showCustomer && item.customerName"> · {{ item.customerName }}</template><span v-if="item.dueDate" class="project-date"> · 目标日期 <time :datetime="item.dueDate">{{ item.dueDate }}</time></span></small>
         </span>
         <UiBadge class="project-status" :tone="statusTone(item.stage)" dot>{{ item.stageLabel }}</UiBadge>
         <span class="project-next">{{ item.nextStep }}</span>
@@ -53,6 +53,8 @@ defineEmits(['open'])
 .project-name strong, .project-name small { display: block; }
 .project-name strong { font-weight: 500; }
 .project-name small, .project-next { color: var(--ui-ink-secondary); font-size: 12px; }
+.project-date { display: inline-block; max-width: 100%; }
+.project-date time { white-space: nowrap; }
 .project-status { justify-self: start; }
 .project-open {
   display: flex;

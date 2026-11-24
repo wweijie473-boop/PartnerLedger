@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { formatCents, quoteCents } from '../channel/quoteMoney.js'
-import { UiButton, UiCard, UiMetricCard, UiState } from '../ui/index.js'
+import { UiBadge, UiButton, UiCard, UiMetricCard, UiState } from '../ui/index.js'
 
 const props = defineProps({ view: String, state: Object, busy: Boolean, submit: Function })
 const emit = defineEmits(['navigate'])
@@ -67,7 +67,7 @@ async function send() {
 
 <template>
   <template v-if="section === 'overview'">
-    <div class="operations-metrics">
+    <div class="metric-grid workspace-finance-metrics">
       <UiMetricCard label="预存款余额" icon="quote" :value="money(state.totals.topup_balance_cents)" interactive @click="emit('navigate', 'funds-transactions')" />
       <UiMetricCard label="待结算佣金" icon="quote" :value="money(state.totals.pending_commission_cents)" interactive @click="emit('navigate', 'commission')" />
       <UiMetricCard label="已结算佣金" icon="check" :value="money(state.totals.settled_commission_cents)" interactive @click="emit('navigate', 'commission')" />
@@ -86,7 +86,7 @@ async function send() {
       <UiButton v-for="(label, key) in queues" :key="key" :variant="section === key ? 'primary' : 'secondary'"
         :aria-pressed="section === key" @click="chooseQueue(key)">{{ label }}</UiButton>
     </nav>
-    <div v-else-if="section === 'claims'" class="operations-metrics">
+    <div v-else-if="section === 'claims'" class="metric-grid workspace-finance-metrics">
       <UiMetricCard label="服务费总额" icon="quote" :value="money(state.totals.service_credit_cents)" />
       <UiMetricCard label="可申请" icon="request" :value="money(state.totals.available_service_cents)" />
       <UiMetricCard label="办理中" icon="time" :value="money(state.totals.claimed_service_cents)" />
@@ -100,22 +100,29 @@ async function send() {
         <div class="operations-actions"><UiButton type="submit" variant="primary" :loading="busy">{{ vendor ? '确认办理' : '提交申请' }}</UiButton><UiButton :disabled="busy" @click="draft = null">取消</UiButton></div>
       </form>
     </UiCard>
-    <UiCard :title="vendor ? queues[section] : typeNames[section]">
-      <label class="operations-search">查询<input v-model="query" type="search" placeholder="订单号、凭证、名称或状态"></label>
-      <UiButton v-if="!vendor && section === 'transactions'" variant="primary" :disabled="busy" @click="openAmountForm('topups')">登记模拟汇款</UiButton>
-      <UiButton v-if="!vendor && section === 'claims'" variant="primary" :disabled="busy || !state.totals.available_service_cents" @click="openAmountForm('claims')">申请服务费报销</UiButton>
-      <div v-if="rows.length" class="operations-table">
-        <table><thead><tr><th scope="col">项目</th><th scope="col">金额</th><th scope="col">日期</th><th scope="col">凭证</th><th scope="col">状态</th><th scope="col">办理</th></tr></thead>
-          <tbody><tr v-for="row in rows" :key="row.id">
-            <td>{{ row.label }}<small v-if="row.order_id" class="operations-meta">订单 {{ row.order_id }}{{ row.detail ? ' · ' + row.detail : '' }}</small></td>
-            <td>{{ money(row.amount_cents) }}</td><td>{{ day(row.handled_at || row.created_at) }}</td>
-            <td>{{ row.reference || '—' }}<small v-if="row.result_reference" class="operations-meta">{{ row.result_reference }}</small></td>
-            <td>{{ row.statusLabel }}</td>
-            <td><UiButton v-if="vendor ? row.vendorAction : row.dealerAction" compact :disabled="busy" @click="openRowForm(row)">{{ vendor ? row.vendorAction : row.dealerAction }}</UiButton></td>
+    <section class="workspace-section" aria-labelledby="fund-records">
+      <header class="workspace-section-heading">
+        <h2 id="fund-records">{{ vendor ? queues[section] : typeNames[section] }}</h2>
+        <div class="workspace-record-controls">
+          <input v-model="query" type="search" aria-label="查询财务记录" placeholder="订单号、凭证、名称或状态">
+          <UiButton v-if="!vendor && section === 'transactions'" variant="primary" :disabled="busy" @click="openAmountForm('topups')">登记模拟汇款</UiButton>
+          <UiButton v-if="!vendor && section === 'claims'" variant="primary" :disabled="busy || !state.totals.available_service_cents" @click="openAmountForm('claims')">申请服务费报销</UiButton>
+        </div>
+      </header>
+      <div v-if="rows.length" class="table-scroll">
+        <table class="workspace-record-table" role="table">
+          <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">项目</th><th scope="col" role="columnheader">金额</th><th scope="col" role="columnheader">日期</th><th scope="col" role="columnheader">凭证</th><th scope="col" role="columnheader">状态</th><th scope="col" role="columnheader">办理</th></tr></thead>
+          <tbody role="rowgroup"><tr v-for="row in rows" :key="row.id" role="row">
+            <td role="cell">{{ row.label }}<small v-if="row.order_id" class="operations-meta">订单 {{ row.order_id }}{{ row.detail ? ' · ' + row.detail : '' }}</small></td>
+            <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">金额</span>{{ money(row.amount_cents) }}</td>
+            <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">日期</span>{{ day(row.handled_at || row.created_at) }}</td>
+            <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">凭证</span>{{ row.reference || '—' }}<small v-if="row.result_reference" class="operations-meta">{{ row.result_reference }}</small></td>
+            <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">状态</span><UiBadge :tone="row.handled_at ? 'success' : (row.vendorAction || row.dealerAction ? 'warning' : 'info')" dot>{{ row.statusLabel }}</UiBadge></td>
+            <td role="cell" class="workspace-record-action"><UiButton v-if="vendor ? row.vendorAction : row.dealerAction" compact :disabled="busy" @click="openRowForm(row)">{{ vendor ? row.vendorAction : row.dealerAction }}</UiButton></td>
           </tr></tbody>
         </table>
       </div>
       <UiState v-else :title="section === 'invoices' && !vendor && !query ? '订单完成收款后可申请开票' : '暂无符合条件的记录'" />
-    </UiCard>
+    </section>
   </template>
 </template>

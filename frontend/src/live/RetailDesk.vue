@@ -1,12 +1,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { requestApi } from '../api.js'
-import { UiButton, UiCard, UiState } from '../ui/index.js'
+import { UiBadge, UiButton, UiCard, UiMetricCard, UiState } from '../ui/index.js'
 import { formatCents, quoteCents } from '../channel/quoteMoney.js'
 import { demoStore } from './retailDemo.js'
 import { customerOrderLink, pendingRetailRequest, readRetailCatalog, retailApi as api } from './retailRequest.js'
 
-const props = defineProps({ mode: String, role: String, request: Function, identity: String, demo: Boolean })
+const props = defineProps({ mode: String, title: String, role: String, request: Function, identity: String, demo: Boolean })
 const emit = defineEmits(['navigate'])
 const params = new URLSearchParams(location.search)
 const code = params.get('code') ?? ''
@@ -45,15 +45,11 @@ const qr = ref('')
 const status = ref('')
 const actionOrder = ref('')
 const reference = ref('')
-const title = {
-  promotion: '推广获客', assisted: '代客下单', checkout: '确认厂商订单',
-  pricing: '订购价格与佣金规则', 'retail-orders': '厂商直收订单', commission: '佣金结算',
-  'manufacturer-receipts': '直收订单与收款', 'manufacturer-settlements': '代理商分佣',
-}[props.mode]
 const labels = {
   confirmation: '待客户确认', payment: '待厂商确认收款', paid: '厂商已确认收款',
   settlement: '待厂商结算', settled: '已登记结算', declined: '客户已拒绝',
 }
+const tones = { confirmation: 'warning', payment: 'warning', paid: 'success', settlement: 'info', settled: 'success', declined: 'neutral' }
 const makers = computed(() => [...new Map(offers.value.map(o => [o.manufacturer_id, o.manufacturer])).entries()])
 const selected = computed(() => offers.value.find(o => o.product_id === product.value))
 const total = computed(() => selected.value && Number.isInteger(quantity.value) ? selected.value.unit_cents * quantity.value : 0)
@@ -203,7 +199,7 @@ function advance(row, action, refValue) {
 </script>
 
 <template>
-    <header v-enter class="page-heading"><h1>{{ title }}</h1><UiButton compact :disabled="loading || busy" @click="load">刷新</UiButton></header>
+    <header v-enter class="page-heading"><h1>{{ title }}</h1><UiButton compact variant="text" :disabled="loading || busy" @click="load">刷新</UiButton></header>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <UiButton v-if="orderID !== null" compact @click="emit('navigate', 'retail-orders')">查看全部订单</UiButton>
@@ -248,24 +244,28 @@ function advance(row, action, refValue) {
       <UiState v-else :title="assisted && !customers.length ? '暂无关联客户' : '该入口暂无可订购产品'" />
     </UiCard>
 
-    <UiCard v-else-if="ledger" :title="settlementView ? '厂商直收订单佣金' : '订单列表'">
+    <template v-else-if="ledger">
       <p v-if="vendor || dealer" class="muted">{{ vendor && receiptView ? (demo ? '客户完成模拟付款后，订单归入厂商收款，同时生成代理商佣金。' : '核对客户已付金额和凭证后登记收款，订单佣金会进入代理商结算台账。') : vendor ? '核对代理商、佣金金额和催办记录后，登记转账凭证。' : '厂商确认收款后可查看待结算金额，每笔订单每 24 小时可催结算一次。' }}</p>
-      <dl v-if="summary" class="retail-summary">
-        <div><dt>待结算佣金</dt><dd>{{ money(summary.settlement_cents) }}</dd></div>
-        <div><dt>已结算佣金</dt><dd>{{ money(summary.settled_cents) }}</dd></div>
-        <div><dt>已催办待结算</dt><dd>{{ summary.reminded }} 笔</dd></div>
-      </dl>
-      <label v-if="orderID === null" class="retail-filter">状态 <select v-model="status" :disabled="busy" @change="load"><option value="">全部</option><option v-for="[value,label] in statusOptions" :key="value" :value="value">{{ label }}</option></select></label>
-      <div v-if="orders.length" class="retail-table"><table>
-        <thead><tr><th>订单和产品</th><th>交易方</th><th>来源</th><th>金额</th><th v-if="vendor || dealer">佣金</th><th>状态与办理</th></tr></thead>
-        <tbody><tr v-for="row in orders" :key="row.id">
-          <td><strong>{{ row.product_name }}</strong><small>订单 {{ row.id }} · {{ row.product_version }} · {{ row.quantity }} 份</small></td>
-          <td>{{ vendor ? row.reseller : row.manufacturer }}<small v-if="vendor || dealer">{{ row.customer }}</small></td>
-          <td>{{ row.source === 'assisted' ? '帮客户下单' : '推广获客' }}</td>
-          <td>{{ money(row.total_cents) }}</td>
-          <td v-if="vendor || dealer"><template v-if="row.commission && row.paid_at">{{ money(row.commission.cents) }} <small>{{ row.commission.rate_bps / 100 }}%</small></template><span v-else>{{ row.status === 'declined' ? '—' : '待收款' }}</span></td>
-          <td>
-            <strong>{{ labels[row.status] }}</strong>
+      <section v-if="summary" class="metric-grid workspace-finance-metrics" aria-label="结算概况">
+        <UiMetricCard label="待结算佣金" :value="money(summary.settlement_cents)" icon="quote" />
+        <UiMetricCard label="已结算佣金" :value="money(summary.settled_cents)" icon="check" />
+        <UiMetricCard label="已催办待结算" :value="summary.reminded + ' 笔'" icon="time" />
+      </section>
+      <section class="workspace-section" aria-labelledby="retail-records">
+        <header class="workspace-section-heading">
+          <h2 id="retail-records">{{ settlementView ? '佣金明细' : '订单列表' }}</h2>
+          <label v-if="orderID === null" class="retail-filter">订单状态 <select v-model="status" :disabled="busy" @change="load"><option value="">全部</option><option v-for="[value,label] in statusOptions" :key="value" :value="value">{{ label }}</option></select></label>
+        </header>
+      <div v-if="orders.length" class="table-scroll"><table class="workspace-record-table" role="table">
+        <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">订单和产品</th><th scope="col" role="columnheader">交易方</th><th scope="col" role="columnheader">来源</th><th scope="col" role="columnheader">金额</th><th v-if="vendor || dealer" scope="col" role="columnheader">佣金</th><th scope="col" role="columnheader">状态与办理</th></tr></thead>
+        <tbody role="rowgroup"><tr v-for="row in orders" :key="row.id" role="row">
+          <td role="cell"><strong>{{ row.product_name }}</strong><small>订单 {{ row.id }} · {{ row.product_version }} · {{ row.quantity }} 份</small></td>
+          <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">交易方</span>{{ vendor ? row.reseller : row.manufacturer }}<small v-if="vendor || dealer">{{ row.customer }}</small></td>
+          <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">来源</span>{{ row.source === 'assisted' ? '帮客户下单' : '推广获客' }}</td>
+          <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">金额</span>{{ money(row.total_cents) }}</td>
+          <td v-if="vendor || dealer" role="cell"><span class="workspace-mobile-label" aria-hidden="true">佣金</span><template v-if="row.commission && row.paid_at">{{ money(row.commission.cents) }} <small>{{ row.commission.rate_bps / 100 }}%</small></template><span v-else>{{ row.status === 'declined' ? '—' : '待收款' }}</span></td>
+          <td class="retail-state workspace-record-action" role="cell">
+            <UiBadge :tone="tones[row.status]" dot>{{ labels[row.status] }}</UiBadge>
             <small v-if="row.commission?.reminder_count">催结算 {{ row.commission.reminder_count }} 次 · 最近 {{ new Date(row.commission.reminded_at).toLocaleString() }}</small>
             <small v-if="row.commission?.settled_at">结算 {{ new Date(row.commission.settled_at).toLocaleString() }}</small>
             <small v-if="vendor && row.receipt_ref">{{ demo ? '模拟收款凭证' : '收款凭证' }} {{ row.receipt_ref }}</small>
@@ -278,7 +278,9 @@ function advance(row, action, refValue) {
             <div v-if="role === 'customer' && row.status === 'confirmation'" class="retail-actions"><UiButton compact :disabled="busy" @click="advance(row,'confirm')">确认订单</UiButton> <UiButton compact :disabled="busy" @click="advance(row,'decline')">拒绝</UiButton></div>
             <UiButton v-if="dealer && settlementView && row.status === 'settlement'" compact class="retail-actions" :disabled="busy || !canRemind(row)" @click="advance(row,'remind')">{{ canRemind(row) ? '催结算' : '已催结算' }}</UiButton>
             <template v-if="vendor && ((receiptView && row.status === 'payment') || (settlementView && row.status === 'settlement'))">
-              <UiButton v-if="actionOrder !== row.id" compact class="retail-actions" :disabled="busy" @click="actionOrder=row.id; reference=''">{{ row.status === 'payment' ? '登记收款' : '登记结算' }}</UiButton>
+              <div v-if="actionOrder !== row.id" class="retail-actions">
+                <UiButton compact :disabled="busy" @click="actionOrder=row.id; reference=''">{{ row.status === 'payment' ? '登记收款' : '登记结算' }}</UiButton>
+              </div>
               <form v-else class="retail-actions" @submit.prevent="advance(row,row.status === 'payment' ? 'receipt' : 'settle',reference)">
                 <label>{{ row.status === 'payment' ? '收款凭证编号' : '转账凭证编号' }}<input v-model="reference" required maxlength="100"></label>
                 <UiButton compact type="submit" :loading="busy">确认登记</UiButton> <UiButton compact :disabled="busy" @click="actionOrder=''">取消</UiButton>
@@ -289,7 +291,8 @@ function advance(row, action, refValue) {
       </table></div>
       <UiState v-else :title="orderID === null ? '当前没有符合条件的订单' : '订单不存在或当前组织无权查看'" />
       <UiButton v-if="next" :loading="busy" @click="run(() => list(next))">加载更多订单</UiButton>
-    </UiCard>
+      </section>
+    </template>
 </template>
 
 <style scoped>
@@ -298,16 +301,11 @@ function advance(row, action, refValue) {
 .retail-form .retail-check { display:flex; align-items:center; }
 .retail-form button { justify-self:start; }
 input:not([type=checkbox]),select { width:100%; min-width:0; padding:7px 10px; border:1px solid var(--ui-border-strong); border-radius:6px; background:var(--ui-surface); color:var(--ui-ink); }
-.retail-filter { display:flex; align-items:center; gap:10px; margin:12px 0; }
+.retail-filter { display:flex; align-items:center; gap:6px; font-size:13px; }
 .retail-filter select { width:auto; }
 .retail-qr { display:flex; flex-wrap:wrap; align-items:center; gap:20px; }
 .retail-qr input { display:block; margin-block:10px; }
-.retail-table { overflow:auto; margin-block:12px; }
-.retail-table table { width:100%; min-width:680px; }
-.retail-table small { display:block; color:var(--ui-ink-muted); }
 .retail-actions { margin-top:6px; }
-.retail-summary { display:flex; flex-wrap:wrap; gap:10px; margin-block:14px; }
-.retail-summary div { flex:1 1 145px; padding:12px 14px; background:var(--ui-surface-hover); border:1px solid var(--ui-border); border-radius:7px; }
-.retail-summary dt { font-size:13px; color:var(--ui-ink-muted); }
-.retail-summary dd { margin:4px 0 0; font-weight:700; }
+.retail-state { min-width: 170px; }
+@media (max-width: 760px) { .retail-state { min-width: 0; } }
 </style>

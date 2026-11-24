@@ -2,19 +2,22 @@
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElDialog } from 'element-plus'
 import WorkspaceShell from '../WorkspaceShell.vue'
+import WorkspaceShortcuts from '../WorkspaceShortcuts.vue'
 import DealerPage from '../DealerPage.vue'
-import { dealerPages } from '../dealerNavigation.js'
+import { isRetailDemoPage, workspacePages, workspaceShortcuts } from '../workspaceNavigation.js'
 import { UiButton, UiCard, UiIcon, UiMetricCard, UiState } from '../ui/index.js'
-import { actionLabels, roles } from './domain.js'
+import { actionLabels, projectScopeLabels, roles } from './domain.js'
 import { createDemoRepository } from './repository.js'
 import ChannelAction from './ChannelAction.vue'
 import ProjectDetail from './ProjectDetail.vue'
+import ProjectFilters from './ProjectFilters.vue'
 import ProjectList from './ProjectList.vue'
+import ProjectPriority from './ProjectPriority.vue'
 import DemoCatalog from './DemoCatalog.vue'
 import OpportunityDesk from './OpportunityDesk.vue'
 import VisitDrafts from '../live/VisitDrafts.vue'
 import { createVisitDraftStore } from '../live/visitDrafts.js'
-import { retailDemoCounterpart, retailDemoEnabled, retailDemoLocation, retailDemoNavigation } from '../live/retailDemo.js'
+import { retailDemoCounterpart, retailDemoEnabled, retailDemoLocation } from '../live/retailDemo.js'
 import './workspace.css'
 import './opportunities.css'
 
@@ -22,24 +25,15 @@ const props = defineProps({ role: { type: String, required: true } })
 const roleKeys = { dealer: 'reseller', vendor: 'manufacturer', customer: 'customer' }
 const names = { dealer: '代理商', vendor: '软件厂商', customer: '企业客户' }
 const copy = {
-  dealer: { title:'渠道业务工作台', en:'CHANNEL OPERATIONS', intro:'跟进客户需求、厂商回复与交付节点，优先处理需要你推进的项目。', ledger:'客户项目台账', add:'代录客户需求' },
-  vendor: { title:'厂商履约工作台', en:'VENDOR OPERATIONS', intro:'集中处理代理商询价、渠道报价及已成单的授权交付。', ledger:'渠道询价队列', add:'' },
-  customer: { title:'企业采购工作台', en:'CUSTOMER OPERATIONS', intro:'提交采购需求、核对方案，在这里跟踪实施与验收。', ledger:'我的采购项目', add:'提交采购需求' },
+  dealer: { title:'代理商工作台', intro:'跟进客户需求、厂商回复与交付节点。', add:'代录客户需求' },
+  vendor: { title:'软件厂商工作台', intro:'处理渠道询价、报价与授权交付。', add:'' },
+  customer: { title:'企业客户工作台', intro:'提交采购需求、核对方案并跟踪实施与验收。', add:'提交采购需求' },
 }[props.role]
 const repo = createDemoRepository(roleKeys[props.role])
 const org = roles[roleKeys[props.role]]
-const retailNav = retailDemoEnabled ? retailDemoNavigation[props.role] ?? [] : []
 const RetailDemoPanel = defineAsyncComponent(() => import('../live/RetailDemoPanel.vue'))
-const nav = [
-  ...(props.role === 'dealer' ? dealerPages : []),
-  { id:'overview', label:'工作总览', icon:'overview' },
-  { id:'ledger', label:copy.ledger, icon:'request' },
-  ...(props.role === 'dealer' ? [{ id:'opportunities', label:'商机拾遗', icon:'workflow' }] : []),
-  ...(props.role === 'dealer' ? [{ id:'visits', label:'记拜访', icon:'request' }] : []),
-  { id:'delivery', label:props.role === 'customer' ? '交付与验收' : '订单与交付', icon:'delivery' },
-  ...(props.role !== 'customer' ? [{id:'catalog', label:'软件目录', icon:'catalog'}] : []),
-  ...retailNav,
-]
+const nav = workspacePages(props.role, { demo: true, retailDemo: retailDemoEnabled })
+const shortcuts = workspaceShortcuts(nav, props.role)
 const projects = ref([])
 const products = ref([])
 const desk = ref({ items: [], partners: [], gaps: [], reverseMatches: [] })
@@ -47,7 +41,8 @@ const opportunity = ref('')
 const captureFor = ref('')
 const params = () => new URLSearchParams(location.search)
 const view = ref('overview')
-const retailView = computed(() => retailNav.some(item => item.id === view.value))
+const currentPage = computed(() => nav.find(item => item.id === view.value))
+const retailView = computed(() => currentPage.value && isRetailDemoPage(currentPage.value))
 const selected = ref(params().get('project') || '')
 const project = computed(() => projects.value.find(item => item.id === selected.value))
 const mode = ref('')
@@ -59,12 +54,19 @@ const formError = ref('')
 const success = ref('')
 const search = ref('')
 const stage = ref('')
-const scope = ref('')
+const scope = ref('all')
 const group = ref('')
 const deliveryRows = computed(() => projects.value.filter(item => item.order))
 const todos = computed(() => projects.value.filter(item => item.isTodo).sort((left,right) => (left.dueDate || '9999').localeCompare(right.dueDate || '9999')))
-const candidateRows = computed(() => view.value === 'overview' ? todos.value : view.value === 'delivery' ? deliveryRows.value : projects.value)
-const stateOptions = computed(() => [...new Set([...candidateRows.value.map(item => item.stageLabel), stage.value].filter(Boolean))])
+const availableRows = computed(() => view.value === 'delivery' ? deliveryRows.value : projects.value)
+const scopes = computed(() => ({
+  all: availableRows.value,
+  mine: view.value === 'delivery' ? deliveryRows.value.filter(item => item.isTodo) : todos.value,
+  partners: availableRows.value.filter(item => !item.isTodo && item.stage !== 'completed'),
+}))
+const counts = computed(() => ({ all: scopes.value.all.length, mine: scopes.value.mine.length, partners: scopes.value.partners.length }))
+const stateOptions = computed(() => [...new Set([...availableRows.value.map(item => item.stageLabel), stage.value].filter(Boolean))]
+  .map(label => ({ id: label, label })))
 const metrics = {
   dealer: [
     {id:'pricing', label:'待对客报价', icon:'quote', description:'渠道已报价或客户要求改版', stages:['channel_quoted','sales_revision']},
@@ -83,8 +85,7 @@ const metrics = {
   ],
 }[props.role]
 const groupMetric = computed(() => metrics.find(item => item.id === group.value))
-const rows = computed(() => candidateRows.value.filter(item => (!groupMetric.value || groupMetric.value.stages.includes(item.stage)) && (!stage.value || item.stageLabel === stage.value) && (!scope.value || item.isTodo) && [item.id,item.title,item.customerName,item.order?.id,item.inquiry?.summary].filter(Boolean).join(' ').toLowerCase().includes(search.value.trim().toLowerCase())))
-const navTitle = computed(() => nav.find(item => item.id === view.value)?.label)
+const rows = computed(() => scopes.value[scope.value].filter(item => (!groupMetric.value || groupMetric.value.stages.includes(item.stage)) && (!stage.value || item.stageLabel === stage.value) && [item.id,item.title,item.customerName,item.order?.id,item.inquiry?.summary].filter(Boolean).join(' ').toLowerCase().includes(search.value.trim().toLowerCase())))
 const dialogTitle = computed(() => mode.value === 'reset' ? '重置三端演示数据' : mode.value === 'roles' ? '切换演示身份' : mode.value === 'create' ? copy.add : actionLabels[mode.value])
 let unsub
 let noticeTimer
@@ -108,16 +109,19 @@ async function refresh() {
 function restoreUrl() {
   selected.value = params().get('project') || ''
   const target = params().get('view')
-  view.value = nav.some(item => item.id === target) ? target : 'overview'
+  view.value = nav.some(item => item.id === target) ? target : selected.value ? 'ledger' : 'overview'
   opportunity.value = view.value === 'opportunities' ? params().get('op') || '' : ''
   captureFor.value = ''
   closeDialog()
   clearFilters()
+  const requestedScope = params().get('scope')
+  if (['ledger', 'delivery'].includes(view.value) && Object.hasOwn(projectScopeLabels, requestedScope)) scope.value = requestedScope
+  group.value = view.value === 'ledger' && metrics.some(metric => metric.id === params().get('metric')) ? params().get('metric') : ''
   const listState = history.state?.demoProjectList
   if (listState) {
     search.value = listState.search
     stage.value = listState.stage
-    scope.value = listState.scope
+    scope.value = listState.scope || 'all'
     group.value = listState.group
     if (!selected.value) {
       nextTick(() => {
@@ -128,17 +132,38 @@ function restoreUrl() {
     }
   }
 }
-function syncUrl(state = null) {
+function syncUrl(state = null, replace = false) {
   const url = new URL(location.href)
   if (view.value === 'overview') url.searchParams.delete('view'); else url.searchParams.set('view', view.value)
   if (selected.value) url.searchParams.set('project', selected.value); else url.searchParams.delete('project')
   if (opportunity.value && view.value === 'opportunities') url.searchParams.set('op', opportunity.value); else url.searchParams.delete('op')
-  if (url.href !== location.href) history.pushState(state, '', url)
+  if (['ledger', 'delivery'].includes(view.value) && scope.value !== 'all') url.searchParams.set('scope', scope.value); else url.searchParams.delete('scope')
+  if (view.value === 'ledger' && group.value) url.searchParams.set('metric', group.value); else url.searchParams.delete('metric')
+  if (url.href !== location.href) {
+    if (replace) history.replaceState(state, '', url)
+    else history.pushState(state, '', url)
+  }
 }
-function clearFilters() { search.value = ''; stage.value = ''; scope.value = ''; group.value = '' }
-function navigate(target) {
-  view.value = target; selected.value = ''; opportunity.value = ''; captureFor.value = ''; clearFilters(); syncUrl()
+function clearFilters() { search.value = ''; stage.value = ''; scope.value = 'all'; group.value = '' }
+function clearListFilters() {
+  clearFilters()
+  syncUrl(null, true)
+}
+function navigate(target, filters = {}) {
+  view.value = target; selected.value = ''; opportunity.value = ''; captureFor.value = ''; clearFilters()
+  scope.value = filters.scope || 'all'
+  group.value = filters.metric || ''
+  syncUrl()
   window.scrollTo(0, 0)
+}
+function chooseScope(value) {
+  scope.value = value
+  group.value = ''
+  syncUrl(null, true)
+}
+function clearMetric() {
+  group.value = ''
+  syncUrl(null, true)
 }
 function openOpportunity(id = '', captureProjectId = '') {
   if (props.role !== 'dealer') return
@@ -164,7 +189,7 @@ function openDialog(action) {
 }
 function closeDialog() { if (!working.value) { mode.value = ''; recordAtOpen.value = null; formError.value = '' } }
 function roleHref(key) {
-  if (retailView.value && retailDemoNavigation[key]) {
+  if (retailView.value && key !== 'customer') {
     return key === props.role ? retailDemoLocation(key, view.value) : retailDemoCounterpart(props.role, view.value)
   }
   return '/experience/' + key + (selected.value ? '?project=' + encodeURIComponent(selected.value) : '')
@@ -205,39 +230,44 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
 
 <template>
   <div class="ch-space">
-    <WorkspaceShell demo :dealer="role === 'dealer'" :nav="nav" :view="view" :organization="org.company" :account-label="names[role] + ' · 演示身份'" environment="本地演示空间" @navigate="navigate" @account="openDialog('roles')">
-      <RetailDemoPanel v-if="retailView" :role="role" :view="view" @navigate="navigate" />
+    <WorkspaceShell demo :role="role" :nav="nav" :view="view" :organization="org.company" :account-label="names[role] + ' · 演示身份'" environment="本地演示空间" @navigate="navigate" @account="openDialog('roles')">
+      <RetailDemoPanel v-if="retailView" :role="role" :view="view" :title="currentPage.label" :operations="currentPage.source === 'operations'" @navigate="navigate" />
       <UiState v-else-if="loading" state="loading" title="正在载入工作台" />
       <UiState v-else-if="loadError" state="error" title="工作台暂时不可用" :description="loadError"><UiButton @click="refresh">重新载入</UiButton><UiButton @click="openDialog('reset')">恢复演示数据</UiButton></UiState>
       <template v-else-if="selected">
         <ProjectDetail v-if="project" :project="project" :role="role" :products="products" :opportunities="role === 'dealer' ? desk.items.filter(item => item.projectId === project.id) : []" @action="openDialog" @back="returnToProjects" @capture="openOpportunity('', project.id)" @opportunity="openOpportunity" />
         <UiState v-else state="denied" title="当前身份无法查看此项目" description="项目不存在、尚未提交给当前组织，或已撤回。"><UiButton @click="navigate('ledger')">查看我的工作列表</UiButton></UiState>
       </template>
-      <DealerPage v-else-if="role === 'dealer' && dealerPages.some(p => p.id === view)" :key="view" :view="view" :projects="projects" :organization="org.company" :account="names[role] + ' · 演示身份'" @project="id => openProjectFromList({ id })" @navigate="navigate" @account="openDialog('roles')" />
+      <DealerPage v-else-if="currentPage?.source === 'utility'" :key="view" :view="view" :title="currentPage.label" :projects="projects" :organization="org.company" :account="names[role] + ' · 演示身份'" @project="id => openProjectFromList({ id })" @navigate="navigate" @account="openDialog('roles')" />
       <DemoCatalog v-else-if="view === 'catalog'" :items="products" :role="role" :save="saveProduct" />
       <VisitDrafts v-else-if="role === 'dealer' && view === 'visits'" :scope="'demo:' + org.orgId" :load-projects="repo.list" :load-desk="repo.opportunityDesk" :capture="captureVisit" @project="id => { navigate('ledger'); openProject({id}) }" @opportunity="openOpportunity" />
       <OpportunityDesk v-else-if="role === 'dealer' && view === 'opportunities'" :desk="desk" :repo="repo" :projects="projects" :selected="opportunity" :capture-for="captureFor" :refresh="refresh" @select="openOpportunity" @capture-opened="captureFor = ''" @project="record => { navigate('ledger'); openProject(record) }" @notice="toast" />
       <template v-else>
-        <section class="page-heading ch-head"><div v-enter :key="view"><p class="ch-kicker">{{ copy.en }} &nbsp; / &nbsp; {{ org.company }}</p><h1>{{ view === 'overview' ? copy.title : navTitle }}</h1><p class="muted">{{ view === 'overview' ? copy.intro : view === 'delivery' ? '从订单追溯报价，跟进供货、实施及客户验收。' : '按编号、项目名称和状态查找协作记录。' }}</p></div>
+        <section class="page-heading ch-head"><div v-enter :key="view"><p v-if="view === 'overview'" class="workspace-kicker">{{ org.company }}</p><h1>{{ view === 'overview' ? copy.title : currentPage?.label }}</h1><p class="muted">{{ view === 'overview' ? copy.intro : view === 'delivery' ? '从订单追溯报价，跟进供货、实施及客户验收。' : '按编号、项目名称和状态查找协作记录。' }}</p></div>
           <UiButton v-if="copy.add && view !== 'delivery'" icon="add" variant="primary" @click="openDialog('create')">{{ copy.add }}</UiButton>
         </section>
-        <div v-if="view === 'overview'" v-enter:children="1" class="metric-grid">
-          <UiMetricCard v-for="metric in metrics" :key="metric.id" :icon="metric.icon" :label="metric.label" :value="projects.filter(item => metric.stages.includes(item.stage)).length" :description="metric.description" interactive @click="navigate('ledger'); group = metric.id" />
-        </div>
-        <section v-if="role === 'dealer' && view === 'overview'" v-enter="2" class="op-banner">
-          <div><p class="ch-kicker">渠道经营 · 团队私有</p><h2>商机拾遗</h2><p>主单之外的需求，团队里谁做过？<span v-if="desk.items.length">当前 {{ desk.items.filter(item => item.stage === 'open').length }} 条待承接。</span></p></div>
-          <UiButton icon="workflow" @click="openOpportunity()">查看商机台账</UiButton>
-          <UiButton @click="navigate('visits')">记拜访</UiButton>
-        </section>
-        <UiCard v-if="role === 'dealer' && view === 'overview' && desk.tasks?.length" v-enter="3" title="今天接着跟进">
-          <div class="op-records"><button v-for="task in desk.tasks" :key="task.opportunityId" @click="openOpportunity(task.opportunityId)"><span><b>{{ task.reason }}</b><small>{{ task.projectTitle }}</small></span><span>{{ task.action }}</span></button></div>
-        </UiCard>
-        <UiCard v-enter="view === 'overview' ? 3 : 1" class="ch-ledger" :title="view === 'overview' ? '优先待办' : '业务记录'" :description="view === 'overview' ? '打开项目，即可处理当前环节。' : undefined" flush>
-          <template #actions><span class="ch-count">{{ rows.length }} 笔</span></template>
-          <div class="ch-tools ch-table-tools"><label class="ch-search"><UiIcon name="search" :size="15" /><input v-model="search" type="search" aria-label="搜索项目" placeholder="搜索项目名称或编号" /></label><select v-model="stage" aria-label="项目状态"><option value="">全部状态</option><option v-for="label in stateOptions" :key="label">{{ label }}</option></select><select v-if="view !== 'overview'" v-model="scope" aria-label="责任筛选"><option value="">所有经办方</option><option value="mine">待我处理</option></select><UiButton v-if="groupMetric" compact :aria-label="'移除筛选：' + groupMetric.label" @click="group = ''">{{ groupMetric.label }} ×</UiButton></div>
+        <template v-if="view === 'overview'">
+          <section v-enter:children="1" class="metric-grid workspace-overview-metrics" aria-label="协作数据">
+            <UiMetricCard v-for="metric in metrics" :key="metric.id" :icon="metric.icon" :label="metric.label" :value="projects.filter(item => metric.stages.includes(item.stage)).length" :description="metric.description" interactive @click="navigate('ledger', { metric: metric.id })" />
+          </section>
+          <ProjectPriority v-enter="2" :projects="todos" :show-customer="role === 'dealer'" @open="openProjectFromList" @show-all="navigate('ledger', { scope: 'mine' })" />
+          <UiCard v-if="role === 'dealer' && desk.tasks?.length" v-enter="3" title="商机待跟进">
+            <div class="op-records"><button v-for="task in desk.tasks.slice(0, 5)" :key="task.opportunityId" @click="openOpportunity(task.opportunityId)"><span><b>{{ task.reason }}</b><small>{{ task.projectTitle }}</small></span><span>{{ task.action }}</span></button></div>
+          </UiCard>
+          <WorkspaceShortcuts v-enter="3" :pages="shortcuts" @navigate="navigate" />
+        </template>
+        <section v-else v-enter="1" class="workspace-section" aria-labelledby="project-list">
+          <h2 id="project-list" class="ch-sr">协作项目</h2>
+          <ProjectFilters :scope="scope" :counts="counts" :keyword="search" :stage="stage" :stages="stateOptions"
+            @scope="chooseScope" @keyword="event => search = event.target.value" @stage="event => stage = event.target.value">
+            <UiButton v-if="groupMetric" compact :aria-label="'移除筛选：' + groupMetric.label" @click="clearMetric">{{ groupMetric.label }} ×</UiButton>
+          </ProjectFilters>
           <ProjectList v-if="rows.length" :projects="rows" :show-customer="role === 'dealer'" @open="openProjectFromList" />
-          <UiState v-else :title="search || stage || scope || group ? '没有匹配的记录' : view === 'overview' ? '当前没有待你处理的项目' : '暂无业务记录'" :description="search || stage || scope || group ? '可清除筛选或更换关键词。' : '进入项目列表查看进度，或切换演示身份体验协作方的操作。'"><UiButton v-if="search || stage || scope || group" compact @click="clearFilters">清除筛选</UiButton><UiButton v-else-if="view !== 'ledger'" compact @click="navigate('ledger')">查看项目列表</UiButton></UiState>
-        </UiCard>
+          <UiState v-else :title="search || stage || group ? '暂无符合条件的项目' : scope === 'mine' ? '暂无待你处理的项目' : scope === 'partners' ? '暂无等待协作方处理的项目' : '暂无协作项目'">
+            <UiButton v-if="search || stage || group" variant="text" @click="clearListFilters">清除筛选</UiButton>
+            <UiButton v-else-if="scope !== 'all'" variant="text" @click="chooseScope('all')">查看全部项目</UiButton>
+          </UiState>
+        </section>
       </template>
       <footer class="demo-footer ch-footer"><span>本地演示 · 三个身份共享此浏览器的示例记录</span><div class="footer-actions"><button @click="openDialog('roles')">切换身份</button><button @click="openDialog('reset')">重置演示</button></div></footer>
     </WorkspaceShell>

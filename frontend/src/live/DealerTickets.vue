@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { UiButton, UiCard, UiState } from '../ui/index.js'
+import { UiBadge, UiButton, UiCard, UiIcon, UiState } from '../ui/index.js'
 import { pendingRetailRequest } from './retailRequest.js'
 
 const props = defineProps({ state: Object, role: String, identity: String, busy: Boolean, submit: Function })
@@ -9,6 +9,7 @@ const newTicket = ref(null)
 const response = ref(null)
 const status = ref('')
 const labels = { open: '待厂商处理', resolved: '待代理商确认', closed: '已关闭' }
+const tones = { open: 'warning', resolved: 'info', closed: 'success' }
 const labelsByRole = { dealer: '代理商', vendor: '厂商' }
 const rows = computed(() => props.state.tickets.filter(row => !status.value || row.status === status.value))
 const time = value => new Date(value).toLocaleString('zh-CN')
@@ -49,14 +50,22 @@ async function sendReply() {
       <div class="operations-actions"><UiButton type="submit" variant="primary" :loading="busy">提交工单</UiButton><UiButton :disabled="busy" @click="newTicket = null">取消</UiButton></div>
     </form>
   </UiCard>
-  <div class="operations-actions">
-    <label class="operations-search">工单状态<select v-model="status"><option value="">全部</option><option v-for="(label, key) in labels" :key="key" :value="key">{{ label }}</option></select></label>
-    <UiButton v-if="!vendor && !newTicket" variant="primary" :disabled="busy" @click="create">新建工单</UiButton>
-  </div>
-  <div v-if="rows.length" class="operations-list">
-    <UiCard v-for="row in rows" :key="row.id" :title="row.subject"
-      :description="row.category + (row.order_id ? ' · 订单 ' + row.order_id : '') + ' · ' + labels[row.status]">
-      <p class="operations-thread">{{ row.detail }}</p>
+  <section class="workspace-section" aria-labelledby="ticket-records">
+    <header class="workspace-section-heading">
+      <h2 id="ticket-records">工单列表</h2>
+      <div class="workspace-record-controls">
+        <label class="ticket-filter">工单状态 <select v-model="status"><option value="">全部</option><option v-for="(label, key) in labels" :key="key" :value="key">{{ label }}</option></select></label>
+        <UiButton v-if="!vendor && !newTicket" variant="primary" :disabled="busy" @click="create">新建工单</UiButton>
+      </div>
+    </header>
+    <details v-for="row in rows" :key="row.id" class="ticket-record">
+      <summary>
+        <span><strong>{{ row.subject }}</strong><small>{{ row.category }}<template v-if="row.order_id"> · 订单 {{ row.order_id }}</template></small></span>
+        <UiBadge :tone="tones[row.status]" dot>{{ labels[row.status] }}</UiBadge>
+        <UiIcon name="chevron-down" :size="14" />
+      </summary>
+      <div class="ticket-body">
+      <p>{{ row.detail }}</p>
       <small class="operations-meta">代理商提交 · {{ time(row.created_at) }}</small>
       <ul v-if="row.replies.length" class="operations-thread">
         <li v-for="(reply, index) in row.replies" :key="index"><strong>{{ labelsByRole[reply.role] }}</strong> {{ reply.text }}<small class="operations-meta">{{ time(reply.time) }}</small></li>
@@ -69,7 +78,32 @@ async function sendReply() {
         <UiButton v-if="!vendor" :disabled="busy" @click="submit('tickets/' + row.id + '/close', {}, '工单已关闭。')">确认关闭</UiButton>
         <UiButton :disabled="busy" @click="response = { id: row.id, reply: '' }">{{ vendor ? '填写处理结果' : '补充并重新打开' }}</UiButton>
       </div>
-    </UiCard>
-  </div>
-  <UiState v-else title="暂无符合条件的工单" />
+      </div>
+    </details>
+    <UiState v-if="!rows.length" title="暂无符合条件的工单" />
+  </section>
 </template>
+
+<style scoped>
+.ticket-filter { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.ticket-filter select { width: auto; }
+.ticket-record { border-top: 1px solid var(--ui-border); }
+.ticket-record summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 6px;
+  list-style: none;
+  cursor: pointer;
+}
+.ticket-record summary::-webkit-details-marker { display: none; }
+.ticket-record summary:hover, .ticket-record[open] summary { background: var(--ui-surface-muted); }
+.ticket-record summary > span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ticket-record summary strong { display: block; font-weight: 500; }
+.ticket-record summary small { display: block; color: var(--ui-ink-muted); }
+.ticket-record[open] summary > svg { transform: rotate(180deg); }
+.ticket-body { padding: 10px 6px 12px; overflow-wrap: anywhere; }
+.ticket-body > p { white-space: pre-wrap; }
+.ticket-body .operations-actions { margin-top: 8px; }
+</style>

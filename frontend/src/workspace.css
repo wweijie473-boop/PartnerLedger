@@ -128,6 +128,35 @@ main.workspace-content .project-progress {
 }
 main.workspace-content .ch-next { padding: 10px 12px; border-radius: 0; }
 
+main.workspace-content .workspace-finance-metrics { margin-block: 12px; }
+main.workspace-content .workspace-finance-metrics strong { overflow-wrap: anywhere; min-width: 0; font-size: 18px; }
+.workspace-record-table td { vertical-align: top; overflow-wrap: anywhere; }
+.workspace-record-table td:last-child, .workspace-record-table th:last-child { width: auto; }
+.workspace-record-table small { display: block; color: var(--ui-ink-muted); }
+.workspace-mobile-label { display: none; }
+.workspace-record-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; }
+
+@media (max-width: 760px) {
+  .workspace-record-table { display: block; min-width: 0; }
+  .workspace-record-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .workspace-record-table tbody { display: block; }
+  .workspace-record-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--ui-border);
+  }
+  main.workspace-content .workspace-record-table td { display: block; min-width: 0; padding: 0; border: 0; }
+  .workspace-record-table td:first-child,
+  .workspace-record-table .workspace-record-action { grid-column: 1 / -1; }
+  .workspace-mobile-label { display: block; color: var(--ui-ink-muted); font-size: 12px; }
+}
+
 @media (max-width: 540px) {
   main.workspace-content { --ui-text-display: 22px; --ui-control-height: 36px; }
+  main.workspace-content .workspace-overview-metrics {
+    grid-template-columns: repeat(auto-fill, minmax(min(105px, 100%), 1fr));
+    gap: 8px;
+  }
 }

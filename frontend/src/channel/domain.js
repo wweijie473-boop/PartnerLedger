@@ -19,6 +19,7 @@ export const stageLabels = {
   supplied: '待代理商实施', acceptance: '待客户验收', rectification: '待整改', completed: '已验收',
   processing: '代理商跟进中', channel_wait: '渠道报价已发送', shipped: '已供货',
 }
+export const projectScopeLabels = { all: '全部项目', mine: '待我处理', partners: '协作方处理中' }
 export const actionLabels = {
   requestInfo: '要求补资料', replyInfo: '回复资料', submitInquiry: '提交厂商询价', withdrawInquiry: '撤回询价',
   channelQuote: '发送渠道报价', salesQuote: '发送对客报价', reviseChannel: '请求厂商改价', reviseSales: '请求修改方案',

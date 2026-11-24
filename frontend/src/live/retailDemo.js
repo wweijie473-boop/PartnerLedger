@@ -1,36 +1,13 @@
 import { requestApi } from '../api.js'
+import { isRetailDemoPage, workspacePages } from '../workspaceNavigation.js'
 
 export const retailDemoApi = '/api/retail-demo'
 export const demoWorkspace = '/experience/retail'
 export const demoStore = '/experience/retail-store'
 export const retailDemoEnabled = import.meta.env.DEV || import.meta.env.MODE === 'retail-demo'
 
-export const retailDemoNavigation = {
-  dealer: [
-    { id: 'business-overview', label: '经营看板', icon: 'overview' },
-    { id: 'customers', label: '客户档案', icon: 'customer' },
-    { id: 'renewals', label: '续费跟进', icon: 'time' },
-    { id: 'promotion', label: '推广获客二维码', icon: 'workflow' },
-    { id: 'assisted', label: '代客下单', icon: 'order' },
-    { id: 'retail-orders', label: '厂商直收订单', icon: 'order' },
-    { id: 'commission', label: '佣金结算', icon: 'quote' },
-    { id: 'funds-overview', label: '资金总览', icon: 'quote' },
-    { id: 'funds-transactions', label: '交易明细', icon: 'order' },
-    { id: 'funds-invoices', label: '订单开票', icon: 'request' },
-    { id: 'funds-claims', label: '服务费报销', icon: 'quote' },
-    { id: 'application-queue', label: '申请台账', icon: 'request' },
-    { id: 'service-tickets', label: '服务工单', icon: 'request' },
-  ],
-  vendor: [
-    { id: 'manufacturer-receipts', label: '直收订单与收款', icon: 'order' },
-    { id: 'manufacturer-settlements', label: '代理商佣金结算', icon: 'quote' },
-    { id: 'vendor-finance', label: '财务办理', icon: 'quote' },
-    { id: 'vendor-tickets', label: '渠道工单', icon: 'request' },
-  ],
-}
-
 export function retailDemoLocation(role, view) {
-  const views = retailDemoNavigation[role]
+  const views = workspacePages(role, { demo: true, retailDemo: true }).filter(isRetailDemoPage)
   const target = views.find(item => item.id === view)?.id ?? (role === 'dealer' ? 'promotion' : 'manufacturer-receipts')
   return '/experience/' + role + '?' + new URLSearchParams({ view: target })
 }

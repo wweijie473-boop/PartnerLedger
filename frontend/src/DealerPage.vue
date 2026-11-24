@@ -1,12 +1,12 @@
 <script setup>
 import { computed, ref, watchEffect } from 'vue'
 import { createHttpProjectRepository } from './channel/httpProjects.js'
+import ProjectList from './channel/ProjectList.vue'
 import { formatCents, lineCents, quoteCents } from './channel/quoteMoney.js'
-import { dealerPages } from './dealerNavigation.js'
 import { retailDemoEnabled } from './live/retailDemo.js'
 import { UiButton, UiState } from './ui/index.js'
 
-const props = defineProps({ view: String, projects: Array, request: Function, organization: String, account: String })
+const props = defineProps({ view: String, title: String, projects: Array, request: Function, organization: String, account: String })
 const emit = defineEmits(['project', 'navigate', 'account'])
 const remote = ref([])
 const loading = ref(false)
@@ -16,7 +16,6 @@ const search = ref('')
 const price = ref('')
 const quantity = ref(1)
 const queues = ['orders', 'finance', 'support', 'tickets']
-const page = computed(() => dealerPages.find(p => p.id === props.view))
 watchEffect(onCleanup => {
   const view = props.view
   retry.value
@@ -56,7 +55,7 @@ const endpoints = [
 ]
 </script>
 <template>
-  <header v-enter class="page-heading"><h1>{{ page?.label }}</h1></header>
+  <header v-enter class="page-heading"><h1>{{ title }}</h1></header>
   <section v-if="queues.includes(view)" class="dealer-panel">
     <p v-if="view === 'finance'">按订单锁定的报价版本核对渠道采购额与对客销售额，实际收付款以财务凭证为准。</p>
     <p v-if="view === 'tickets'">按项目当前阶段列出需要本方处理的事项，打开项目即可办理。</p>
@@ -64,8 +63,18 @@ const endpoints = [
     <label class="dealer-search">查找项目 <input v-model="search" placeholder="项目名称、客户或编号" type="search"></label>
     <UiState v-if="loading" state="loading" title="正在读取本组织的项目" />
     <UiState v-else-if="error" state="error" title="读取失败" :description="error"><UiButton @click="retry++">重试</UiButton></UiState>
-    <div v-else-if="rows.length" class="dealer-scroll"><table><thead><tr><th>项目 / 客户</th><th>当前阶段</th><template v-if="view === 'finance'"><th>渠道采购额</th><th>对客销售额</th></template><th v-else>下一步</th></tr></thead>
-      <tbody><tr v-for="p in rows" :key="p.id"><td><button class="dealer-inline" @click="emit('project', p.id)">{{ p.title }}</button><small>{{ p.customerName }} · {{ p.id }}</small></td><td>{{ p.stageLabel }}</td><template v-if="view === 'finance'"><td>{{ lockedAmount(p.channelQuotes, p.order?.channelQuoteId) }}</td><td>{{ lockedAmount(p.salesQuotes, p.order?.salesQuoteId) }}</td></template><td v-else>{{ p.nextStep }}</td></tr></tbody></table></div>
+    <ProjectList v-else-if="rows.length && view !== 'finance'" :projects="rows" show-customer @open="project => emit('project', project.id)" />
+    <div v-else-if="rows.length" class="table-scroll">
+      <table class="workspace-record-table" role="table">
+        <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">项目 / 客户</th><th scope="col" role="columnheader">当前阶段</th><th scope="col" role="columnheader">渠道采购额</th><th scope="col" role="columnheader">对客销售额</th></tr></thead>
+        <tbody role="rowgroup"><tr v-for="project in rows" :key="project.id" role="row">
+          <td role="cell"><button class="dealer-inline" @click="emit('project', project.id)">{{ project.title }}</button><small>{{ project.customerName }} · {{ project.id }}</small></td>
+          <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">当前阶段</span>{{ project.stageLabel }}</td>
+          <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">渠道采购额</span>{{ lockedAmount(project.channelQuotes, project.order?.channelQuoteId) }}</td>
+          <td role="cell"><span class="workspace-mobile-label" aria-hidden="true">对客销售额</span>{{ lockedAmount(project.salesQuotes, project.order?.salesQuoteId) }}</td>
+        </tr></tbody>
+      </table>
+    </div>
     <UiState v-else :title="search ? '没有匹配的项目' : '当前没有相关项目'" />
   </section>
   <section v-else-if="view === 'staff'" class="dealer-panel"><h2>{{ organization }}</h2><p>{{ account }}</p><UiButton @click="emit('account')">查看身份</UiButton></section>
@@ -74,12 +83,11 @@ const endpoints = [
   <section v-else-if="view === 'tools'" class="dealer-panel"><h2>授权金额试算</h2><div class="dealer-inputs"><label>授权单价（元）<input v-model="price" inputmode="decimal" placeholder="0.00"></label><label>数量<input v-model.number="quantity" type="number" min="1" step="1"></label></div><p>预计总额　<strong>{{ estimate }}</strong></p><a href="/tables">打开表格工作台 →</a></section>
 </template>
 <style scoped>
-.dealer-panel { padding:24px; background:white; border:1px solid var(--ui-border); border-radius:10px }
-.dealer-panel h2 { font-size:18px }.dealer-panel p {margin:10px 0 18px;color:var(--ui-ink-secondary)}
+.dealer-panel { padding-block:12px; border-block:1px solid var(--ui-border) }
+.dealer-panel h2 { font-size:16px;font-weight:500 }.dealer-panel p {margin:8px 0 12px;color:var(--ui-ink-secondary)}
 .dealer-search,.dealer-inputs label {display:grid;gap:6px;max-width:320px;font-weight:500;margin-bottom:16px}
 .dealer-inputs {display:flex;flex-wrap:wrap;gap:16px;margin-top:16px}
 input {min-width:0;border:1px solid var(--ui-border-strong);padding:8px 12px;border-radius:6px}
-.dealer-scroll {overflow:auto} table {width:100%;border-collapse:collapse;text-align:left} td,th {padding:10px;border-bottom:1px solid var(--ui-border)}
-small {display:block;color:var(--ui-ink-muted)} .dealer-inline {background:none;border:0;padding:0;color:var(--ui-link);text-align:left}
+.dealer-inline {background:none;border:0;padding:0;color:var(--ui-link);text-align:left}
 details {padding:14px 0;border-bottom:1px solid var(--ui-border)} summary {cursor:pointer;font-weight:600} code {display:block;margin-top:12px;overflow-wrap:anywhere}
 </style>

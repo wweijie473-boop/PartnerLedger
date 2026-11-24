@@ -9,13 +9,8 @@ import DealerFunds from './DealerFunds.vue'
 import DealerTickets from './DealerTickets.vue'
 import './dealer-operations.css'
 
-const props = defineProps({ view: String, role: String, identity: String, request: Function })
+const props = defineProps({ view: String, title: String, role: String, identity: String, request: Function })
 const emit = defineEmits(['navigate'])
-const titles = {
-  'business-overview': '经营看板', customers: '客户档案', renewals: '续费跟进', 'funds-overview': '资金总览', 'funds-transactions': '交易明细',
-  'funds-invoices': '订单开票', 'funds-claims': '服务费报销', 'vendor-finance': '财务办理', 'application-queue': '申请台账',
-  'service-tickets': '服务工单', 'vendor-tickets': '渠道工单',
-}
 const controller = new AbortController()
 const loading = ref(true)
 const busy = ref(false)
@@ -81,13 +76,13 @@ onUnmounted(() => {
 
 <template>
   <div class="dealer-operations">
-    <header class="page-heading"><h1>{{ titles[view] }}</h1><UiButton compact :disabled="loading || busy" @click="load">刷新</UiButton></header>
+    <header class="page-heading"><h1>{{ title }}</h1><UiButton compact variant="text" :disabled="loading || busy" @click="load">刷新</UiButton></header>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <p v-if="notice" class="operations-notice" role="status">{{ notice }}</p>
     <UiState v-if="!state && loading" state="loading" title="正在读取运营记录" />
     <UiState v-else-if="!state" state="error" title="无法读取运营记录"><UiButton @click="load">重试</UiButton></UiState>
     <template v-else-if="view === 'business-overview'">
-      <div class="operations-metrics">
+      <div class="metric-grid">
         <UiMetricCard label="客户档案" icon="customer" :value="state.totals.customers" interactive @click="emit('navigate', 'customers')" />
         <UiMetricCard label="直购订单" icon="order" :value="state.totals.orders" :description="'推广订单 ' + state.totals.promotion_orders + ' 笔'" interactive @click="emit('navigate', 'retail-orders')" />
         <UiMetricCard label="30 天内到期" icon="time" :value="state.totals.renewals_30_days" interactive @click="emit('navigate', 'renewals')" />

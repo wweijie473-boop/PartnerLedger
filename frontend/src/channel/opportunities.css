@@ -1,8 +1,6 @@
-.op-banner,.op-count,.op-tabs,.op-tools,.op-records button { display:flex; align-items:center; gap:12px; }
-.op-banner { justify-content:space-between; flex-wrap:wrap; margin:16px 0; background:var(--ui-surface-muted); padding:10px 12px; border-left:2px solid var(--ui-teal); }
-.op-banner h2 { margin:4px 0; font-size:16px; font-weight:500; }
-.op-banner p,.op-muted,.op-line p,.op-form p,.op-desk .ui-card p { line-height:1.7; overflow-wrap:anywhere; }
-.op-muted,.op-line p,.op-banner p { color:var(--ui-ink-muted); }
+.op-count,.op-tabs,.op-tools,.op-records button { display:flex; align-items:center; gap:12px; }
+.op-muted,.op-line p,.op-form p,.op-desk .ui-card p { line-height:1.7; overflow-wrap:anywhere; }
+.op-muted,.op-line p { color:var(--ui-ink-muted); }
 .op-tabs { gap:4px; margin-bottom:12px; flex-wrap:wrap; border-bottom:1px solid var(--ui-border); }
 .op-tabs button { min-height:var(--ui-control-height); border:0; border-bottom:2px solid transparent; background:transparent; color:var(--ui-ink-secondary); padding:4px 10px; font-size:13px; }
 .op-tabs button:hover { background:var(--ui-accent-bg); }

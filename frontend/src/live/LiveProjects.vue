@@ -3,16 +3,18 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElDialog } from 'element-plus'
 import { UiButton, UiField, UiState, UiMetricCard } from '../ui/index.js'
 import ProjectDetail from '../channel/ProjectDetail.vue'
+import ProjectFilters from '../channel/ProjectFilters.vue'
 import ProjectList from '../channel/ProjectList.vue'
+import ProjectPriority from '../channel/ProjectPriority.vue'
 import ChannelAction from '../channel/ChannelAction.vue'
-import { actionLabels } from '../channel/domain.js'
+import { actionLabels, projectScopeLabels } from '../channel/domain.js'
 import { createHttpProjectRepository } from '../channel/httpProjects.js'
 import { createProjectWriteJournal } from './projectWrites.js'
 import { useProjectWorkspace } from './useProjectWorkspace.js'
 import '../channel/workspace.css'
 
 const props = defineProps({ request: Function, role: String, organizationId: String, userId: String, overview: Boolean })
-defineEmits(['capture-opportunity', 'open-project', 'open-list'])
+const emit = defineEmits(['capture-opportunity', 'open-project', 'open-list'])
 const repo = createHttpProjectRepository(props.request)
 const journal = createProjectWriteJournal(repo, props.organizationId, props.userId)
 const pending = computed(() => journal.state.job)
@@ -28,10 +30,14 @@ const detailLoading = ref(false)
 const dialog = ref('')
 const formError = ref('')
 const notice = ref(journal.state.error)
-const scopeLabels = { all: '全部项目', mine: '待我处理', partners: '协作方处理中' }
+const overviewMetrics = {
+  customer: ['采购项目', '待我处理', '协作方处理中'],
+  dealer: ['客户项目', '待我跟进', '协作方处理中'],
+  vendor: ['渠道询价', '待厂商处理', '协作方处理中'],
+}
 const listScope = () => {
   const value = projectParams().get('scope')
-  return Object.hasOwn(scopeLabels, value) ? value : 'all'
+  return Object.hasOwn(projectScopeLabels, value) ? value : 'all'
 }
 const scope = ref(listScope())
 const savedList = () => {
@@ -286,6 +292,12 @@ onMounted(async () => {
   if (!props.overview) window.addEventListener('popstate', syncProjectFromHistory)
   await refreshProgress()
   if (unmounted) return
+  if (!props.overview && !selected.value && projectParams().get('create') === '1') {
+    const url = new URL(location.href)
+    url.searchParams.delete('create')
+    history.replaceState(history.state, '', url)
+    if (!pending.value && props.role !== 'vendor') openAction('create')
+  }
   if (!props.overview && !selected.value && savedList()) restoreListPosition(savedList())
   timer = setInterval(backgroundRefresh,20000)
   window.addEventListener('focus',backgroundRefresh)
@@ -313,7 +325,8 @@ onUnmounted(() => {
       </div>
       <div class="workspace-actions live-project-actions">
         <UiButton variant="text" :disabled="busy" @click="refreshProgress">刷新协作进度</UiButton>
-        <UiButton v-if="!overview && !selected && !loading && role !== 'vendor'" icon="add" variant="primary" @click="openAction('create')">建立项目</UiButton>
+        <UiButton v-if="!selected && !loading && role !== 'vendor'" icon="add" variant="primary"
+          @click="overview ? emit('open-list', 'all', true) : openAction('create')">建立项目</UiButton>
       </div>
     </header>
     <p v-if="notice" class="live-feedback" role="status">{{ notice }}</p>
@@ -321,19 +334,13 @@ onUnmounted(() => {
       <UiState v-if="loading" state="loading" title="正在读取项目待办" />
       <UiState v-else-if="loadError" state="error" title="项目待办暂不可用" :description="loadError"><UiButton @click="refreshProgress">重新载入</UiButton></UiState>
       <template v-else>
-        <section v-enter:children="1" class="metric-grid" aria-label="协作数据">
-          <UiMetricCard label="可见项目" :value="counts.all" description="当前组织参与的项目" icon="request" interactive @click="$emit('open-list', 'all')" />
-          <UiMetricCard label="待我处理" :value="counts.mine" description="下一步由本方办理" icon="activity" tone="brand" interactive @click="$emit('open-list', 'mine')" />
-          <UiMetricCard label="协作方处理中" :value="counts.partners" description="等待协作方推进" icon="time" interactive @click="$emit('open-list', 'partners')" />
+        <section v-enter:children="1" class="metric-grid workspace-overview-metrics" aria-label="协作数据">
+          <UiMetricCard :label="overviewMetrics[role][0]" :value="counts.all" icon="request" interactive @click="$emit('open-list', 'all')" />
+          <UiMetricCard :label="overviewMetrics[role][1]" :value="counts.mine" icon="activity" tone="brand" interactive @click="$emit('open-list', 'mine')" />
+          <UiMetricCard :label="overviewMetrics[role][2]" :value="counts.partners" icon="time" interactive @click="$emit('open-list', 'partners')" />
         </section>
-        <section v-enter="2" class="workspace-section" aria-labelledby="project-tasks">
-          <header class="workspace-section-heading">
-            <h2 id="project-tasks">项目待办</h2>
-            <UiButton v-if="rows.length" variant="text" end-icon="forward" @click="$emit('open-list', 'mine')">查看全部待办</UiButton>
-          </header>
-          <ProjectList v-if="rows.length" :projects="rows" :show-customer="role === 'dealer'" @open="item => $emit('open-project', item.id, 'mine')" />
-          <UiState v-else title="当前没有待办理项目" description="新的需求或协作方回复到达后，会出现在这里。可从项目台账查看全部进度。" />
-        </section>
+        <ProjectPriority v-enter="2" :projects="rows" :show-customer="role === 'dealer'"
+          @open="item => $emit('open-project', item.id, 'mine')" @show-all="$emit('open-list', 'mine')" />
       </template>
     </template>
     <div v-else-if="selected" ref="detailTop" tabindex="-1">
@@ -350,20 +357,9 @@ onUnmounted(() => {
     </div>
     <template v-else>
       <section v-enter="1" ref="list" class="workspace-section" aria-labelledby="project-list" :aria-busy="loading">
-        <header class="workspace-section-heading">
-          <div class="live-project-scopes" role="group" aria-label="项目范围">
-            <h2 id="project-list" class="ch-sr">协作项目</h2>
-            <button v-for="(label, key) in scopeLabels" :key="key" type="button"
-              :aria-pressed="scope === key" @click="chooseScope(key)">{{ label }} <span>{{ counts[key] }}</span></button>
-          </div>
-          <div class="live-project-filters">
-            <input :value="keyword" type="search" placeholder="搜索项目或编号" aria-label="搜索项目" maxlength="120" @input="changeKeyword">
-            <select v-model="stage" aria-label="项目状态" @change="changeStage">
-              <option value="">全部状态</option>
-              <option v-for="option in stages" :key="option.id" :value="option.id">{{ option.label }}</option>
-            </select>
-          </div>
-        </header>
+        <h2 id="project-list" class="ch-sr">协作项目</h2>
+        <ProjectFilters :scope="scope" :counts="counts" :keyword="keyword" :stage="stage" :stages="stages"
+          @scope="chooseScope" @keyword="changeKeyword" @stage="changeStage" />
         <UiState v-if="loading" state="loading" title="正在读取项目" />
         <UiState v-else-if="loadError" state="error" title="项目列表暂不可用" :description="loadError"><UiButton @click="refreshProgress">重新载入</UiButton></UiState>
         <ProjectList v-else-if="rows.length" :projects="rows" :show-customer="role === 'dealer'" @open="openProject" />
@@ -405,37 +401,6 @@ onUnmounted(() => {
 <style scoped>
 .live-project-actions { margin-left: auto; }
 .live-feedback { margin-block: 8px; color: var(--ui-ink-secondary); }
-.live-project-filters, .live-project-scopes {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-  font-size: 13px;
-}
-.live-project-scopes { gap: 2px 4px; }
-.live-project-scopes button {
-  min-height: var(--ui-control-height);
-  padding: 4px 7px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--ui-ink-secondary);
-  white-space: nowrap;
-}
-.live-project-scopes button:hover { background: var(--ui-accent-bg); }
-.live-project-scopes button[aria-pressed="true"] { border-bottom-color: var(--ui-accent); color: var(--ui-link); font-weight: 600; }
-.live-project-scopes button span { margin-left: 2px; font-variant-numeric: tabular-nums; }
-.live-project-filters :is(input[type='search'], select) {
-  min-height: var(--ui-control-height);
-  min-width: 0;
-  max-width: 100%;
-  padding: 4px 8px;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  background: var(--ui-surface);
-  color: var(--ui-ink);
-  font-size: inherit;
-}
 .workspace-section > .ui-state { border-top: 1px solid var(--ui-border); }
 .live-project-pagination { padding: 12px 0; align-items: center; }
 @media (max-width: 540px) {
