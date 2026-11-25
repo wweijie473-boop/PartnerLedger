@@ -17,8 +17,20 @@ const props = defineProps({
   environment: { type: String, required: true },
   role: { type: String, default: '' },
   demo: Boolean,
+  badges: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['navigate', 'account'])
+const pageBadge = id => {
+  const n = Number(props.badges?.[id])
+  return Number.isInteger(n) && n > 0 ? (n > 99 ? '99+' : String(n)) : ''
+}
+const groupBadge = group => {
+  const sum = (group?.pages ?? []).reduce((acc, p) => {
+    const n = Number(props.badges?.[p.id])
+    return acc + (Number.isInteger(n) && n > 0 ? n : 0)
+  }, 0)
+  return sum > 0 ? (sum > 99 ? '99+' : String(sum)) : ''
+}
 const { account, signedIn } = props.demo ? useSessionAccount() : { account: null, signedIn: false }
 const dealerLogo = computed(() => props.demo && props.role === 'dealer' ? '/brand/zhufei-logo.png' : '')
 const groups = computed(() => groupWorkspacePages(props.nav, props.role))
@@ -89,6 +101,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
                 @click="emit('navigate', group.pages[0].id)">
                 <UiIcon v-if="group.featured" :name="group.icon" :size="19" />
                 <span>{{ group.label }}</span>
+                <span v-if="groupBadge(group)" class="workspace-nav-badge" aria-hidden="true">{{ groupBadge(group) }}</span>
               </button>
             </nav>
             <div ref="menu" class="workspace-menu" @focusout="leaveMenu" @keydown.esc="escapeMenu">
@@ -102,7 +115,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
                     <h2 v-if="role && (group.pages.length > 1 || group.label !== group.pages[0].label)">{{ group.label }}</h2>
                     <button v-for="page in group.pages" :key="page.id" type="button"
                       :aria-current="view === page.id ? 'page' : undefined" @click="navigateFromMenu(page.id)">
-                      {{ page.label }}
+                      <span>{{ page.label }}</span>
+                      <span v-if="pageBadge(page.id)" class="workspace-nav-badge is-inline" aria-hidden="true">{{ pageBadge(page.id) }}</span>
                     </button>
                   </section>
                 </div>
@@ -117,7 +131,10 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
       <nav v-if="showGroupPages" class="workspace-subpages" :class="{ 'has-picker': groupPages.length > 4 }" aria-label="当前栏目功能">
         <div class="workspace-page-links">
           <button v-for="page in groupPages" :key="page.id" type="button"
-            :aria-current="view === page.id ? 'page' : undefined" @click="emit('navigate', page.id)">{{ page.label }}</button>
+            :aria-current="view === page.id ? 'page' : undefined" @click="emit('navigate', page.id)">
+            <span>{{ page.label }}</span>
+            <span v-if="pageBadge(page.id)" class="workspace-nav-badge" aria-hidden="true">{{ pageBadge(page.id) }}</span>
+          </button>
           <span v-if="currentPage?.direct" aria-current="page">{{ currentPage.label }}</span>
         </div>
         <label v-if="groupPages.length > 4" class="workspace-page-picker">
@@ -208,7 +225,10 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
 .workspace-menu-group { break-inside: avoid; padding-bottom: 8px; }
 .workspace-menu-group h2 { margin: 0 0 4px; color: var(--ui-ink-muted); font-size: 12px; font-weight: 500; }
 .workspace-menu-group button {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   width: 100%;
   min-height: 34px;
   padding: 4px 6px;
@@ -218,6 +238,21 @@ onUnmounted(() => document.removeEventListener('pointerdown', outsideMenu))
   text-align: left;
   overflow-wrap: anywhere;
 }
+.workspace-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #d93025;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.workspace-nav-badge.is-inline { flex: none; }
 .workspace-menu-group button:hover, .workspace-menu-group button[aria-current] { background: var(--ui-accent-bg); color: var(--ui-link); }
 .workspace-environment {
   display: inline-flex;

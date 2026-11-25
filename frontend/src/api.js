@@ -18,6 +18,7 @@ const apiMessages = {
   invalid_transition: '项目状态已变化，当前操作暂不可办理。',
   quote_expired: '关联报价已过期，请查看最新报价后再办理。',
   organization_link_required: '请选择已关联的组织，或联系维护者建立代理关系。',
+  invalid_invite_code: '代理绑定码无效或已过期，请向代理商索取最新邀请码。',
   opportunity_exists: '此项目已记录相同的附加需求，请刷新商机台账查看。',
   dependencies_unavailable: '服务依赖暂不可用，请稍后重试。',
   model_unavailable: 'AI 服务暂不可用，请稍后重试。',

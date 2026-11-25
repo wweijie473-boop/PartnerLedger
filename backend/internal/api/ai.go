@@ -88,7 +88,8 @@ func (s server) chatWorkspace(c *gin.Context) {
 
 func (s server) streamWorkspace(c *gin.Context) {
 	actor := principal(c)
-	if actor.Organization.Kind != data.Reseller {
+	kind := actor.Organization.Kind
+	if kind != data.Reseller && kind != data.Manufacturer && kind != data.Customer {
 		respond(c, http.StatusForbidden, "forbidden", nil)
 		return
 	}
@@ -118,6 +119,7 @@ func (s server) streamWorkspace(c *gin.Context) {
 	}
 	streamer, ok := s.parser.(interface {
 		StreamWorkspace(context.Context, string, []ai.ChatMessage, ai.ToolExecutor, ai.StreamCallbacks) error
+		StreamWorkspaceWithConfig(context.Context, ai.AgentStreamConfig, []ai.ChatMessage, ai.ToolExecutor, ai.StreamCallbacks) error
 	})
 	if !ok {
 		aiWorkspaceResult(c, nil, ai.ErrUnavailable)
@@ -140,27 +142,67 @@ func (s server) streamWorkspace(c *gin.Context) {
 	}
 
 	today := time.Now().In(chinaTime).Format(time.DateOnly)
-	actorHeader := fmt.Sprintf("日期：%s | 代理商组织：%s | 当前经办账号：%s", today, actor.Organization.Name, actor.Username)
+	roleLabel := map[string]string{
+		data.Reseller:     "代理商组织",
+		data.Manufacturer: "软件厂商",
+		data.Customer:     "企业客户",
+	}[kind]
+	actorHeader := fmt.Sprintf("日期：%s | %s：%s | 当前经办账号：%s", today, roleLabel, actor.Organization.Name, actor.Username)
 
-	err := streamer.StreamWorkspace(c.Request.Context(), actorHeader, input.Messages,
-		func(toolCtx context.Context, name string, args json.RawMessage) (string, string, string, error) {
-			return s.executeDealerReadTool(toolCtx, actor, name, args)
+	cb := ai.StreamCallbacks{
+		OnStatus: func(label string) {
+			writeEvent("status", gin.H{"label": label})
 		},
-		ai.StreamCallbacks{
-			OnStatus: func(label string) {
-				writeEvent("status", gin.H{"label": label})
-			},
-			OnRoute: func(route ai.WorkspaceRoute) {
-				writeEvent("route", route)
-			},
-			OnDelta: func(delta string) {
-				writeEvent("delta", gin.H{"text": delta})
-			},
-			OnDone: func(links []string, model string) {
-				writeEvent("done", gin.H{"links": links, "model": model})
-			},
+		OnRoute: func(route ai.WorkspaceRoute) {
+			writeEvent("route", route)
 		},
-	)
+		OnRawRoute: func(raw json.RawMessage) {
+			writeEvent("route", raw)
+		},
+		OnDelta: func(delta string) {
+			writeEvent("delta", gin.H{"text": delta})
+		},
+		OnDone: func(links []string, model string) {
+			writeEvent("done", gin.H{"links": links, "model": model})
+		},
+	}
+
+	var err error
+	switch kind {
+	case data.Reseller:
+		err = streamer.StreamWorkspace(c.Request.Context(), actorHeader, input.Messages,
+			func(toolCtx context.Context, name string, args json.RawMessage) (string, string, string, error) {
+				return s.executeDealerReadTool(toolCtx, actor, name, args)
+			},
+			cb,
+		)
+	case data.Manufacturer:
+		err = streamer.StreamWorkspaceWithConfig(c.Request.Context(), ai.AgentStreamConfig{
+			SystemPrompt: ai.VendorSystemPrompt(),
+			ActorHeader:  actorHeader,
+			Tools:        ai.VendorWorkspaceTools(),
+			AllowedLinks: ai.VendorAllowedLinks(),
+			RawRouteMode: true,
+		}, input.Messages,
+			func(toolCtx context.Context, name string, args json.RawMessage) (string, string, string, error) {
+				return s.executeVendorReadTool(toolCtx, actor, name, args)
+			},
+			cb,
+		)
+	case data.Customer:
+		err = streamer.StreamWorkspaceWithConfig(c.Request.Context(), ai.AgentStreamConfig{
+			SystemPrompt: ai.CustomerSystemPrompt(),
+			ActorHeader:  actorHeader,
+			Tools:        ai.CustomerWorkspaceTools(),
+			AllowedLinks: ai.CustomerAllowedLinks(),
+			RawRouteMode: true,
+		}, input.Messages,
+			func(toolCtx context.Context, name string, args json.RawMessage) (string, string, string, error) {
+				return s.executeCustomerReadTool(toolCtx, actor, name, args)
+			},
+			cb,
+		)
+	}
 	if err != nil {
 		code := "model_response_error"
 		if errors.Is(err, ai.ErrUnavailable) {
@@ -262,7 +304,8 @@ func fallbackDash(value string) string {
 }
 
 func (s server) transcribeAudio(c *gin.Context) {
-	if principal(c).Organization.Kind != data.Reseller {
+	kind := principal(c).Organization.Kind
+	if kind != data.Reseller && kind != data.Manufacturer && kind != data.Customer {
 		respond(c, http.StatusForbidden, "forbidden", nil)
 		return
 	}

@@ -1,0 +1,934 @@
+<script setup>
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { ElDialog } from 'element-plus'
+import { UiBadge, UiButton, UiField, UiIcon } from '../ui/index.js'
+import { createHttpProjectRepository } from '../channel/httpProjects.js'
+import { formatCents } from '../channel/quoteMoney.js'
+import { createAiSessionStore } from './aiChatSessions.js'
+import { streamWorkspaceChat } from './aiStreamClient.js'
+import { retailApi, readRetailCatalog } from './retailRequest.js'
+import { useVoiceInput } from './useVoiceInput.js'
+import './ai-workspace.css'
+
+const props = defineProps({
+  role: { type: String, required: true }, // 'vendor' | 'customer'
+  request: { type: Function, required: true },
+  organizationId: { type: String, required: true },
+  userId: { type: String, required: true },
+  organizationName: { type: String, default: '' },
+})
+const emit = defineEmits(['navigate', 'open-project', 'badges-changed'])
+
+const isVendor = computed(() => props.role === 'vendor')
+const repo = createHttpProjectRepository(props.request)
+const controller = new AbortController()
+const options = { signal: controller.signal }
+
+const log = ref(null)
+const composerInput = ref(null)
+const skillsExpanded = ref(false)
+
+const sessionStore = createAiSessionStore(`${props.role}:${props.organizationId}:${props.userId}`)
+const initialStore = sessionStore.loadInitial('')
+const sessions = ref(initialStore.sessions)
+const activeSessionId = ref(initialStore.activeId)
+const currentSessionObj = () => sessions.value.find(item => item.id === activeSessionId.value) ?? sessions.value[0]
+
+const input = ref('')
+const turns = ref((currentSessionObj()?.turns ?? []).map(item => reactive({ ...item })))
+const working = ref('')
+const approval = ref(null)
+const approvalOpen = ref(false)
+const approvalError = ref('')
+const disposed = ref(false)
+let turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+
+const {
+  recording, transcribing, formattedDuration, voiceError, toggleVoice, cancelVoice,
+} = useVoiceInput({
+  demo: false,
+  request: props.request,
+  input,
+  onReady: () => nextTick(() => composerInput.value?.focus()),
+})
+
+const vendorShortcuts = [
+  { id: 'v_knowledge', icon: 'catalog', label: '提取录入产品知识库', description: '从产品介绍自动提取模块、席位与部署方式并保存', prompt: '帮我把云序 MES 制造执行的知识库更新一下：支持生产排程、工序报工、质检追溯模块，支持云部署和私有化部署，10到800席' },
+  { id: 'v_pricing', icon: 'quote', label: '配置直购定价与分佣', description: '一键设定已发布软件的直购单价、代理分佣与年度属性', prompt: '帮我配置云序 MES 制造执行的直购规则：单价 3980 元，代理商分佣 45%，设为年度订阅' },
+  { id: 'v_quote', icon: 'request', label: '发送渠道底价单', description: '定位待报价的渠道询价项目并打包生成渠道底价', prompt: '帮我给当前待报价的渠道询价项目发送渠道底价' },
+  { id: 'v_receipt', icon: 'order', label: '登记直购订单收款', description: '核对待收款直购订单并录入收款凭证号', prompt: '帮我登记当前待收款直购订单的厂商收款凭证' },
+  { id: 'v_settle', icon: 'check', label: '登记代理佣金结算', description: '筛选待结佣订单并录入转账流水完成分账', prompt: '帮我为待结算的直购订单办理代理商佣金结算登记' },
+  { id: 'v_ticket', icon: 'delivery', label: '回复渠道售后工单', description: '自动草拟处理方案并弹窗回复待办渠道工单', prompt: '帮我查看待处理的渠道售后工单并准备回复方案' },
+]
+
+const customerShortcuts = [
+  { id: 'c_create', icon: 'add', label: '痛点梳理一键立项', description: '用大白话描述管理痛点，自动生成规范采购需求并立项', prompt: '我们是 90 人的精密电子厂，想上云端采购、库存批次和车间扫码报工系统，计划下月底上线，帮我整理需求并发起采购立项' },
+  { id: 'c_quote', icon: 'quote', label: '审阅确认对客报价', description: '核对代理商发来的对客销售报价明细并一键确认', prompt: '帮我核对当前待确认的对客报价单并准备确认审批' },
+  { id: 'c_accept', icon: 'delivery', label: '确认项目实施验收', description: '核查代理商提交的实施交付记录并完成项目验收', prompt: '帮我查看待验收的采购项目并提交确认验收' },
+  { id: 'c_order', icon: 'order', label: '确认代客直购订单', description: '核对代理商代下的标准化软件订单并确认生效', prompt: '帮我核对并确认当前待我确认的厂商软件直购订单' },
+]
+
+const shortcuts = computed(() => isVendor.value ? vendorShortcuts : customerShortcuts)
+
+const linkLabels = {
+  projects: isVendor.value ? '打开渠道询价' : '打开我的采购项目',
+  catalog: '管理产品目录',
+  pricing: '打开订购价格与佣金',
+  'manufacturer-receipts': '打开直收订单与收款',
+  'manufacturer-settlements': '打开代理商佣金结算',
+  'vendor-finance': '打开财务办理',
+  'vendor-tickets': '打开渠道工单',
+  'retail-orders': '打开厂商订购订单',
+  account: '打开账号与组织',
+}
+
+function persistCurrentSession() {
+  const active = currentSessionObj()
+  if (!active) return
+  const updated = sessionStore.buildUpdatedSession(active, turns.value, '')
+  sessions.value = [updated, ...sessions.value.filter(item => item.id !== updated.id)]
+  sessionStore.saveSessions(activeSessionId.value, sessions.value)
+}
+
+function startNewSession() {
+  if (working.value || approval.value) return
+  const active = currentSessionObj()
+  if (active && active.turns.length === 0) {
+    input.value = ''
+    return
+  }
+  const fresh = sessionStore.makeEmptySession('')
+  sessions.value = [fresh, ...sessions.value]
+  activeSessionId.value = fresh.id
+  turns.value = []
+  input.value = ''
+  sessionStore.saveSessions(fresh.id, sessions.value)
+}
+
+function switchSession(id) {
+  if (working.value || approval.value) return
+  const target = sessions.value.find(item => item.id === id)
+  if (!target) return
+  activeSessionId.value = target.id
+  turns.value = (target.turns ?? []).map(item => reactive({ ...item }))
+  turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+  sessionStore.saveSessions(activeSessionId.value, sessions.value)
+  nextTick(() => { if (log.value) log.value.scrollTop = log.value.scrollHeight })
+}
+
+function clearCurrentSession() {
+  if (working.value || approval.value) return
+  const remaining = sessions.value.filter(item => item.id !== activeSessionId.value)
+  if (!remaining.length) {
+    const fresh = sessionStore.makeEmptySession('')
+    sessions.value = [fresh]
+    activeSessionId.value = fresh.id
+    turns.value = []
+  } else {
+    sessions.value = remaining
+    activeSessionId.value = remaining[0].id
+    turns.value = (remaining[0].turns ?? []).map(item => reactive({ ...item }))
+    turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+  }
+  sessionStore.saveSessions(activeSessionId.value, sessions.value)
+}
+
+onUnmounted(() => {
+  disposed.value = true
+  controller.abort()
+})
+
+function say(text, extra = {}) {
+  if (disposed.value) return null
+  const entry = reactive({ id: ++turnId, role: 'assistant', text, ...extra })
+  turns.value.push(entry)
+  persistCurrentSession()
+  nextTick(() => { if (log.value) log.value.scrollTop = log.value.scrollHeight })
+  return entry
+}
+
+function offsetDate(days = 30) {
+  const dt = new Date(Date.now() + days * 86400000)
+  return dt.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
+}
+
+function requestApproval(spec, message) {
+  const state = reactive(spec)
+  approval.value = state
+  approvalError.value = ''
+  approvalOpen.value = true
+  say(message, { approval: state })
+}
+
+function closeApproval() {
+  approvalOpen.value = false
+}
+
+function reopenApproval() {
+  if (approval.value) approvalOpen.value = true
+}
+
+function declineApproval() {
+  approvalOpen.value = false
+  approval.value = null
+  approvalError.value = ''
+  say('已取消本次审批，未执行任何业务写入。')
+}
+
+async function openRoleSkill(route) {
+  working.value = '正在拉取待办单据组装审批单'
+  const intent = route.intent
+
+  if (intent === 'vendor_save_knowledge') {
+    const page = await props.request('/api/products?limit=50', options)
+    const products = page?.items ?? []
+    if (!products.length) {
+      say('当前名下暂无软件产品，请先前往「产品目录」创建产品。', { navAction: { label: '前往产品目录', view: 'catalog' } })
+      return
+    }
+    const chosen = products.find(p => String(p.id) === String(route.product_id || '').replace(/^#/, '')) ?? products[0]
+    let existing = { category: '', modules: [], deployment_modes: [], license: {}, sources: [] }
+    try {
+      existing = await props.request(`/api/products/${encodeURIComponent(chosen.id)}/knowledge`, options)
+    } catch {}
+    requestApproval({
+      kind: 'vendor_save_knowledge',
+      title: '审批更新产品匹配知识库',
+      products,
+      productId: String(chosen.id),
+      category: route.category || existing.category || '企业管理软件',
+      modulesText: (Array.isArray(route.modules) && route.modules.length ? route.modules : existing.modules || []).join('、'),
+      modes: Array.isArray(route.deployment_modes) && route.deployment_modes.length ? [...route.deployment_modes] : [...(existing.deployment_modes || ['cloud'])],
+      minimum: route.min_seats ?? existing.license?.minimum ?? 5,
+      maximum: route.max_seats ?? existing.license?.maximum ?? 500,
+      note: route.license_note || existing.license?.note || '支持按席位阶梯扩容。',
+      sourceTitle: route.source_title || existing.sources?.[0]?.title || `${chosen.name} 产品白皮书`,
+      sourceRef: route.source_reference || existing.sources?.[0]?.reference || `${chosen.version} 官方规格说明`,
+      sourceExcerpt: route.source_excerpt || existing.sources?.[0]?.excerpt || '支持标准功能模块灵活选配与多端协同。',
+      existingSources: existing.sources || [],
+    }, '已从你的描述中提取结构化产品知识库，请在弹窗核对后保存，保存后代理商 AI 选品立即可读。')
+    return
+  }
+
+  if (intent === 'vendor_set_pricing') {
+    const [page, configured] = await Promise.all([
+      props.request('/api/products?limit=50', options),
+      props.request(retailApi + '/manufacturer-offers', options),
+    ])
+    const products = (page?.items ?? []).filter(p => p.published)
+    if (!products.length) {
+      say('当前没有已发布的软件产品可配置直购规则，请先在「产品目录」发布产品。', { navAction: { label: '前往产品目录', view: 'catalog' } })
+      return
+    }
+    const chosen = products.find(p => String(p.id) === String(route.product_id || '').replace(/^#/, '')) ?? products[0]
+    const prev = (configured?.items ?? []).find(o => String(o.product_id) === String(chosen.id))
+    requestApproval({
+      kind: 'vendor_set_pricing',
+      title: '审批配置软件直购单价与代理分佣',
+      products,
+      productId: String(chosen.id),
+      unitPrice: route.unit_price != null ? Number(route.unit_price).toFixed(2) : (prev ? (prev.unit_cents / 100).toFixed(2) : '1998.00'),
+      commissionPercent: route.commission_percent != null ? String(route.commission_percent) : (prev ? String(prev.commission_bps / 100) : '45'),
+      annual: route.annual != null ? Boolean(route.annual) : (prev?.annual ?? true),
+      active: true,
+    }, '已准备好直购价格与代理商分佣规则审批单，确认后代理商可立即发起推广与代客下单。')
+    return
+  }
+
+  if (intent === 'vendor_channel_quote') {
+    const list = await repo.list(options)
+    const eligible = list.filter(p => p.actions?.includes('channelQuote'))
+    if (!eligible.length) {
+      say('当前没有可发送渠道底价的询价项目。', { navAction: { label: '查看渠道询价队列', view: 'projects' } })
+      return
+    }
+    const cleanId = String(route.project_id || '').replace(/^#/, '')
+    const target = eligible.find(p => String(p.id) === cleanId) ?? (eligible.find(p => p.isTodo) ?? eligible[0])
+    const detail = await repo.get(target.id, options)
+    const last = detail.channelQuotes?.at(-1)
+    requestApproval({
+      kind: 'vendor_channel_quote',
+      title: '审批发布厂商渠道底价',
+      project: detail,
+      lineLabel: route.line_label || last?.lines?.[0]?.label || `${detail.productName || '软件企业授权'} 标准授权包`,
+      quantity: route.quantity || last?.lines?.[0]?.quantity || 1,
+      unitPrice: route.unit_price != null ? Number(route.unit_price).toFixed(2) : (last?.lines?.[0]?.unitPrice || '36000.00'),
+      deliveryDays: route.delivery_days || last?.deliveryDays || 10,
+      validUntil: offsetDate(route.valid_days || 30),
+      note: route.reply || '厂商标准渠道结算底价（含原厂二线技术支持与版本升级保障）。',
+    }, `已为渠道项目「${detail.title}」打包好渠道底价审批单（该底价仅经办代理商可见，终端客户不可见）。`)
+    return
+  }
+
+  if (intent === 'vendor_confirm_receipt' || intent === 'vendor_settle_commission') {
+    const isReceipt = intent === 'vendor_confirm_receipt'
+    const targetStatus = isReceipt ? 'payment' : 'settlement'
+    const res = await props.request(`${retailApi}/orders?status=${targetStatus}`, options)
+    const items = res?.items ?? []
+    if (!items.length) {
+      say(isReceipt ? '当前没有处于「待厂商确认收款」状态的直购订单。' : '当前没有处于「待厂商结算佣金」状态的直购订单。', {
+        navAction: { label: isReceipt ? '打开直收订单' : '打开佣金结算', view: isReceipt ? 'manufacturer-receipts' : 'manufacturer-settlements' },
+      })
+      return
+    }
+    const cleanId = String(route.order_id || '').replace(/^#/, '')
+    const chosen = items.find(o => String(o.id) === cleanId) ?? items[0]
+    requestApproval({
+      kind: intent,
+      title: isReceipt ? '审批登记直购订单收款' : '审批登记代理商佣金结算',
+      orders: items,
+      orderId: String(chosen.id),
+      reference: route.reference || ((isReceipt ? 'RCV-' : 'SET-') + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + chosen.id),
+    }, isReceipt ? `已定位待收款订单 #${chosen.id}，核对收款凭证号后即可确认入账。` : `已定位待结佣订单 #${chosen.id}，核对转账流水号后即可完成佣金核销。`)
+    return
+  }
+
+  if (intent === 'vendor_resolve_ticket') {
+    const tickets = await readRetailCatalog(path => props.request(path, options), `${retailApi}/operations/tickets`)
+    const openItems = tickets.filter(t => t.status === 'open')
+    if (!openItems.length) {
+      say('当前没有待厂商处理的渠道售后工单。', { navAction: { label: '打开渠道工单', view: 'vendor-tickets' } })
+      return
+    }
+    const cleanId = String(route.ticket_id || '').replace(/^#/, '')
+    const chosen = openItems.find(t => String(t.id) === cleanId) ?? openItems[0]
+    requestApproval({
+      kind: 'vendor_resolve_ticket',
+      title: '审批回复渠道售后工单',
+      ticket: chosen,
+      reply: route.reply || '原厂技术团队已核实该工单问题并提供配置补丁与交付指引，请代理商协助客户验证后确认关闭。',
+    }, `已为你准备好渠道工单 #${chosen.id}《${chosen.subject}》的处理回复审批单。`)
+    return
+  }
+
+  if (intent === 'customer_create_project') {
+    const linkPage = await props.request('/api/channel/v1/organization-links', options)
+    const dealers = linkPage?.items ?? []
+    if (!dealers.length) {
+      say('贵司当前尚未绑定合作代理商。请先前往「账号与组织」输入代理商提供的绑定码建立关联，即可发起采购立项。', {
+        navAction: { label: '前往账号与组织绑定代理商', view: 'account' },
+      })
+      return
+    }
+    requestApproval({
+      kind: 'customer_create_project',
+      title: '审批发起软件采购项目',
+      dealers,
+      resellerId: String(dealers[0].id),
+      projectTitle: route.title || `${props.organizationName || '企业'} · 数字化软件采购项目`,
+      requirement: route.requirement || '',
+      dueDate: route.due_date || offsetDate(45),
+    }, '已将你的业务痛点梳理为结构化采购立项单，确认后将直接同步至合作代理商跟进选型与报价。')
+    return
+  }
+
+  if (intent === 'customer_confirm_quote') {
+    const list = await repo.list(options)
+    const eligible = list.filter(p => p.actions?.includes('confirmSales'))
+    if (!eligible.length) {
+      say('当前没有处于「待客户确认对客报价」阶段的采购项目。', { navAction: { label: '查看我的采购项目', view: 'projects' } })
+      return
+    }
+    const cleanId = String(route.project_id || '').replace(/^#/, '')
+    const target = eligible.find(p => String(p.id) === cleanId) ?? eligible[0]
+    const detail = await repo.get(target.id, options)
+    const quote = detail.salesQuotes?.at(-1)
+    if (!quote) {
+      say('暂未读取到该项目的有效对客销售报价明细。')
+      return
+    }
+    requestApproval({
+      kind: 'customer_confirm_quote',
+      title: '审批确认代理商对客报价方案',
+      project: detail,
+      quote,
+    }, `已调出项目「${detail.title}」的最新对客报价单（${quote.id}），核对金额与交付期无误后即可确认锁价。`)
+    return
+  }
+
+  if (intent === 'customer_accept_delivery') {
+    const list = await repo.list(options)
+    const eligible = list.filter(p => p.actions?.includes('accept'))
+    if (!eligible.length) {
+      say('当前没有处于「待客户确认验收」阶段的采购项目。', { navAction: { label: '查看我的采购项目', view: 'projects' } })
+      return
+    }
+    const cleanId = String(route.project_id || '').replace(/^#/, '')
+    const target = eligible.find(p => String(p.id) === cleanId) ?? eligible[0]
+    const detail = await repo.get(target.id, options)
+    requestApproval({
+      kind: 'customer_accept_delivery',
+      title: '审批确认项目实施验收',
+      project: detail,
+      note: route.note || '系统核心模块运行稳定、关键岗位培训已到位，同意正式结项验收。',
+    }, `已调出项目「${detail.title}」的实施交付记录，确认无误后将完成正式验收。`)
+    return
+  }
+
+  if (intent === 'customer_confirm_order') {
+    const res = await props.request(`${retailApi}/orders?status=confirmation`, options)
+    const items = res?.items ?? []
+    if (!items.length) {
+      say('当前没有待您确认的代理商代客直购订单。', { navAction: { label: '查看厂商订购订单', view: 'retail-orders' } })
+      return
+    }
+    const cleanId = String(route.order_id || '').replace(/^#/, '')
+    const chosen = items.find(o => String(o.id) === cleanId) ?? items[0]
+    requestApproval({
+      kind: 'customer_confirm_order',
+      title: '审批确认厂商软件直购订单',
+      order: chosen,
+    }, `已调出待确认直购订单 #${chosen.id}（${chosen.product_name} × ${chosen.quantity} 份），确认后进入付款交付流程。`)
+  }
+}
+
+async function approve() {
+  const item = approval.value
+  if (!item || working.value) return
+  approvalError.value = ''
+  working.value = '正在提交审批执行结果'
+  try {
+    if (item.kind === 'vendor_save_knowledge') {
+      const modules = item.modulesText.split(/[\r\n,，、]+/).map(v => v.trim()).filter(Boolean)
+      if (!modules.length || !item.modes.length) {
+        approvalError.value = '请至少填写一项支持模块并勾选一种部署方式。'
+        working.value = ''
+        return
+      }
+      await props.request(`/api/products/${encodeURIComponent(item.productId)}/knowledge`, {
+        method: 'PUT',
+        body: {
+          category: item.category.trim(),
+          modules,
+          deployment_modes: item.modes,
+          license: {
+            minimum: item.minimum === '' || item.minimum == null ? null : Number(item.minimum),
+            maximum: item.maximum === '' || item.maximum == null ? null : Number(item.maximum),
+            note: item.note.trim(),
+          },
+          sources: [{
+            title: item.sourceTitle.trim() || '官方产品说明',
+            reference: item.sourceRef.trim() || 'v1.0',
+            excerpt: item.sourceExcerpt.trim() || '支持企业级业务协同。',
+          }],
+        },
+      })
+      approvalOpen.value = false
+      approval.value = null
+      say('产品匹配知识库已更新保存，全平台合作代理商 AI 选品工作流已实时同步。', {
+        navAction: { label: '查看产品目录', view: 'catalog' },
+      })
+    } else if (item.kind === 'vendor_set_pricing') {
+      const unitCents = Math.round(Number(item.unitPrice) * 100)
+      const commBps = Math.round(Number(item.commissionPercent) * 100)
+      if (!(unitCents > 0 && unitCents <= 100000000 && commBps >= 0 && commBps <= 10000)) {
+        approvalError.value = '请填写有效的单价与 0–100% 之间的代理分佣比例。'
+        working.value = ''
+        return
+      }
+      await props.request(`${retailApi}/manufacturer-offers/${encodeURIComponent(item.productId)}`, {
+        method: 'PUT',
+        body: { unit_cents: unitCents, commission_bps: commBps, active: Boolean(item.active), annual: Boolean(item.annual) },
+      })
+      approvalOpen.value = false
+      approval.value = null
+      say(`直购定价与分佣规则（单价 ¥${Number(item.unitPrice).toFixed(2)}，分佣 ${item.commissionPercent}%）已生效。`, {
+        navAction: { label: '查看订购价格与佣金', view: 'pricing' },
+      })
+    } else if (item.kind === 'vendor_channel_quote') {
+      const updated = await repo.act(item.project.id, 'channelQuote', {
+        lines: [{ label: item.lineLabel.trim(), quantity: Number(item.quantity), unitPrice: Number(item.unitPrice).toFixed(2) }],
+        validUntil: item.validUntil,
+        deliveryDays: Number(item.deliveryDays),
+        note: item.note.trim(),
+      }, item.project.revision)
+      approvalOpen.value = false
+      approval.value = null
+      emit('badges-changed')
+      say(`渠道底价已发送至经办代理商（当前阶段：${updated.stageLabel}）。`, {
+        navAction: { label: '打开渠道询价队列', view: 'projects' },
+      })
+    } else if (item.kind === 'vendor_confirm_receipt' || item.kind === 'vendor_settle_commission') {
+      if (!item.reference?.trim()) {
+        approvalError.value = '请填写有效的凭证流水号。'
+        working.value = ''
+        return
+      }
+      const act = item.kind === 'vendor_confirm_receipt' ? 'receipt' : 'settle'
+      await props.request(`${retailApi}/orders/${encodeURIComponent(item.orderId)}/${act}`, {
+        method: 'POST',
+        body: { reference: item.reference.trim() },
+      })
+      approvalOpen.value = false
+      approval.value = null
+      emit('badges-changed')
+      say(act === 'receipt'
+        ? `直购订单 #${item.orderId} 已确认收款，代理商佣金已自动计入待结算台账。`
+        : `直购订单 #${item.orderId} 的代理商佣金已登记结清。`, {
+        navAction: {
+          label: act === 'receipt' ? '查看直收订单' : '查看佣金结算台账',
+          view: act === 'receipt' ? 'manufacturer-receipts' : 'manufacturer-settlements',
+        },
+      })
+    } else if (item.kind === 'vendor_resolve_ticket') {
+      if (!item.reply?.trim()) {
+        approvalError.value = '请填写工单处理结果。'
+        working.value = ''
+        return
+      }
+      await props.request(`${retailApi}/operations/tickets/${encodeURIComponent(item.ticket.id)}/resolve`, {
+        method: 'POST',
+        body: { reply: item.reply.trim(), revision: item.ticket.revision },
+      })
+      approvalOpen.value = false
+      approval.value = null
+      emit('badges-changed')
+      say(`渠道工单 #${item.ticket.id} 处理结果已回复代理商，状态流转为「待代理商确认」。`, {
+        navAction: { label: '查看渠道工单', view: 'vendor-tickets' },
+      })
+    } else if (item.kind === 'customer_create_project') {
+      if (!item.projectTitle.trim() || !item.requirement.trim()) {
+        approvalError.value = '请填写项目名称与具体业务需求。'
+        working.value = ''
+        return
+      }
+      const created = await repo.create({
+        title: item.projectTitle.trim(),
+        requirement: item.requirement.trim(),
+        dueDate: item.dueDate || '',
+        resellerId: item.resellerId,
+      })
+      approvalOpen.value = false
+      approval.value = null
+      emit('badges-changed')
+      say(`采购项目 #${created.id}「${created.title}」已成功立项并推送给合作代理商跟进。`, {
+        project: created,
+      })
+    } else if (item.kind === 'customer_confirm_quote') {
+      const updated = await repo.act(item.project.id, 'confirmSales', { quoteId: item.quote.id }, item.project.revision)
+      approvalOpen.value = false
+      approval.value = null
+      emit('badges-changed')
+      say(`已确认对客报价单 ${item.quote.id}，合作代理商收到通知后将正式锁定采购订单。`, {
+        project: updated,
+      })
+    } else if (item.kind === 'customer_accept_delivery') {
+      const updated = await repo.act(item.project.id, 'accept', { note: item.note.trim() }, item.project.revision)
+      approvalOpen.value = false
+      approval.value = null
+      emit('badges-changed')
+      say(`项目「${updated.title}」已确认验收结项！`, {
+        project: updated,
+      })
+    } else if (item.kind === 'customer_confirm_order') {
+      await props.request(`${retailApi}/orders/${encodeURIComponent(item.order.id)}/confirm`, {
+        method: 'POST',
+        body: {},
+      })
+      approvalOpen.value = false
+      approval.value = null
+      emit('badges-changed')
+      say(`软件直购订单 #${item.order.id} 已确认，请按厂商指引完成付款。`, {
+        navAction: { label: '查看厂商订购订单', view: 'retail-orders' },
+      })
+    }
+  } catch (cause) {
+    approvalError.value = cause.message || '执行失败，请刷新核对后重试。'
+  } finally {
+    working.value = ''
+  }
+}
+
+async function dispatch(value = input.value) {
+  const text = value.trim()
+  if (!text || working.value) return
+  if (approval.value) { reopenApproval(); return }
+  if ([...text].length > 2000) { say('单条消息限 2000 字，请缩短后发送。'); return }
+  input.value = ''
+  say(text, { role: 'user' })
+  working.value = '正在理解你的诉求并按需调取数据'
+  let streamingTurn = null
+
+  try {
+    let routedSkill = null
+    const history = turns.value
+      .filter(item => (item.role === 'user' || item.role === 'assistant') && item.text?.trim())
+      .slice(-14)
+      .map(item => ({ role: item.role, content: item.text.slice(0, 3500) }))
+
+    await streamWorkspaceChat({
+      messages: history,
+      signal: controller.signal,
+      onStatus(label) {
+        if (!disposed.value && label) working.value = label
+      },
+      onRoute(route) {
+        routedSkill = route
+      },
+      onDelta(chunk) {
+        if (disposed.value) return
+        if (!streamingTurn) {
+          streamingTurn = reactive({ id: ++turnId, role: 'assistant', text: '', streaming: true })
+          turns.value.push(streamingTurn)
+          working.value = '正在流式生成回答'
+        }
+        streamingTurn.text += chunk
+        nextTick(() => { if (log.value) log.value.scrollTop = log.value.scrollHeight })
+      },
+      onDone({ links }) {
+        if (disposed.value || !streamingTurn) return
+        streamingTurn.streaming = false
+        const chatLinks = (links ?? [])
+          .filter(v => linkLabels[v])
+          .map(v => ({ view: v, label: linkLabels[v] }))
+        if (chatLinks.length) streamingTurn.chatLinks = chatLinks
+        persistCurrentSession()
+      },
+    })
+
+    if (disposed.value) return
+
+    if (routedSkill) {
+      if (streamingTurn) {
+        streamingTurn.streaming = false
+        turns.value = turns.value.filter(item => item !== streamingTurn)
+        streamingTurn = null
+      }
+      await openRoleSkill(routedSkill)
+      return
+    }
+
+    if (streamingTurn) {
+      streamingTurn.streaming = false
+      persistCurrentSession()
+    }
+  } catch (cause) {
+    if (streamingTurn) {
+      streamingTurn.streaming = false
+      if (streamingTurn.text.trim()) {
+        streamingTurn.text += '\n\n（流式输出中断，以上为已生成内容）'
+        persistCurrentSession()
+        return
+      }
+      turns.value = turns.value.filter(item => item !== streamingTurn)
+    }
+    if (cause.name !== 'AbortError') {
+      say(cause.message || 'AI 顾问暂时不可用，请稍后重试。')
+    }
+  } finally {
+    working.value = ''
+  }
+}
+
+function triggerSkill(skill) {
+  skillsExpanded.value = false
+  dispatch(skill.prompt)
+}
+
+function formatInlineMd(escapedLine) {
+  return escapedLine
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`\n]+)`/g, '<code class="ai-md-code">$1</code>')
+}
+
+function formatBubbleHtml(raw) {
+  const escaped = String(raw ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+  const lines = escaped.split('\n')
+  const out = []
+  let i = 0
+  while (i < lines.length) {
+    if (i + 1 < lines.length && /^\s*\|.+\|\s*$/.test(lines[i]) && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+      const parseRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(cell => formatInlineMd(cell.trim()))
+      const headers = parseRow(lines[i])
+      i += 2
+      const bodyRows = []
+      while (i < lines.length && /^\s*\|.+\|\s*$/.test(lines[i])) {
+        bodyRows.push(parseRow(lines[i]))
+        i++
+      }
+      const thead = '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead>'
+      const tbody = bodyRows.length ? '<tbody>' + bodyRows.map(r => '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>').join('') + '</tbody>' : ''
+      out.push(`<div class="ai-md-table-wrap"><table class="ai-md-table">${thead}${tbody}</table></div>`)
+      continue
+    }
+    const heading = /^#{1,4}\s+(.+)$/.exec(lines[i])
+    out.push(heading ? `<strong class="ai-md-heading">${formatInlineMd(heading[1])}</strong>` : formatInlineMd(lines[i]))
+    i++
+  }
+  return out.join('\n')
+}
+
+function onEnter(event) {
+  if (event.isComposing || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return
+  event.preventDefault()
+  dispatch()
+}
+
+const money = cents => formatCents(BigInt(cents ?? 0))
+const deploymentOptions = { cloud: '云部署', saas: 'SaaS', private: '私有化部署', on_premises: '本地部署' }
+</script>
+
+<template>
+  <section class="ai-workspace" aria-labelledby="role-ai-title">
+    <header class="ai-hero">
+      <div class="ai-hero-heading">
+        <div class="ai-emblem"><UiIcon name="ai" :size="36" /></div>
+        <div>
+          <h1 id="role-ai-title">{{ isVendor ? '软件厂商 AI 工作台' : '企业客户 AI 采购工作台' }}</h1>
+          <p>{{ isVendor ? '智能盘点渠道询价、分佣结算与工单积压，一句话提取产品知识库并打包审批执行。' : '用自然语言梳理数字化痛点并一键立项，实时分析对客报价方案、跟进订单与项目验收。' }}</p>
+        </div>
+      </div>
+      <div class="ai-hero-badges">
+        <UiButton compact variant="secondary" icon="workflow" :aria-expanded="skillsExpanded" @click="skillsExpanded = !skillsExpanded">
+          {{ skillsExpanded ? '收起技能面板' : `已接入技能 (${shortcuts.length})` }}
+        </UiButton>
+      </div>
+    </header>
+
+    <section v-if="skillsExpanded" class="ai-skill-drawer" aria-label="专属工作流技能">
+      <button v-for="skill in shortcuts" :key="skill.id" type="button" class="ai-skill-card" :disabled="!!working" @click="triggerSkill(skill)">
+        <span class="ai-skill-card-head"><UiIcon :name="skill.icon" :size="16" /><strong>{{ skill.label }}</strong></span>
+        <small>{{ skill.description }}</small>
+      </button>
+    </section>
+
+    <div class="ai-chat">
+      <div class="ai-chat-head">
+        <div class="ai-head-session">
+          <div class="ai-assistant-title"><UiIcon name="ai" :size="20" /><strong>{{ isVendor ? '原厂渠道运营 AI 顾问' : '企业数字化选型与验收顾问' }}</strong></div>
+          <div class="ai-session-controls">
+            <select :value="activeSessionId" aria-label="历史对话列表" class="ai-session-select" :disabled="!!working || !!approval" @change="switchSession($event.target.value)">
+              <option v-for="sess in sessions" :key="sess.id" :value="sess.id">
+                {{ sess.title }}{{ sess.turns.length ? ` (${Math.ceil(sess.turns.length / 2)})` : '' }}
+              </option>
+            </select>
+            <UiButton compact icon="add" :disabled="!!working || !!approval" @click="startNewSession">新对话</UiButton>
+            <UiButton v-if="turns.length" compact variant="text" :disabled="!!working || !!approval" @click="clearCurrentSession">清空</UiButton>
+          </div>
+        </div>
+      </div>
+
+      <div ref="log" class="ai-log" role="log" aria-label="AI 对话记录">
+        <div class="ai-turn">
+          <div class="ai-avatar"><UiIcon name="ai" :size="19" /></div>
+          <div class="ai-turn-content">
+            <p class="ai-speaker">{{ isVendor ? '原厂运营助手' : '企业采购顾问' }}</p>
+            <p class="ai-bubble">
+              {{ isVendor
+                ? '你好！我可以帮你实时盘点渠道询价、待收款订单、待结代理佣金、财务申请与售后工单，也支持粘贴产品介绍一键提取录入匹配知识库、发渠道底价或回复工单。'
+                : '你好！你可以直接用语音或文字告诉我企业目前的管理痛点（我将自动整理规范需求并向合作代理商立项），也可以让我帮你核对对客报价方案、查看交付进度或确认订单与验收。' }}
+            </p>
+            <div v-if="!turns.length" class="ai-prompts">
+              <UiButton compact icon="ai" :disabled="!!working" @click="dispatch(isVendor ? '帮我全面盘点一下目前有哪些待我处理的渠道询价、收款、结佣、财务申请和售后工单？' : '帮我看看目前名下所有采购项目和软件订单进展到哪一步了，有没有需要我拍板的？')">
+                {{ isVendor ? '盘点全渠道待办事项' : '盘点我的项目与待确认事项' }}
+              </UiButton>
+              <UiButton v-for="skill in shortcuts.slice(0, 3)" :key="skill.id" compact :icon="skill.icon" :disabled="!!working" @click="triggerSkill(skill)">
+                {{ skill.label }}
+              </UiButton>
+            </div>
+          </div>
+        </div>
+
+        <div v-for="turn in turns" :key="turn.id" class="ai-turn" :class="{ 'is-user': turn.role === 'user' }">
+          <div v-if="turn.role === 'assistant'" class="ai-avatar"><UiIcon name="ai" :size="19" /></div>
+          <div class="ai-turn-content">
+            <p class="ai-speaker">{{ turn.role === 'user' ? '你' : (isVendor ? '原厂运营助手' : '企业采购顾问') }}</p>
+            <p v-if="turn.role === 'user'" class="ai-bubble">{{ turn.text }}</p>
+            <div v-else class="ai-bubble" :class="{ 'is-streaming': turn.streaming }" v-html="formatBubbleHtml(turn.text)" />
+
+            <div v-if="turn.approval" class="ai-result">
+              <div class="ai-result-head">
+                <strong>{{ turn.approval.title }}</strong>
+                <UiBadge :tone="approval === turn.approval ? 'warning' : 'neutral'">{{ approval === turn.approval ? '待人工审批' : '审批已结束' }}</UiBadge>
+              </div>
+              <UiButton v-if="approval === turn.approval" compact icon="permission" @click="reopenApproval">打开审批弹窗</UiButton>
+            </div>
+
+            <article v-if="turn.project" class="ai-result">
+              <div class="ai-result-head">
+                <strong>{{ turn.project.title }}</strong>
+                <UiBadge tone="info">{{ turn.project.stageLabel }}</UiBadge>
+              </div>
+              <p v-if="turn.project.nextStep">下一步：{{ turn.project.nextStep }}</p>
+              <UiButton compact end-icon="open-detail" @click="emit('open-project', turn.project.id)">打开项目详情</UiButton>
+            </article>
+
+            <div v-if="turn.chatLinks?.length" class="ai-prompts">
+              <UiButton v-for="link in turn.chatLinks" :key="link.view" compact end-icon="open-detail" @click="emit('navigate', link.view)">
+                {{ link.label }}
+              </UiButton>
+            </div>
+
+            <article v-if="turn.navAction" class="ai-result">
+              <UiButton compact end-icon="open-detail" @click="emit('navigate', turn.navAction.view)">{{ turn.navAction.label }}</UiButton>
+            </article>
+          </div>
+        </div>
+      </div>
+
+      <div class="ai-composer">
+        <div v-if="working" class="ai-working" role="status"><UiIcon name="loading" :size="16" /> {{ working }}…</div>
+        <div v-if="recording" class="ai-voice-status is-recording" role="status">
+          <span class="ai-voice-dot" aria-hidden="true" />
+          <span>正在录音 {{ formattedDuration }} · 说完点击「完成说词」自动转写文字</span>
+          <UiButton compact variant="text" @click="cancelVoice">取消</UiButton>
+        </div>
+        <div v-else-if="transcribing" class="ai-working" role="status"><UiIcon name="loading" :size="16" /> 正在通过大模型转写语音…</div>
+        <p v-if="voiceError" class="form-error ai-voice-error" role="alert">{{ voiceError }}</p>
+
+        <form class="ai-composer-form" @submit.prevent="dispatch()">
+          <textarea
+            ref="composerInput"
+            v-model="input"
+            :aria-label="isVendor ? '给原厂运营助手发消息' : '给企业采购顾问发消息'"
+            rows="2"
+            maxlength="2000"
+            :placeholder="isVendor ? '输入或语音说出诉求，例如：盘点待处理渠道询价和待结佣金' : '输入或语音描述需求，例如：帮我看看有哪些待确认报价或整理新采购需求'"
+            :disabled="transcribing"
+            @keydown.enter="onEnter"
+          />
+          <div class="ai-composer-buttons">
+            <UiButton
+              type="button"
+              :variant="recording ? 'danger' : 'secondary'"
+              :icon="recording ? 'stop' : 'mic'"
+              :loading="transcribing"
+              :aria-pressed="recording"
+              :disabled="!!working || transcribing"
+              @click="toggleVoice"
+            >
+              {{ recording ? '完成说词' : '语音' }}
+            </UiButton>
+            <UiButton type="submit" variant="primary" end-icon="forward" :disabled="!input.trim() || !!working || recording || transcribing">发送</UiButton>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <ElDialog
+      :model-value="approvalOpen && !!approval"
+      :title="approval?.title || '人工审批确认'"
+      width="min(620px, calc(100vw - 24px))"
+      align-center
+      :close-on-click-modal="false"
+      @close="closeApproval"
+    >
+      <div v-if="approval" class="ai-approval">
+        <template v-if="approval.kind === 'vendor_save_knowledge'">
+          <UiField label="目标软件产品" v-slot="{ control }">
+            <select v-bind="control" v-model="approval.productId">
+              <option v-for="p in approval.products" :key="p.id" :value="String(p.id)">{{ p.name }} · {{ p.version }}</option>
+            </select>
+          </UiField>
+          <UiField label="产品分类" v-slot="{ control }"><input v-bind="control" v-model="approval.category" maxlength="80" /></UiField>
+          <UiField label="支持功能模块（顿号分隔）" v-slot="{ control }"><textarea v-bind="control" v-model="approval.modulesText" rows="2" /></UiField>
+          <div class="ai-checkbox-row">
+            <label v-for="(label, code) in deploymentOptions" :key="code" style="margin-right: 12px;">
+              <input v-model="approval.modes" type="checkbox" :value="code" /> {{ label }}
+            </label>
+          </div>
+          <div class="ai-fields">
+            <UiField label="最低授权席位" v-slot="{ control }"><input v-bind="control" v-model.number="approval.minimum" type="number" min="1" /></UiField>
+            <UiField label="最高授权席位" v-slot="{ control }"><input v-bind="control" v-model.number="approval.maximum" type="number" min="1" /></UiField>
+          </div>
+          <UiField label="资料出处名称" v-slot="{ control }"><input v-bind="control" v-model="approval.sourceTitle" maxlength="120" /></UiField>
+          <UiField label="关键规格摘录" v-slot="{ control }"><textarea v-bind="control" v-model="approval.sourceExcerpt" rows="2" maxlength="500" /></UiField>
+        </template>
+
+        <template v-else-if="approval.kind === 'vendor_set_pricing'">
+          <UiField label="已发布产品" v-slot="{ control }">
+            <select v-bind="control" v-model="approval.productId">
+              <option v-for="p in approval.products" :key="p.id" :value="String(p.id)">{{ p.name }} · {{ p.version }}</option>
+            </select>
+          </UiField>
+          <div class="ai-fields">
+            <UiField label="直购单价（元）" v-slot="{ control }"><input v-bind="control" v-model="approval.unitPrice" inputmode="decimal" /></UiField>
+            <UiField label="代理商分佣比例（%）" v-slot="{ control }"><input v-bind="control" v-model="approval.commissionPercent" inputmode="decimal" /></UiField>
+          </div>
+          <label class="ai-checkbox-row"><input v-model="approval.annual" type="checkbox" /> 设为年度授权（收款后自动进入代理商续费跟进台账）</label>
+        </template>
+
+        <template v-else-if="approval.kind === 'vendor_channel_quote'">
+          <p class="ai-muted-hint">项目：{{ approval.project.title }}（#{{ approval.project.id }}）· 此渠道底价仅经办代理商可见。</p>
+          <UiField label="授权明细项" v-slot="{ control }"><input v-bind="control" v-model="approval.lineLabel" maxlength="100" /></UiField>
+          <div class="ai-fields-three">
+            <UiField label="数量" v-slot="{ control }"><input v-bind="control" v-model.number="approval.quantity" type="number" min="1" /></UiField>
+            <UiField label="渠道底价单价（元）" v-slot="{ control }"><input v-bind="control" v-model="approval.unitPrice" inputmode="decimal" /></UiField>
+            <UiField label="交付周期（天）" v-slot="{ control }"><input v-bind="control" v-model.number="approval.deliveryDays" type="number" min="1" /></UiField>
+          </div>
+          <UiField label="报价有效期至" v-slot="{ control }"><input v-bind="control" v-model="approval.validUntil" type="date" /></UiField>
+          <UiField label="渠道说明" v-slot="{ control }"><textarea v-bind="control" v-model="approval.note" rows="2" /></UiField>
+        </template>
+
+        <template v-else-if="approval.kind === 'vendor_confirm_receipt' || approval.kind === 'vendor_settle_commission'">
+          <UiField label="目标直购订单" v-slot="{ control }">
+            <select v-bind="control" v-model="approval.orderId">
+              <option v-for="o in approval.orders" :key="o.id" :value="String(o.id)">
+                订单 #{{ o.id }} · {{ o.product_name }} · {{ o.customer }}（总额 {{ money(o.total_cents) }}）
+              </option>
+            </select>
+          </UiField>
+          <UiField :label="approval.kind === 'vendor_confirm_receipt' ? '收款凭证编号' : '佣金转账凭证编号'" v-slot="{ control }">
+            <input v-bind="control" v-model="approval.reference" maxlength="100" />
+          </UiField>
+        </template>
+
+        <template v-else-if="approval.kind === 'vendor_resolve_ticket'">
+          <dl class="ai-send-details">
+            <div><dt>工单标题</dt><dd>#{{ approval.ticket.id }} · {{ approval.ticket.subject }}</dd></div>
+            <div><dt>问题详情</dt><dd>{{ approval.ticket.detail }}</dd></div>
+          </dl>
+          <UiField label="原厂处理结果回复" v-slot="{ control }"><textarea v-bind="control" v-model="approval.reply" rows="3" maxlength="500" /></UiField>
+        </template>
+
+        <template v-else-if="approval.kind === 'customer_create_project'">
+          <UiField label="指派合作代理商" v-slot="{ control }">
+            <select v-bind="control" v-model="approval.resellerId">
+              <option v-for="d in approval.dealers" :key="d.id" :value="String(d.id)">{{ d.name }}</option>
+            </select>
+          </UiField>
+          <UiField label="采购项目标题" v-slot="{ control }"><input v-bind="control" v-model="approval.projectTitle" maxlength="100" /></UiField>
+          <UiField label="结构化业务需求描述" v-slot="{ control }"><textarea v-bind="control" v-model="approval.requirement" rows="4" maxlength="2000" /></UiField>
+          <UiField label="期望上线日期" v-slot="{ control }"><input v-bind="control" v-model="approval.dueDate" type="date" /></UiField>
+        </template>
+
+        <template v-else-if="approval.kind === 'customer_confirm_quote'">
+          <dl class="ai-send-details">
+            <div><dt>采购项目</dt><dd>{{ approval.project.title }}（#{{ approval.project.id }}）</dd></div>
+            <div><dt>报价单号</dt><dd>{{ approval.quote.id }} · 合计 ¥{{ approval.quote.total }}</dd></div>
+            <div><dt>交付与效期</dt><dd>{{ approval.quote.deliveryDays }} 天交付 · 有效期至 {{ approval.quote.validUntil }}</dd></div>
+            <div><dt>服务说明</dt><dd>{{ approval.quote.note || '标准授权与实施服务' }}</dd></div>
+          </dl>
+        </template>
+
+        <template v-else-if="approval.kind === 'customer_accept_delivery'">
+          <dl class="ai-send-details">
+            <div><dt>采购项目</dt><dd>{{ approval.project.title }}（#{{ approval.project.id }}）</dd></div>
+            <div><dt>实施记录</dt><dd>{{ approval.project.implementationNote || '已完成系统部署与培训交接' }}</dd></div>
+          </dl>
+          <UiField label="企业验收意见" v-slot="{ control }"><textarea v-bind="control" v-model="approval.note" rows="3" maxlength="500" /></UiField>
+        </template>
+
+        <template v-else-if="approval.kind === 'customer_confirm_order'">
+          <dl class="ai-send-details">
+            <div><dt>直购订单</dt><dd>#{{ approval.order.id }} · {{ approval.order.product_name }} {{ approval.order.product_version }}</dd></div>
+            <div><dt>订购数量</dt><dd>{{ approval.order.quantity }} 份</dd></div>
+            <div><dt>应付总额</dt><dd>{{ money(approval.order.total_cents) }}（收款方：{{ approval.order.manufacturer }}）</dd></div>
+          </dl>
+        </template>
+
+        <p v-if="approvalError" class="form-error" role="alert">{{ approvalError }}</p>
+        <div class="ai-approval-actions">
+          <UiButton :disabled="!!working" @click="declineApproval">不同意</UiButton>
+          <UiButton variant="primary" :loading="!!working" @click="approve">同意并自动执行</UiButton>
+        </div>
+      </div>
+    </ElDialog>
+  </section>
+</template>

@@ -96,7 +96,7 @@ onUnmounted(() => {
         <div class="operations-actions"><UiButton @click="emit('navigate', 'promotion')">推广获客</UiButton><UiButton @click="emit('navigate', 'assisted')">代客下单</UiButton><UiButton @click="emit('navigate', 'funds-overview')">资金总览</UiButton></div>
       </UiCard>
     </template>
-    <DealerCustomers v-else-if="view === 'customers'" :state="state" :busy="busy" :submit="submit" :demo="demo" @navigate="emit('navigate', $event)" />
+    <DealerCustomers v-else-if="view === 'customers'" :state="state" :busy="busy" :submit="submit" :request="request" :demo="demo" @navigate="emit('navigate', $event)" />
     <DealerRenewals v-else-if="view === 'renewals'" :rows="state.renewals" :busy="busy" :submit="submit" />
     <UiCard v-else-if="view === 'application-queue'" title="财务申请记录">
       <label class="operations-check"><input v-model="pendingOnly" type="checkbox"> 仅看待处理申请</label>

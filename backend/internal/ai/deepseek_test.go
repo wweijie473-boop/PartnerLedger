@@ -383,3 +383,40 @@ func TestStreamWorkspaceSingleHopProposeWorkflowSkillAndFailover(t *testing.T) {
 		t.Fatalf("expected single-hop sales_quote route after failover, got %+v err=%v", routed, err)
 	}
 }
+
+func TestStreamWorkspaceWithConfigSupportsVendorAndCustomerRawRoutes(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_v1\",\"function\":{\"name\":\"propose_workflow_skill\",\"arguments\":\"{\\\"intent\\\":\\\"vendor_save_knowledge\\\",\\\"product_id\\\":\\\"34\\\",\\\"modules\\\":[\\\"财务\\\",\\\"库存\\\"]}\"}}]}}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer mock.Close()
+
+	provider := NewProvider(mock.URL, "test-key", "vendor-stream-model")
+	var gotRaw json.RawMessage
+	err := provider.StreamWorkspaceWithConfig(
+		context.Background(),
+		AgentStreamConfig{
+			SystemPrompt: VendorSystemPrompt(),
+			Tools:        VendorWorkspaceTools(),
+			AllowedLinks: VendorAllowedLinks(),
+			RawRouteMode: true,
+		},
+		[]ChatMessage{{Role: "user", Content: "把云序 ERP 的财务和库存模块录入产品知识库"}},
+		nil,
+		StreamCallbacks{
+			OnRawRoute: func(raw json.RawMessage) { gotRaw = raw },
+		},
+	)
+	if err != nil || len(gotRaw) == 0 {
+		t.Fatalf("expected vendor raw route, got %s err=%v", string(gotRaw), err)
+	}
+	var parsed struct {
+		Intent    string   `json:"intent"`
+		ProductID string   `json:"product_id"`
+		Modules   []string `json:"modules"`
+	}
+	if json.Unmarshal(gotRaw, &parsed) != nil || parsed.Intent != "vendor_save_knowledge" || parsed.ProductID != "34" || len(parsed.Modules) != 2 {
+		t.Fatalf("unexpected parsed vendor route: %+v", parsed)
+	}
+}

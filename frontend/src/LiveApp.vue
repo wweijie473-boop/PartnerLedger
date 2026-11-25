@@ -8,6 +8,7 @@ import DealerPage from './DealerPage.vue'
 import { workspacePages, workspaceShortcuts } from './workspaceNavigation.js'
 import ProductCatalog from './live/ProductCatalog.vue'
 import AiWorkspace from './live/AiWorkspace.vue'
+import RoleAiWorkspace from './live/RoleAiWorkspace.vue'
 import LiveProjects from './live/LiveProjects.vue'
 import LiveVisits from './live/LiveVisits.vue'
 import LiveOpportunities from './live/LiveOpportunities.vue'
@@ -47,12 +48,21 @@ const aiProject = ref(entryParams.get('project') || '')
 const navigationRevision = ref(0)
 const isManufacturer = computed(() => organization.value?.kind === 'MANUFACTURER')
 const isDealer = computed(() => organization.value?.kind === 'RESELLER')
+const isCustomer = computed(() => organization.value?.kind === 'CUSTOMER')
 const kindLabel = computed(() => portal.value?.label || '')
 const RetailDesk = defineAsyncComponent(() => import('./live/RetailDesk.vue'))
 const DealerOperations = defineAsyncComponent(() => import('./live/DealerOperations.vue'))
 const navigation = computed(() => workspacePages(entry.value, { directView: entryParams.get('view') }))
 const currentPage = computed(() => navigation.value.find(page => page.id === view.value))
 const shortcuts = computed(() => workspaceShortcuts(navigation.value, entry.value))
+
+const badgeState = ref({ total: 0, pages: {}, items: [] })
+const linkedOrgs = ref([])
+const bindCode = ref(entryParams.get('bind') || '')
+const bindPreview = ref(null)
+const bindBusy = ref(false)
+const bindNotice = ref('')
+const bindError = ref('')
 
 function accessPath(nextMode, role = entry.value) {
   return '/' + nextMode + (role ? '/' + role : '')
@@ -62,6 +72,7 @@ function customerRetailIntent() {
   const params = new URLSearchParams(location.search)
   if (params.get('view') === 'checkout' && params.has('code')) return 'checkout'
   if (params.get('view') === 'retail-orders' && params.has('order_id')) return 'retail-orders'
+  if (params.has('bind')) return 'account'
   return ''
 }
 
@@ -154,6 +165,9 @@ async function loadIdentity() {
     const retailIntent = accountRole === 'customer' && customerRetailIntent()
     if (retailIntent) view.value = retailIntent
     if (!navigation.value.some(item => item.id === view.value)) view.value = 'overview'
+    loadBadges()
+    loadLinkedOrganizations()
+    if (accountRole === 'customer' && bindCode.value) previewInviteCode()
   } catch (error) {
     if (session.value === active) identityError.value = error.message
   } finally {
@@ -161,11 +175,72 @@ async function loadIdentity() {
   }
 }
 
+async function loadBadges() {
+  if (!session.value || !user.value) return
+  try {
+    const res = await authenticated('/api/workspace/badges')
+    if (res && typeof res.pages === 'object' && Array.isArray(res.items)) {
+      badgeState.value = { total: Number(res.total) || 0, pages: res.pages, items: res.items }
+    }
+  } catch {}
+}
+
+async function loadLinkedOrganizations() {
+  if (!session.value || !organization.value || organization.value.kind === 'MANUFACTURER') return
+  try {
+    const res = await authenticated('/api/channel/v1/organization-links')
+    if (Array.isArray(res?.items)) linkedOrgs.value = res.items
+  } catch {}
+}
+
+async function previewInviteCode() {
+  if (!bindCode.value.trim() || bindBusy.value) return
+  bindBusy.value = true
+  bindError.value = ''
+  bindNotice.value = ''
+  bindPreview.value = null
+  try {
+    bindPreview.value = await authenticated('/api/channel/v1/link-invites/preview?code=' + encodeURIComponent(bindCode.value.trim()))
+  } catch (cause) {
+    bindError.value = cause.message || '未找到该代理绑定码。'
+  } finally {
+    bindBusy.value = false
+  }
+}
+
+async function confirmBindInvite() {
+  if (!bindCode.value.trim() || bindBusy.value) return
+  bindBusy.value = true
+  bindError.value = ''
+  bindNotice.value = ''
+  try {
+    const res = await authenticated('/api/channel/v1/organization-links', {
+      method: 'POST',
+      body: { code: bindCode.value.trim() },
+    })
+    bindNotice.value = `已与代理商「${res.reseller?.name || ''}」建立正式协作关联，现在可直接发起采购项目！`
+    bindPreview.value = null
+    bindCode.value = ''
+    const url = new URL(location.href)
+    url.searchParams.delete('bind')
+    history.replaceState(null, '', url)
+    await loadLinkedOrganizations()
+  } catch (cause) {
+    bindError.value = cause.message || '绑定失败，请核对邀请码后重试。'
+  } finally {
+    bindBusy.value = false
+  }
+}
+
 onMounted(() => {
   loadIdentity()
   window.addEventListener('popstate', restoreWorkspaceView)
+  window.addEventListener('focus', loadBadges)
 })
-onUnmounted(() => window.removeEventListener('popstate', restoreWorkspaceView))
+onUnmounted(() => {
+  window.removeEventListener('popstate', restoreWorkspaceView)
+  window.removeEventListener('focus', loadBadges)
+})
 
 async function signIn() {
   if (signingIn.value) return
@@ -269,6 +344,8 @@ function navigate(target, params = {}) {
   url.search = new URLSearchParams({ view: target, ...checkout, ...params })
   history.replaceState(null, '', url)
   window.scrollTo(0, 0)
+  loadBadges()
+  if (target === 'account') loadLinkedOrganizations()
 }
 function openProject(id, scope = 'all') {
   navigate('projects', { project: id, scope })
@@ -341,12 +418,24 @@ function openOpportunity(id = '', projectId = '') {
   </main>
 
   <WorkspaceShell v-else :role="entry" :nav="navigation" :view="view" :organization="organization.name"
-    :account-label="user.username" environment="正式工作台" @navigate="navigate" @account="navigate('account')">
+    :account-label="user.username" environment="正式工作台" :badges="badgeState.pages" @navigate="navigate" @account="navigate('account')">
     <RetailDesk v-if="currentPage?.source === 'retail'" :key="navigationRevision + ':' + view" :mode="view" :title="currentPage.label" :role="entry" :request="authenticated" :identity="user.id" @navigate="navigate" />
     <DealerOperations v-else-if="currentPage?.source === 'dealer-operations'" :key="navigationRevision + ':' + view"
       :view="view" :title="currentPage.label" :role="entry" :identity="user.id" :request="authenticated" @navigate="navigate" />
     <DealerPage v-else-if="currentPage?.source === 'utility'" :key="view" :view="view" :title="currentPage.label" :request="authenticated" @navigate="navigate" @project="openProject" />
     <template v-else-if="view === 'overview'">
+      <section v-if="badgeState.items.length" class="live-todo-banner" aria-label="跨端协同待办提醒">
+        <div class="live-todo-head">
+          <UiIcon name="workflow" :size="18" />
+          <strong>跨端协同待办（{{ badgeState.total }}）</strong>
+        </div>
+        <div class="live-todo-pills">
+          <button v-for="alert in badgeState.items" :key="alert.view" type="button" class="live-todo-pill" @click="navigate(alert.view)">
+            <span>{{ alert.description }}</span>
+            <UiIcon name="forward" :size="14" />
+          </button>
+        </div>
+      </section>
       <LiveProjects :key="navigationRevision" overview :request="authenticated" :role="entry" :organization-id="organization.id" :user-id="user.id"
         @open-project="openProject" @open-list="(scope, create) => navigate('projects', create ? { scope, create: '1' } : { scope })">
         <template #heading>
@@ -370,6 +459,9 @@ function openOpportunity(id = '', projectId = '') {
       @open-project="id => openProject(id)" @open-projects="navigate('projects')"
       @open-opportunity="(id, projectId) => openOpportunity(id, projectId)"
       @navigate="(target, params) => navigate(target, params)" />
+    <RoleAiWorkspace v-else-if="view === 'ai-assistant' && (isManufacturer || isCustomer)" :key="navigationRevision"
+      :role="entry" :request="authenticated" :organization-id="organization.id" :user-id="user.id" :organization-name="organization.name"
+      @open-project="id => openProject(id)" @navigate="(target, params) => navigate(target, params)" @badges-changed="loadBadges" />
     <template v-else>
       <header class="page-heading"><h1>账号与组织</h1></header>
       <section class="workspace-section live-account" aria-labelledby="current-account">
@@ -384,6 +476,37 @@ function openOpportunity(id = '', projectId = '') {
           <div><dt>组织编号</dt><dd>{{ organization.id }}</dd></div>
         </dl>
         <p v-if="logoutError" class="form-error live-feedback" role="alert">{{ logoutError }}</p>
+      </section>
+
+      <section v-if="isCustomer || isDealer" class="workspace-section live-account" aria-labelledby="linked-orgs-heading" style="margin-top: 20px;">
+        <header class="workspace-section-heading">
+          <h2 id="linked-orgs-heading">{{ isCustomer ? '已绑定的合作代理商' : '已建立代理关联的企业客户' }}</h2>
+          <UiButton v-if="isDealer" compact variant="text" @click="navigate('customers')">前往客户档案生成绑定码</UiButton>
+        </header>
+        <ul v-if="linkedOrgs.length" class="live-linked-list">
+          <li v-for="org in linkedOrgs" :key="org.id">
+            <strong>{{ org.name }}</strong>
+            <span class="muted">组织编号 #{{ org.id }}</span>
+          </li>
+        </ul>
+        <p v-else class="muted">{{ isCustomer ? '当前尚未绑定代理商，输入下方代理商服务绑定码即可建立协作。' : '当前暂无已关联企业客户，可在「客户档案」生成绑定邀请码发给客户。' }}</p>
+
+        <div v-if="isCustomer" class="live-bind-box">
+          <h3>通过绑定码关联代理商</h3>
+          <form class="live-bind-form" @submit.prevent="previewInviteCode">
+            <input v-model.trim="bindCode" placeholder="输入代理商绑定码，例如 PL-A8F3K9D2" maxlength="16" aria-label="代理商服务绑定码" />
+            <UiButton type="submit" compact :loading="bindBusy" :disabled="!bindCode.trim()">核对绑定码</UiButton>
+          </form>
+          <div v-if="bindPreview" class="live-bind-preview">
+            <p>
+              识别到二级代理商：<strong>{{ bindPreview.reseller?.name }}</strong>（编号 #{{ bindPreview.reseller?.id }}）
+              <span v-if="bindPreview.already_linked" class="muted"> · 已建立关联</span>
+            </p>
+            <UiButton v-if="!bindPreview.already_linked" variant="primary" compact :loading="bindBusy" @click="confirmBindInvite">确认建立代理协作关系</UiButton>
+          </div>
+          <p v-if="bindNotice" class="access-notice" role="status">{{ bindNotice }}</p>
+          <p v-if="bindError" class="form-error" role="alert">{{ bindError }}</p>
+        </div>
       </section>
     </template>
     <footer class="live-links"><a href="/">平台首页</a><a :href="'/experience/' + entry">{{ kindLabel }}演示</a></footer>
@@ -407,4 +530,83 @@ function openOpportunity(id = '', projectId = '') {
 .live-account-facts dt { color: var(--ui-ink-muted); }
 .live-account-facts dd { margin: 0; overflow-wrap: anywhere; }
 .live-feedback { margin-block: 8px; }
+.live-todo-banner {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid #d5e4ff;
+  border-radius: var(--ui-radius-md);
+  background: linear-gradient(180deg, #f5f9ff 0%, #eef5ff 100%);
+}
+.live-todo-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #15315e;
+  font-size: 14px;
+}
+.live-todo-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.live-todo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid #bfd6ff;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ui-link);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.live-todo-pill:hover { background: var(--ui-accent-bg); border-color: var(--ui-accent); }
+.live-linked-list {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.live-linked-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+.live-bind-box {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+.live-bind-box h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.live-bind-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.live-bind-form input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+}
+.live-bind-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-accent-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-accent-bg);
+}
+.live-bind-preview p { margin: 0; }
 </style>

@@ -16,10 +16,19 @@ import (
 type ToolExecutor func(ctx context.Context, name string, args json.RawMessage) (result string, linkKey string, statusLabel string, err error)
 
 type StreamCallbacks struct {
-	OnStatus func(label string)
-	OnRoute  func(route WorkspaceRoute)
-	OnDelta  func(delta string)
-	OnDone   func(links []string, model string)
+	OnStatus   func(label string)
+	OnRoute    func(route WorkspaceRoute)
+	OnRawRoute func(raw json.RawMessage)
+	OnDelta    func(delta string)
+	OnDone     func(links []string, model string)
+}
+
+type AgentStreamConfig struct {
+	SystemPrompt string
+	ActorHeader  string
+	Tools        []ToolDefinition
+	AllowedLinks map[string]bool
+	RawRouteMode bool
 }
 
 type streamedToolCall struct {
@@ -29,6 +38,15 @@ type streamedToolCall struct {
 }
 
 func (d *DeepSeek) StreamWorkspace(ctx context.Context, actorHeader string, history []ChatMessage, exec ToolExecutor, cb StreamCallbacks) error {
+	return d.StreamWorkspaceWithConfig(ctx, AgentStreamConfig{
+		SystemPrompt: agentSystemPrompt,
+		ActorHeader:  actorHeader,
+		Tools:        WorkspaceTools(),
+		RawRouteMode: false,
+	}, history, exec, cb)
+}
+
+func (d *DeepSeek) StreamWorkspaceWithConfig(ctx context.Context, cfg AgentStreamConfig, history []ChatMessage, exec ToolExecutor, cb StreamCallbacks) error {
 	if d.apiKey == "" || len(d.models) == 0 {
 		return ErrUnavailable
 	}
@@ -55,9 +73,10 @@ func (d *DeepSeek) StreamWorkspace(ctx context.Context, actorHeader string, hist
 			return fmt.Errorf("%w: %w", ErrUnavailable, ctx.Err())
 		}
 		emittedAnyDelta := false
-		outcome, err := d.runStreamingAgentWithModel(ctx, model, actorHeader, history, exec, StreamCallbacks{
-			OnStatus: cb.OnStatus,
-			OnRoute:  cb.OnRoute,
+		outcome, err := d.runStreamingAgentWithModel(ctx, model, cfg, history, exec, StreamCallbacks{
+			OnStatus:   cb.OnStatus,
+			OnRoute:    cb.OnRoute,
+			OnRawRoute: cb.OnRawRoute,
 			OnDelta: func(delta string) {
 				emittedAnyDelta = true
 				if cb.OnDelta != nil {
@@ -96,14 +115,17 @@ func (d *DeepSeek) StreamWorkspace(ctx context.Context, actorHeader string, hist
 func (d *DeepSeek) runStreamingAgentWithModel(
 	ctx context.Context,
 	model string,
-	actorHeader string,
+	cfg AgentStreamConfig,
 	history []ChatMessage,
 	exec ToolExecutor,
 	cb StreamCallbacks,
 ) (callOutcome, error) {
-	sys := agentSystemPrompt
-	if strings.TrimSpace(actorHeader) != "" {
-		sys += "\n\n【当前会话身份】" + strings.TrimSpace(actorHeader)
+	sys := cfg.SystemPrompt
+	if sys == "" {
+		sys = agentSystemPrompt
+	}
+	if strings.TrimSpace(cfg.ActorHeader) != "" {
+		sys += "\n\n【当前会话身份】" + strings.TrimSpace(cfg.ActorHeader)
 	}
 	messages := make([]map[string]any, 0, len(history)+6)
 	messages = append(messages, map[string]any{"role": "system", "content": sys})
@@ -111,7 +133,10 @@ func (d *DeepSeek) runStreamingAgentWithModel(
 		messages = append(messages, map[string]any{"role": msg.Role, "content": msg.Content})
 	}
 
-	tools := WorkspaceTools()
+	tools := cfg.Tools
+	if tools == nil {
+		tools = WorkspaceTools()
+	}
 	collectedLinks := make([]string, 0, 3)
 	emittedInPriorRound := false
 
@@ -143,7 +168,11 @@ func (d *DeepSeek) runStreamingAgentWithModel(
 				return outcomeInvalidOutput, ErrResponse
 			}
 			if cb.OnDone != nil {
-				cb.OnDone(filterAllowedChatLinks(collectedLinks), model)
+				links := filterAllowedChatLinks(collectedLinks)
+				if cfg.AllowedLinks != nil {
+					links = filterCustomLinks(collectedLinks, cfg.AllowedLinks)
+				}
+				cb.OnDone(links, model)
 			}
 			return outcomeSuccess, nil
 		}
@@ -151,6 +180,19 @@ func (d *DeepSeek) runStreamingAgentWithModel(
 		// Check if the LLM invoked propose_workflow_skill to open an approval dialog
 		for _, tc := range toolCalls {
 			if tc.Name == "propose_workflow_skill" {
+				if cfg.RawRouteMode {
+					rawArgs := strings.TrimSpace(tc.Arguments.String())
+					var check struct {
+						Intent string `json:"intent"`
+					}
+					if json.Unmarshal([]byte(rawArgs), &check) != nil || strings.TrimSpace(check.Intent) == "" {
+						return outcomeInvalidOutput, ErrResponse
+					}
+					if cb.OnRawRoute != nil {
+						cb.OnRawRoute(json.RawMessage(rawArgs))
+					}
+					return outcomeSuccess, nil
+				}
 				route, parseErr := parseProposedWorkflowSkill(tc.Arguments.String())
 				if parseErr != nil {
 					return outcomeInvalidOutput, parseErr
@@ -230,9 +272,39 @@ func defaultToolStatusHint(name string) string {
 		return "正在查询服务工单与财务申请记录"
 	case "query_product_catalog":
 		return "正在查询已发布软件目录与产品知识库"
+	case "vendor_overview":
+		return "正在读取厂商渠道运营总览"
+	case "vendor_query_inquiries":
+		return "正在查询渠道询价与供货进展"
+	case "vendor_query_products":
+		return "正在读取本厂软件目录与知识库"
+	case "vendor_query_orders_and_settlements":
+		return "正在查询直购收款与佣金结算明细"
+	case "vendor_query_finance_and_tickets":
+		return "正在查询渠道财务申请与售后工单"
+	case "customer_query_projects":
+		return "正在查询本企业采购项目与对客报价"
+	case "customer_query_orders_and_dealers":
+		return "正在查询直购订单与合作代理商"
 	default:
 		return ""
 	}
+}
+
+func filterCustomLinks(links []string, allowed map[string]bool) []string {
+	seen := make(map[string]bool)
+	out := make([]string, 0, 2)
+	for _, item := range links {
+		key := strings.TrimSpace(item)
+		if allowed[key] && !seen[key] {
+			seen[key] = true
+			out = append(out, key)
+			if len(out) == 2 {
+				break
+			}
+		}
+	}
+	return out
 }
 
 func parseProposedWorkflowSkill(rawArgs string) (WorkspaceRoute, error) {
