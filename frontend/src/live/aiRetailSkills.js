@@ -198,3 +198,28 @@ export function buildCustomerConfirmUrl(orderId) {
   const path = customerOrderLink(orderId)
   return globalThis.location?.origin ? new URL(path, globalThis.location.origin).href : path
 }
+
+export async function readCustomersSummary(ctx) {
+  const bridge = await createRetailSkillBridge(ctx)
+  const rows = bridge.demo
+    ? ((await bridge.request(retailApi + '/operations'))?.customers ?? []).map(item => ({ ...item, linked: true, prospect: false }))
+    : await readRetailCatalog(path => bridge.request(path), retailApi + '/operations/customers')
+  const linkedCount = rows.filter(row => row.linked).length
+  const prospectCount = rows.filter(row => row.prospect).length
+  return { demo: bridge.demo, items: rows, linkedCount, prospectCount }
+}
+
+export async function readOperationsSummary(ctx) {
+  const bridge = await createRetailSkillBridge(ctx)
+  const totals = bridge.demo
+    ? (await bridge.request(retailApi + '/operations'))?.totals
+    : await bridge.request(retailApi + '/operations/overview')
+  return {
+    customers: Number(totals?.customers ?? 0),
+    orders: Number(totals?.orders ?? 0),
+    promotionOrders: Number(totals?.promotion_orders ?? 0),
+    renewals30Days: Number(totals?.renewals_30_days ?? 0),
+    pendingCommissionText: formatMoneyCents(totals?.pending_commission_cents ?? 0),
+    openTickets: Number(totals?.open_tickets ?? 0),
+  }
+}

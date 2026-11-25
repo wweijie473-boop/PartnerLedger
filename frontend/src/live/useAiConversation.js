@@ -14,6 +14,7 @@ import {
 import {
   buildCustomerConfirmUrl, createRetailSkillBridge, formatMoneyCents,
   prepareApplyInvoiceSkill, prepareAssistedOrderSkill, prepareCreateTicketSkill, prepareRemindCommissionSkill,
+  readCustomersSummary, readOperationsSummary,
 } from './aiRetailSkills.js'
 import { retailApi } from './retailRequest.js'
 
@@ -295,6 +296,35 @@ export function useAiConversation(props, log) {
     current.partners = await queryVisitPartners(ctx, current.criteria)
   }
 
+  function demoChatReply(text) {
+    if (/^(?:你好|您好|嗨|在吗|hello|hi)\b/i.test(text)) {
+      return `你好！我是渠智链智能业务助手。当前可见 ${projects.value.length} 个协作项目，你可以直接让我查客户、看项目进度、撰写跟进话术，或下达询价、对客报价、下单、记拜访等业务指令。`
+    }
+    if (/区别|什么是\s*(?:ERP|MES|WMS)/i.test(text)) {
+      return '简单来说：ERP 侧重企业财务、采购、库存与订单经营主干；MES 侧重生产车间排程、工序报工与质检追溯；WMS 侧重库位、批次与扫码出入库。制造客户通常先落 ERP 业财一体，再将车间工序需求作为附加商机对接 MES。'
+    }
+    if (/话术|微信|跟进|怎么谈/.test(text)) {
+      return '可以参考这段跟进话术：\n「王总您好，上次沟通的云端业财一体化方案我们已结合贵司规模梳理好模块范围与实施周期。为确保报价精准不浪费席位，想和您确认一下首期需要开通账号的具体岗位人数，确认后我今天把正式对客方案发您审阅。」'
+    }
+    return `收到你的问题：「${text}」。在本地离线演示空间中我已为你梳理当前台账（共 ${projects.value.length} 个项目）；登录正式工作台后，我将结合贵组织的实时数据库与火山方舟大模型为你深度解答任意业务或日常话题。`
+  }
+
+  async function replyWithChat(text) {
+    if (demo) {
+      say(demoChatReply(text))
+      return
+    }
+    working.value = '正在结合业务上下文思考回复'
+    const history = turns.value
+      .filter(item => (item.role === 'user' || item.role === 'assistant') && item.text?.trim())
+      .slice(-10)
+      .map(item => ({ role: item.role, content: item.text.slice(0, 2000) }))
+    const res = await post('/api/ai/workspace/chat', { messages: history }, 38000)
+    if (!disposed.value) {
+      say(res?.reply || '我已收到你的消息，请告诉我接下来想了解或办理的内容。')
+    }
+  }
+
   async function dispatch(value = input.value) {
     const text = value.trim()
     if (!text || working.value || loadingProjects.value || pendingWrite.value) return
@@ -302,24 +332,23 @@ export function useAiConversation(props, log) {
     if ([...text].length > 2000) { say('单条消息限 2000 字，请缩短后发送。'); return }
     input.value = ''
     say(text, { role: 'user' })
-    working.value = '正在识别所需业务技能'
+    working.value = '正在理解你的问题与所需技能'
     try {
       const route = demo ? routeDemoWorkspace(text) : await post('/api/ai/workspace/route', { text }, 32000)
       if (disposed.value) return
-      if (!Object.hasOwn(workspaceSkills, route.intent)) {
-        say('我可以自动识别并打包审批以下工作流：一键建项与厂商询价、发送对客报价、确认下单、提交实施验收、记拜访转商机、代客直购下单、催办佣金、申请开票及提交服务工单。直接告诉我你想办哪一项即可。')
+      if (route.intent === 'chat' || route.intent === 'help' || !Object.hasOwn(workspaceSkills, route.intent)) {
+        await replyWithChat(text)
         return
       }
       await openSkillByRoute(route, text)
     } catch (cause) {
       if (cause.name !== 'AbortError') {
-        const modelUnavailable = working.value === '正在识别所需业务技能' || working.value === '正在提取需求与预匹配产品'
-          ? [502, 503, 504].includes(cause.status)
-          : false
+        const modelUnavailable = [502, 503, 504].includes(cause.status)
         const fallbackRoute = modelUnavailable ? routeLocalWorkspace(text) : null
+        const canManualApprove = fallbackRoute && !['chat', 'help', 'query_customers', 'query_operations', 'project_status'].includes(fallbackRoute.intent)
         say(
-          cause.message || '技能暂时不可用，请稍后重试。',
-          modelUnavailable ? { manualSource: text, fallbackIntent: fallbackRoute?.intent || 'prepare_inquiry' } : {},
+          cause.message || '助手暂时不可用，请稍后重试。',
+          canManualApprove ? { manualSource: text, fallbackIntent: fallbackRoute.intent } : {},
         )
       }
     } finally {
@@ -328,18 +357,58 @@ export function useAiConversation(props, log) {
   }
 
   async function openSkillByRoute(route, text, { manual = false } = {}) {
-    working.value = '正在预拉取业务上下文并组装审批单'
+    working.value = '正在读取业务数据'
+    if (route.intent === 'query_customers') {
+      const summary = await readCustomersSummary(ctx)
+      if (!summary.items.length) {
+        say('当前组织暂未登记任何客户档案。你可以前往「客户档案」新增或关联企业客户。', {
+          navAction: { label: '打开客户档案', view: 'customers' },
+        })
+        return
+      }
+      const head = summary.demo
+        ? `当前共有 ${summary.items.length} 家演示客户档案：`
+        : `当前你的组织共有 ${summary.items.length} 家客户档案（其中已关联签约客户 ${summary.linkedCount} 家、潜在跟进客户 ${summary.prospectCount} 家）：`
+      say(head, { customersCard: summary })
+      return
+    }
+
+    if (route.intent === 'query_operations') {
+      const overview = await readOperationsSummary(ctx)
+      say(
+        `当前经营数据汇总：客户档案 ${overview.customers} 家，直购订单 ${overview.orders} 笔，待结算佣金 ${overview.pendingCommissionText}，30 天内到期续费 ${overview.renewals30Days} 笔，未关闭服务工单 ${overview.openTickets} 单。`,
+        { operationsCard: overview },
+      )
+      return
+    }
+
     const needsProjectLookup = ['match_products', 'prepare_inquiry', 'submit_inquiry', 'sales_quote', 'place_order', 'submit_acceptance', 'capture_visit_opportunity', 'project_status'].includes(route.intent)
     const contextProject = needsProjectLookup ? projectFromText(text) : null
-    const project = contextProject ? await repo.get(contextProject.id, options) : null
+    let project = contextProject ? await repo.get(contextProject.id, options) : null
     if (project) {
       projects.value = projects.value.map(item => item.id === project.id ? project : item)
     }
 
     if (route.intent === 'project_status') {
-      if (!project) say('请先在上方选择一个项目，或在消息里写出项目名称。')
-      else say(`这是「${project.title}」的当前进展。`, { project })
+      if (project) {
+        say(`这是「${project.title}」的当前进展。`, { project })
+      } else if (projects.value.length) {
+        const todoCount = projects.value.filter(item => item.isTodo).length
+        say(`当前你共有 ${projects.value.length} 个可见协作项目（其中 ${todoCount} 个待你处理）：`, {
+          projectsList: projects.value.slice(0, 12),
+        })
+      } else {
+        say('当前暂无可见的协作项目。')
+      }
       return
+    }
+
+    if (!project && ['prepare_inquiry', 'submit_inquiry'].includes(route.intent) && route.use_project_requirement && !demo && inquiryProjects.value.length) {
+      project = await repo.get(inquiryProjects.value[0].id, options)
+      if (project) {
+        selectedId.value = project.id
+        projects.value = projects.value.map(item => item.id === project.id ? project : item)
+      }
     }
 
     if (route.intent === 'submit_inquiry' && route.use_project_requirement && project && canInquire(project)) {

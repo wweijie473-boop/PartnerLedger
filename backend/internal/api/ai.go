@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
@@ -39,6 +41,122 @@ func (s server) routeWorkspace(c *gin.Context) {
 	}
 	route, err := router.RouteWorkspace(c.Request.Context(), text)
 	aiWorkspaceResult(c, route, err)
+}
+
+func (s server) chatWorkspace(c *gin.Context) {
+	actor := principal(c)
+	if actor.Organization.Kind != data.Reseller {
+		respond(c, http.StatusForbidden, "forbidden", nil)
+		return
+	}
+	var input struct {
+		Messages []ai.ChatMessage `json:"messages"`
+	}
+	if !decodeWithLimit(c, &input, 64<<10) {
+		return
+	}
+	if len(input.Messages) == 0 || len(input.Messages) > 12 {
+		respond(c, http.StatusBadRequest, "invalid_request", nil)
+		return
+	}
+	for i := range input.Messages {
+		role := strings.TrimSpace(input.Messages[i].Role)
+		text := strings.TrimSpace(input.Messages[i].Content)
+		if (role != "user" && role != "assistant") || text == "" || utf8.RuneCountInString(text) > 2000 {
+			respond(c, http.StatusBadRequest, "invalid_request", nil)
+			return
+		}
+		input.Messages[i].Role = role
+		input.Messages[i].Content = text
+	}
+	if input.Messages[len(input.Messages)-1].Role != "user" {
+		respond(c, http.StatusBadRequest, "invalid_request", nil)
+		return
+	}
+	chatter, ok := s.parser.(interface {
+		ChatWorkspace(context.Context, string, []ai.ChatMessage) (string, error)
+	})
+	if !ok {
+		aiWorkspaceResult(c, nil, ai.ErrUnavailable)
+		return
+	}
+	snapshot := s.buildDealerSnapshot(c.Request.Context(), actor)
+	reply, err := chatter.ChatWorkspace(c.Request.Context(), snapshot, input.Messages)
+	aiWorkspaceResult(c, gin.H{"reply": reply}, err)
+}
+
+func (s server) buildDealerSnapshot(ctx context.Context, actor data.User) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "代理商组织：%s（当前经办账号：%s）\n", actor.Organization.Name, actor.Username)
+
+	if s.db != nil {
+		dealer := actor.OrganizationID
+		customers := make([]operationsCustomer, 0)
+		_ = s.db.WithContext(ctx).Raw(`
+			SELECT * FROM (
+				SELECT CONCAT('o', org.id) AS id, org.name, COALESCE(profile.contact, '') AS contact,
+					COALESCE(profile.note, '') AS note, link.customer_id IS NOT NULL AS linked, FALSE AS prospect
+				FROM (`+dealerCustomerOrganizations+`) known
+				JOIN pl_organizations org ON org.id = known.customer_id
+				LEFT JOIN pl_channel_links link ON link.customer_id = org.id AND link.reseller_id = ?
+				LEFT JOIN pl_dealer_customer_profiles profile ON profile.customer_id = org.id AND profile.reseller_id = ?
+				UNION ALL
+				SELECT CONCAT('p', id), prospect_name, contact, note, FALSE, TRUE
+				FROM pl_dealer_customer_profiles WHERE reseller_id = ? AND customer_id IS NULL
+			) customers ORDER BY id LIMIT 30`,
+			dealer, dealer, dealer, dealer, dealer).Scan(&customers).Error
+
+		fmt.Fprintf(&b, "\n客户档案（共 %d 家）：\n", len(customers))
+		for _, cust := range customers {
+			tag := "直购客户"
+			if cust.Linked {
+				tag = "已关联客户"
+			} else if cust.Prospect {
+				tag = "潜在客户"
+			}
+			fmt.Fprintf(&b, "- %s [%s] | 联系人：%s | 备注：%s\n",
+				cust.Name, tag, fallbackDash(cust.Contact), fallbackDash(cust.Note))
+		}
+
+		today := time.Now().In(chinaTime).Format(time.DateOnly)
+		var totals operationsTotals
+		if s.db.WithContext(ctx).Raw(`
+			SELECT (SELECT COUNT(*) FROM (`+dealerCustomerOrganizations+`) known)
+				+ (SELECT COUNT(*) FROM pl_dealer_customer_profiles WHERE reseller_id = ? AND customer_id IS NULL) AS customers,
+				COUNT(*) AS orders, COUNT(CASE WHEN source = 'promotion' THEN 1 END) AS promotion_orders,
+				COUNT(CASE WHEN renewal_due_on BETWEEN ? AND DATE_ADD(?, INTERVAL 30 DAY) THEN 1 END) AS renewals_30_days,
+				COALESCE(SUM(CASE WHEN status = 'settlement' THEN `+retailCommissionCents+` ELSE 0 END), 0) AS pending_commission_cents,
+				(SELECT COUNT(*) FROM pl_channel_service_tickets WHERE reseller_id = ? AND status <> 'closed') AS open_tickets
+			FROM pl_retail_orders WHERE reseller_id = ?`,
+			dealer, dealer, dealer, today, today, dealer, dealer).Scan(&totals).Error == nil {
+			fmt.Fprintf(&b, "\n直购与运营统计：直购订单 %d 笔，待结佣金 %.2f 元，30天内到期续费 %d 笔，未关闭工单 %d 单。\n",
+				totals.Orders, float64(totals.PendingCommissionCents)/100.0, totals.Renewals30Days, totals.OpenTickets)
+		}
+	}
+
+	if page, err := s.channel.List(ctx, actor, 0, 20); err == nil {
+		fmt.Fprintf(&b, "\n协作项目列表（最近 %d 个）：\n", len(page.Items))
+		for _, p := range page.Items {
+			custName := ""
+			if p.CustomerName != nil {
+				custName = *p.CustomerName
+			}
+			todoTag := ""
+			if p.IsTodo {
+				todoTag = "【待我处理】"
+			}
+			fmt.Fprintf(&b, "- #%s %s（客户：%s）| 阶段：%s %s | 下一步：%s\n",
+				p.ID, p.Title, fallbackDash(custName), p.StageLabel, todoTag, p.NextStep)
+		}
+	}
+	return b.String()
+}
+
+func fallbackDash(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "未填写"
+	}
+	return strings.TrimSpace(value)
 }
 
 func (s server) transcribeAudio(c *gin.Context) {

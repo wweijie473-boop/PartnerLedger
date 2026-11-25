@@ -240,3 +240,58 @@ test('语音输入编码标准 16kHz 单声道 RIFF WAVE 并无损拼接到输�
   assert.equal(appendTranscript('给财务共享中心', '加价25%发报价'), '给财务共享中心加价25%发报价')
   assert.equal(appendTranscript('ERP', 'MES对接'), 'ERP MES对接')
 })
+
+test('客户信息查询、经营汇总查询与多轮自由对话直接返回真实回答与数据卡片，不答非所问', async () => {
+  const storage = memoryStorage()
+  let chatHistorySent = null
+
+  async function mockLiveRequest(path, options = {}) {
+    if (path.startsWith('/api/channel/v1/projects?')) {
+      return {
+        items: [{ id: '1', title: '海川 ERP 采购', stage: 'requested', stageLabel: '待整理需求', nextStep: '提交厂商询价', isTodo: true, actions: ['submitInquiry'] }],
+        next_cursor: null,
+      }
+    }
+    if (path === '/api/ai/workspace/route') {
+      const text = options.body.text
+      if (text.includes('所有客户信息')) return { intent: 'query_customers', use_project_requirement: false }
+      return { intent: 'chat', use_project_requirement: false }
+    }
+    if (path.startsWith('/api/retail/v1/operations/customers')) {
+      return {
+        items: [
+          { id: 'o239', name: '海川精密机械制造有限公司', contact: '陈志远 · 生产副总', note: '120人离散制造企业', linked: true, prospect: false },
+          { id: 'p32', name: '星河光电仪器有限公司', contact: '郑浩 · 总经理助理', note: '明年一季度升级云ERP', linked: false, prospect: true },
+        ],
+        next_cursor: null,
+      }
+    }
+    if (path === '/api/ai/workspace/chat') {
+      chatHistorySent = options.body.messages
+      return { reply: '陈志远是海川精密机械制造有限公司的生产副总，建议重点切入云端业财与车间排程协同。' }
+    }
+    return {}
+  }
+
+  const scope = effectScope()
+  const conv = scope.run(() => useAiConversation({
+    request: mockLiveRequest,
+    organizationId: '236',
+    userId: '1',
+    storage,
+  }, { value: null }))
+  await conv.loadProjects()
+
+  await conv.dispatch('帮我查看一下我的所有客户信息')
+  const custTurn = conv.turns.value.at(-1)
+  assert.equal(custTurn.customersCard.items.length, 2)
+  assert.equal(custTurn.customersCard.linkedCount, 1)
+  assert.equal(custTurn.customersCard.prospectCount, 1)
+
+  await conv.dispatch('陈志远是哪家公司的？给我一点跟进建议')
+  const chatTurn = conv.turns.value.at(-1)
+  assert.match(chatTurn.text, /陈志远是海川精密机械制造有限公司/)
+  assert.equal(chatHistorySent.length, 3, '携带前序对话上下文发给大模型')
+
+  scope.stop()
+})

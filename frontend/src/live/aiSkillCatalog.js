@@ -12,6 +12,8 @@ export const workspaceSkills = Object.freeze({
   remind_commission: '催办待结算佣金',
   apply_invoice: '申请已收款订单开票',
   create_ticket: '提交厂商服务工单',
+  query_customers: '查询客户档案',
+  query_operations: '查询经营数据',
   project_status: '查询项目进展与待办',
 })
 
@@ -153,7 +155,15 @@ export function routeLocalWorkspace(text) {
   if (/(?:确认|正式|生成).{0,4}下单|报价已确认.{0,6}下单/.test(clean) && !/代客|直购/.test(clean)) {
     return { intent: 'place_order', use_project_requirement: true, slots }
   }
-  if (/进展|进度|到哪|状态|待办/.test(clean)) {
+  if (/(?:查看|看看|查一下|列出|有哪些|我的|所有|全部).{0,10}客户|客户(?:档案|信息|列表|名单)/.test(clean) &&
+      !/报价|下单|询价|话术|怎么谈|微信/.test(clean)) {
+    return { intent: 'query_customers', use_project_requirement: false, slots }
+  }
+  if (/(?:查看|看看|查一下|我的).{0,8}(?:经营看板|经营数据|资金总览|业绩|续费|多少佣金|直购订单)/.test(clean) &&
+      !/催|开票|下单/.test(clean)) {
+    return { intent: 'query_operations', use_project_requirement: false, slots }
+  }
+  if (/进展|进度|到哪|状态|待办|(?:查看|看看|查一下|所有|全部).{0,6}项目/.test(clean) && !/询价|报价|下单|验收/.test(clean)) {
     return { intent: 'project_status', use_project_requirement: true, slots }
   }
 
@@ -162,9 +172,14 @@ export function routeLocalWorkspace(text) {
     extracted.employee_count || extracted.license_count || extracted.enterprise_type ||
     extracted.required_modules.length || extracted.deployment_mode,
   )
+  const isAdvisoryQuestion = /(?:怎么|如何|为什么|区别|什么是|写一[段篇封条]|话术|建议|分析)/.test(clean) && !/帮我(?:准备|发起|发送|提交|生成)/.test(clean)
+  if (isAdvisoryQuestion) {
+    return { intent: 'chat', use_project_requirement: false, slots }
+  }
+
   const sends = /(?:发送|提交|发给|发起|直接发).{0,12}询价|询价.{0,12}(?:发给|发送|提交)/.test(clean) && !isQuestionAboutSending
   const matchOnly = /匹配|推荐|找.{0,4}产品|选型/.test(clean) && !/草稿|询价/.test(clean)
-  const prepare = /询价|草稿|采购|需求|ERP|MES/i.test(clean)
+  const prepare = /询价|草稿|采购.{0,6}(?:需求|ERP|软件)|(?:需要|计划采购).{0,12}(?:ERP|MES|OA)/i.test(clean)
 
   const intent = sends
     ? 'submit_inquiry'
@@ -172,7 +187,7 @@ export function routeLocalWorkspace(text) {
       ? 'match_products'
       : prepare
         ? 'prepare_inquiry'
-        : 'help'
+        : 'chat'
 
   return {
     intent,

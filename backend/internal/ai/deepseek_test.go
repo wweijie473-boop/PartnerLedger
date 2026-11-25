@@ -183,6 +183,42 @@ func TestTranscribeAudioSkipsNonAudioModelAndFailsOver(t *testing.T) {
 	}
 }
 
+func TestChatWorkspaceCarriesBusinessSnapshotAndFailsOver(t *testing.T) {
+	calls := 0
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		var payload struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		if len(payload.Messages) != 2 || payload.Messages[0].Role != "system" {
+			t.Fatalf("unexpected chat messages: %+v", payload.Messages)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{
+				"finish_reason": "stop",
+				"message":       map[string]string{"content": `{"reply":"海川精密的联系人是陈志远生产副总。"}`},
+			}},
+		})
+	}))
+	defer mock.Close()
+
+	provider := NewProvider(mock.URL, "test-key", "exhausted-a,healthy-b")
+	reply, err := provider.ChatWorkspace(context.Background(), "海川精密机械制造有限公司 | 联系人：陈志远", []ChatMessage{
+		{Role: "user", Content: "海川精密的联系人是谁？"},
+	})
+	if err != nil || reply != "海川精密的联系人是陈志远生产副总。" {
+		t.Fatalf("unexpected chat reply: %q, err=%v", reply, err)
+	}
+}
+
 func TestWorkspaceRouterAcceptsOnlyRegisteredSkills(t *testing.T) {
 	markup := 25.0
 	qty := 3

@@ -223,6 +223,50 @@ function onEnter(event) {
               </div>
             </article>
 
+            <article v-if="turn.customersCard" class="ai-result ai-data-card">
+              <ul class="ai-entity-list">
+                <li v-for="cust in turn.customersCard.items.slice(0, 12)" :key="cust.id">
+                  <div class="ai-result-head">
+                    <strong>{{ cust.name }}</strong>
+                    <UiBadge :tone="cust.linked ? 'success' : cust.prospect ? 'warning' : 'info'">
+                      {{ cust.linked ? '已关联' : cust.prospect ? '潜在客户' : '直购客户' }}
+                    </UiBadge>
+                  </div>
+                  <small class="ai-entity-meta">联系人：{{ cust.contact || '未填写' }}<template v-if="cust.note"> · {{ cust.note }}</template></small>
+                </li>
+              </ul>
+              <div class="ai-prompts">
+                <UiButton compact end-icon="open-detail" @click="emit('navigate', 'customers')">打开客户档案</UiButton>
+                <UiButton compact variant="text" @click="emit('navigate', 'assisted')">去代客下单</UiButton>
+              </div>
+            </article>
+
+            <article v-if="turn.operationsCard" class="ai-result ai-data-card">
+              <div class="ai-mini-metrics">
+                <div><span>客户档案</span><strong>{{ turn.operationsCard.customers }}</strong></div>
+                <div><span>直购订单</span><strong>{{ turn.operationsCard.orders }}</strong></div>
+                <div><span>待结佣金</span><strong>{{ turn.operationsCard.pendingCommissionText }}</strong></div>
+                <div><span>30天内续费</span><strong>{{ turn.operationsCard.renewals30Days }}</strong></div>
+                <div><span>未关闭工单</span><strong>{{ turn.operationsCard.openTickets }}</strong></div>
+              </div>
+              <UiButton compact end-icon="open-detail" @click="emit('navigate', 'business-overview')">打开经营看板</UiButton>
+            </article>
+
+            <article v-if="turn.projectsList?.length" class="ai-result ai-data-card">
+              <ul class="ai-entity-list">
+                <li v-for="item in turn.projectsList" :key="item.id">
+                  <div class="ai-result-head">
+                    <strong>{{ item.title }}</strong>
+                    <UiBadge :tone="item.isTodo ? 'warning' : 'info'">{{ item.stageLabel }}</UiBadge>
+                  </div>
+                  <div class="ai-entity-row">
+                    <small class="ai-entity-meta">下一步：{{ item.nextStep }}</small>
+                    <UiButton compact variant="text" end-icon="open-detail" @click="emit('open-project', item.id)">打开</UiButton>
+                  </div>
+                </li>
+              </ul>
+            </article>
+
             <article v-if="turn.navAction" class="ai-result">
               <div class="ai-prompts">
                 <UiButton compact end-icon="open-detail" @click="emit('navigate', turn.navAction.view)">{{ turn.navAction.label }}</UiButton>
