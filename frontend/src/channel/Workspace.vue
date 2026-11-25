@@ -264,7 +264,8 @@ onUnmounted(() => { unsub?.(); clearTimeout(noticeTimer); window.removeEventList
         <UiState v-else state="denied" title="当前身份无法查看此项目" description="项目不存在、尚未提交给当前组织，或已撤回。"><UiButton @click="navigate('ledger')">查看我的工作列表</UiButton></UiState>
       </template>
       <AiWorkspace v-else-if="view === 'requirement' && role === 'dealer'" :key="aiProject" :demo-repository="repo" :initial-project="aiProject"
-        @open-project="openAiProject" />
+        @open-project="openAiProject" @open-projects="navigate('ledger')"
+        @open-opportunity="openOpportunity" @navigate="navigate" />
       <DealerPage v-else-if="currentPage?.source === 'utility'" :key="view" :view="view" :title="currentPage.label" :projects="projects" :organization="org.company" :account="names[role] + ' · 演示身份'" @project="id => openProjectFromList({ id })" @navigate="navigate" @account="openDialog('roles')" />
       <DemoCatalog v-else-if="view === 'catalog'" :items="products" :role="role" :save="saveProduct" />
       <VisitDrafts v-else-if="role === 'dealer' && view === 'visits'" :scope="'demo:' + org.orgId" :load-projects="repo.list" :load-desk="repo.opportunityDesk" :capture="captureVisit" @project="id => { navigate('ledger'); openProject({id}) }" @opportunity="openOpportunity" />

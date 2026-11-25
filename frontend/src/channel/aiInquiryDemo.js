@@ -1,4 +1,5 @@
 import { roles } from './domain.js'
+import { routeLocalWorkspace } from '../live/aiSkillCatalog.js'
 
 export const aiDemoProject = {
   title: '海川精工 · ERP 采购',
@@ -30,17 +31,7 @@ export function parseDemoRequirement(text) {
 }
 
 export function routeDemoWorkspace(text) {
-  const status = /进展|进度|到哪|状态|待办/.test(text)
-  const sends = /(?:发送|提交|发给).{0,12}询价|询价.{0,12}(?:发给|发送|提交)/.test(text) &&
-    !/(?:不|别|无需|先别|不用|是否|怎么).{0,5}(?:发送|提交|发给)|[？?]$/.test(text)
-  const match = /匹配|推荐|找.{0,4}产品|选型/.test(text)
-  const prepare = /询价|草稿|采购|需求|ERP|MES/i.test(text)
-  const extracted = parseDemoRequirement(text)
-  return {
-    intent: status ? 'project_status' : sends ? 'submit_inquiry' : match && !/草稿|询价/.test(text) ? 'match_products' : prepare ? 'prepare_inquiry' : 'help',
-    use_project_requirement: !(extracted.employee_count || extracted.license_count || extracted.enterprise_type ||
-      extracted.required_modules.length || extracted.deployment_mode),
-  }
+  return routeLocalWorkspace(text)
 }
 
 export function matchDemoProducts(products, requirement) {

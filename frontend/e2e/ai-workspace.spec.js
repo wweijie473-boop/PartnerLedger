@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('对话识别询价技能，批准字段后自动保存，发送审批前厂商不可见', async ({ page, context }) => {
+test('打包弹窗一次审批自动执行建项与询价，草稿阶段厂商不可见，发送后厂商可见', async ({ page, context }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/experience/dealer')
   const navigation = page.getByRole('navigation', { name: '工作台栏目' })
@@ -9,25 +9,26 @@ test('对话识别询价技能，批准字段后自动保存，发送审批前�
   await tab.click()
   await page.getByRole('button', { name: '试试 ERP 询价示例' }).click()
 
-  const dialog = page.getByRole('dialog', { name: '审批需求字段' })
+  const dialog = page.getByRole('dialog', { name: '审批采购询价工作流' })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByLabel('员工人数')).toHaveValue('120')
   await expect(dialog.getByLabel('授权用户数')).toHaveValue('')
   await expect(dialog.getByLabel('所需模块')).toHaveValue('财务、库存')
   await dialog.getByRole('button', { name: '不同意' }).click()
-  await expect(page.getByText('已拒绝本次审批，相关操作未执行。')).toBeVisible()
-  await expect(page.getByText('已自动保存询价草稿，项目仍待询价。')).toHaveCount(0)
+  await expect(page.getByText('已取消本次审批，未执行任何业务写入。')).toBeVisible()
+  await expect(page.getByText('审批已执行完成：已自动保存询价草稿，项目仍待询价。')).toHaveCount(0)
 
   const composer = page.getByRole('textbox', { name: '给渠道业务助手发消息' })
   await composer.fill('制造企业员工 120 人，需要财务和库存模块，希望云部署。帮我准备询价草稿。')
   await composer.press('Enter')
   await expect(dialog).toBeVisible()
   await dialog.getByLabel('授权用户数').fill('25')
-  await dialog.getByRole('button', { name: '同意并继续' }).click()
-  await expect(page.getByText('已自动保存询价草稿，项目仍待询价。')).toBeVisible()
+  await dialog.getByRole('button', { name: '同意并自动执行' }).click()
+  await expect(page.getByText('审批已执行完成：已自动保存询价草稿，项目仍待询价。')).toBeVisible()
   await expect(page.getByText(/授权席位：25/)).toBeVisible()
   await page.getByText('查看厂商资料').click()
   await expect(page.getByText('演示软件目录', { exact: false })).toBeVisible()
+
   const readProject = page.getByRole('combobox', { name: '项目上下文' })
   const project = await readProject.inputValue()
   expect(project).toBeTruthy()
@@ -42,8 +43,8 @@ test('对话识别询价技能，批准字段后自动保存，发送审批前�
   await expect(sendDialog).toBeVisible()
   await expect(sendDialog.getByText(/授权席位：25/)).toBeVisible()
   await expect(vendor.getByText('当前身份无法查看此项目')).toBeVisible()
-  await sendDialog.getByRole('button', { name: '同意发送询价' }).click()
-  await expect(page.getByText('询价已提交给厂商。')).toBeVisible()
+  await sendDialog.getByRole('button', { name: '同意并发送询价' }).click()
+  await expect(page.getByText('审批已执行完成：询价已提交给软件厂商。')).toBeVisible()
   await expect(vendor.getByRole('definition').filter({ hasText: /授权席位：25/ })).toBeVisible()
 
   await composer.fill('帮我查一下当前项目进展')
@@ -52,22 +53,37 @@ test('对话识别询价技能，批准字段后自动保存，发送审批前�
   await expect(page.getByRole('dialog')).not.toBeVisible()
 })
 
-test('只查产品和多个候选待选时都不会自动创建询价', async ({ page }) => {
+test('多候选产品在弹窗内一次选定并自动执行，对客报价与拜访转商机技能一键跑通', async ({ page }) => {
   await page.goto('/experience/dealer?view=requirement')
   const composer = page.getByRole('textbox', { name: '给渠道业务助手发消息' })
-  const approve = page.getByRole('button', { name: '同意并继续' })
+
   await composer.fill('请帮我匹配财务和库存的产品，要求云部署')
   await composer.press('Enter')
-  await approve.click()
+  const matchDialog = page.getByRole('dialog', { name: '审批产品匹配条件' })
+  await expect(matchDialog).toBeVisible()
+  await matchDialog.getByRole('button', { name: '同意并匹配产品' }).click()
   await expect(page.getByText('匹配完成，找到 1 款可进一步核对的产品。')).toBeVisible()
-  await expect(page.getByText('已自动保存询价草稿，项目仍待询价。')).toHaveCount(0)
+  await expect(page.getByText('审批已执行完成：已自动保存询价草稿，项目仍待询价。')).toHaveCount(0)
 
   await composer.fill('帮我准备询价草稿，要求云部署')
   await composer.press('Enter')
-  await approve.click()
-  await expect(page.getByRole('button', { name: '选用并保存草稿' })).toHaveCount(2)
-  await expect(page.getByText('已自动保存询价草稿，项目仍待询价。')).toHaveCount(0)
-  const product = page.locator('article').filter({ hasText: '云序 OA 协作套件' }).last()
-  await product.getByRole('button', { name: '选用并保存草稿' }).click()
+  const inquiryDialog = page.getByRole('dialog', { name: '审批采购询价工作流' })
+  await expect(inquiryDialog).toBeVisible()
+  await inquiryDialog.locator('label').filter({ hasText: '云序 OA 协作套件' }).click()
+  await inquiryDialog.getByRole('button', { name: '同意并自动执行' }).click()
   await expect(page.getByText('询价草稿 · 云序 OA 协作套件')).toBeVisible()
+
+  await composer.fill('给财务共享中心项目按加价 25% 生成并发送对客报价')
+  await composer.press('Enter')
+  const quoteDialog = page.getByRole('dialog', { name: '审批编制并发送对客报价' })
+  await expect(quoteDialog).toBeVisible()
+  await quoteDialog.getByRole('button', { name: '同意并自动执行' }).click()
+  await expect(page.getByText(/对客报价已自动生成并发送给客户/)).toBeVisible()
+
+  await composer.fill('记一条拜访：今天回访确认了主项目，另外客户还需要把 ERP 对接 MES 排程接口')
+  await composer.press('Enter')
+  const visitDialog = page.getByRole('dialog', { name: '审批记拜访并沉淀团队商机' })
+  await expect(visitDialog).toBeVisible()
+  await visitDialog.getByRole('button', { name: '同意并自动执行' }).click()
+  await expect(page.getByText('拜访记录与团队附加商机已自动沉淀完成，主项目订单不受影响。')).toBeVisible()
 })

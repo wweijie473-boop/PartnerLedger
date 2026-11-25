@@ -58,17 +58,30 @@ func TestParseRequirementHandlesProviderRateLimit(t *testing.T) {
 }
 
 func TestWorkspaceRouterAcceptsOnlyRegisteredSkills(t *testing.T) {
+	markup := 25.0
+	qty := 3
+	badMarkup := 900.0
 	for _, test := range []struct {
+		name   string
 		intent string
+		slots  *WorkspaceSlots
 		valid  bool
 	}{
-		{"prepare_inquiry", true},
-		{"delete_project", false},
-		{"", false},
+		{"prepare_inquiry", "prepare_inquiry", nil, true},
+		{"sales_quote_with_slots", "sales_quote", &WorkspaceSlots{MarkupPercent: &markup, Note: " 含首年巡检 "}, true},
+		{"assisted_order_with_qty", "assisted_order", &WorkspaceSlots{Quantity: &qty}, true},
+		{"capture_visit", "capture_visit_opportunity", nil, true},
+		{"invalid_markup_rejected", "sales_quote", &WorkspaceSlots{MarkupPercent: &badMarkup}, false},
+		{"delete_project", "delete_project", nil, false},
+		{"empty_intent", "", nil, false},
 	} {
-		t.Run(test.intent, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				content, _ := json.Marshal(WorkspaceRoute{Intent: test.intent, UseProjectRequirement: true})
+				content, _ := json.Marshal(WorkspaceRoute{
+					Intent:                test.intent,
+					UseProjectRequirement: true,
+					Slots:                 test.slots,
+				})
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]string{"content": string(content)}}},
 				})
@@ -76,13 +89,16 @@ func TestWorkspaceRouterAcceptsOnlyRegisteredSkills(t *testing.T) {
 			defer mock.Close()
 			model := NewDeepSeek("test-key", "test-model")
 			model.endpoint = mock.URL
-			route, err := model.RouteWorkspace(context.Background(), "请整理当前项目的采购需求")
+			route, err := model.RouteWorkspace(context.Background(), "请处理当前业务")
 			if test.valid {
 				if err != nil || route.Intent != test.intent || !route.UseProjectRequirement {
 					t.Fatalf("unexpected route: %+v, %v", route, err)
 				}
+				if test.name == "sales_quote_with_slots" && (route.Slots == nil || route.Slots.Note != "含首年巡检") {
+					t.Fatalf("expected trimmed slots, got %+v", route.Slots)
+				}
 			} else if !errors.Is(err, ErrResponse) {
-				t.Fatalf("unexpected error for unknown intent %q: %v", test.intent, err)
+				t.Fatalf("unexpected error for %s: %v", test.name, err)
 			}
 		})
 	}

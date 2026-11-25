@@ -163,7 +163,7 @@ test('the formal AI workspace carries the current project into an approved draft
   await page.getByRole('button', { name: '用 AI 整理需求' }).click()
   await expect(page.getByLabel('项目上下文')).toHaveValue('1')
   await page.getByRole('button', { name: '整理当前项目需求' }).click()
-  const dialog = page.getByRole('dialog', { name: '审批需求字段' })
+  const dialog = page.getByRole('dialog', { name: '审批采购询价工作流' })
   await expect(dialog.getByLabel('授权用户数')).toHaveValue('')
   await expect(dialog.getByLabel('关联项目')).toHaveValue('1')
   await dialog.getByText('查看需求原文').click()
@@ -171,7 +171,7 @@ test('the formal AI workspace carries the current project into an approved draft
   expect(api.requests.some(item => item.method === 'POST' && item.pathname.includes('/inquiry-draft'))).toBe(false)
   api.dropDraft()
   const posted = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/1/inquiry-draft'))
-  await dialog.getByRole('button', { name: '同意并继续' }).click()
+  await dialog.getByRole('button', { name: '同意并自动执行' }).click()
   expect((await posted).postDataJSON()).toMatchObject({
     revision: 3, productId: '51', confirmed: true, requestId: expect.any(String),
     requirement: { employee_count: 120, license_count: null },
@@ -180,7 +180,7 @@ test('the formal AI workspace carries the current project into an approved draft
   expect(api.requests.some(item => item.method === 'POST' && item.pathname.includes('/actions/'))).toBe(false)
   await page.reload()
   await page.getByRole('button', { name: '用原请求确认结果' }).click()
-  await expect(page.getByText('已确认草稿保存成功。')).toBeVisible()
+  await expect(page.getByText('审批已执行完成：已自动保存询价草稿，项目仍待询价。')).toBeVisible()
   expect(api.draftAttempts).toHaveLength(2)
   expect(api.draftAttempts[1]).toEqual(api.draftAttempts[0])
   await page.reload()
