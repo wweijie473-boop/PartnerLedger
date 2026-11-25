@@ -204,18 +204,18 @@ func TestChatWorkspaceCarriesBusinessSnapshotAndFailsOver(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []any{map[string]any{
 				"finish_reason": "stop",
-				"message":       map[string]string{"content": `{"reply":"海川精密的联系人是陈志远生产副总。"}`},
+				"message":       map[string]string{"content": `{"reply":"海川精密的联系人是陈志远生产副总。","links":["customers","invalid_page"]}`},
 			}},
 		})
 	}))
 	defer mock.Close()
 
 	provider := NewProvider(mock.URL, "test-key", "exhausted-a,healthy-b")
-	reply, err := provider.ChatWorkspace(context.Background(), "海川精密机械制造有限公司 | 联系人：陈志远", []ChatMessage{
+	res, err := provider.ChatWorkspace(context.Background(), "海川精密机械制造有限公司 | 联系人：陈志远", []ChatMessage{
 		{Role: "user", Content: "海川精密的联系人是谁？"},
 	})
-	if err != nil || reply != "海川精密的联系人是陈志远生产副总。" {
-		t.Fatalf("unexpected chat reply: %q, err=%v", reply, err)
+	if err != nil || res.Reply != "海川精密的联系人是陈志远生产副总。" || len(res.Links) != 1 || res.Links[0] != "customers" {
+		t.Fatalf("unexpected chat response: %+v, err=%v", res, err)
 	}
 }
 

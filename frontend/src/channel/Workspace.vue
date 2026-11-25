@@ -17,6 +17,7 @@ import DemoCatalog from './DemoCatalog.vue'
 import OpportunityDesk from './OpportunityDesk.vue'
 import VisitDrafts from '../live/VisitDrafts.vue'
 import AiWorkspace from '../live/AiWorkspace.vue'
+import { clearDemoAiSessions } from '../live/aiChatSessions.js'
 import { createVisitDraftStore } from '../live/visitDrafts.js'
 import { retailDemoCounterpart, retailDemoEnabled, retailDemoLocation } from '../live/retailDemo.js'
 import './workspace.css'
@@ -223,6 +224,7 @@ async function perform(payload) {
     if (action === 'reset') {
       await repo.reset()
       createVisitDraftStore('demo:' + org.orgId).clear()
+      clearDemoAiSessions()
       navigate('overview')
     } else {
       const previous = recordAtOpen.value

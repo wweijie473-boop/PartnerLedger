@@ -152,11 +152,18 @@ export function routeLocalWorkspace(text) {
   if (/(?:对客|销售|给客户).{0,6}报价|加价\s*\d+\s*%|生成.{0,4}报价/.test(clean) && !/渠道报价/.test(clean)) {
     return { intent: 'sales_quote', use_project_requirement: true, slots }
   }
+  const isAnalyticalOrAdvisory = /(?:为什么|哪些|那些|分析|评估|认为|建议|整理输出|怎么看|可能性|最有可能|写一[段篇封条]|话术|怎么谈|如何|区别|什么是)/.test(clean) &&
+    !/帮我(?:准备|发起|发送|提交|生成.{0,4}报价|正式下单|代客)/.test(clean)
+
+  if (isAnalyticalOrAdvisory) {
+    return { intent: 'chat', use_project_requirement: false, slots }
+  }
+
   if (/(?:确认|正式|生成).{0,4}下单|报价已确认.{0,6}下单/.test(clean) && !/代客|直购/.test(clean)) {
     return { intent: 'place_order', use_project_requirement: true, slots }
   }
   if (/(?:查看|看看|查一下|列出|有哪些|我的|所有|全部).{0,10}客户|客户(?:档案|信息|列表|名单)/.test(clean) &&
-      !/报价|下单|询价|话术|怎么谈|微信/.test(clean)) {
+      !/报价|下单|询价/.test(clean)) {
     return { intent: 'query_customers', use_project_requirement: false, slots }
   }
   if (/(?:查看|看看|查一下|我的).{0,8}(?:经营看板|经营数据|资金总览|业绩|续费|多少佣金|直购订单)/.test(clean) &&
@@ -172,10 +179,6 @@ export function routeLocalWorkspace(text) {
     extracted.employee_count || extracted.license_count || extracted.enterprise_type ||
     extracted.required_modules.length || extracted.deployment_mode,
   )
-  const isAdvisoryQuestion = /(?:怎么|如何|为什么|区别|什么是|写一[段篇封条]|话术|建议|分析)/.test(clean) && !/帮我(?:准备|发起|发送|提交|生成)/.test(clean)
-  if (isAdvisoryQuestion) {
-    return { intent: 'chat', use_project_requirement: false, slots }
-  }
 
   const sends = /(?:发送|提交|发给|发起|直接发).{0,12}询价|询价.{0,12}(?:发给|发送|提交)/.test(clean) && !isQuestionAboutSending
   const matchOnly = /匹配|推荐|找.{0,4}产品|选型/.test(clean) && !/草稿|询价/.test(clean)

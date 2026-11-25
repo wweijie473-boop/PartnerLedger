@@ -268,7 +268,10 @@ test('客户信息查询、经营汇总查询与多轮自由对话直接返回�
     }
     if (path === '/api/ai/workspace/chat') {
       chatHistorySent = options.body.messages
-      return { reply: '陈志远是海川精密机械制造有限公司的生产副总，建议重点切入云端业财与车间排程协同。' }
+      return {
+        reply: '陈志远是海川精密机械制造有限公司的生产副总，建议重点切入云端业财与车间排程协同。',
+        links: ['customers', 'renewals'],
+      }
     }
     return {}
   }
@@ -291,7 +294,36 @@ test('客户信息查询、经营汇总查询与多轮自由对话直接返回�
   await conv.dispatch('陈志远是哪家公司的？给我一点跟进建议')
   const chatTurn = conv.turns.value.at(-1)
   assert.match(chatTurn.text, /陈志远是海川精密机械制造有限公司/)
+  assert.equal(chatTurn.chatLinks.length, 2)
   assert.equal(chatHistorySent.length, 3, '携带前序对话上下文发给大模型')
 
+  const firstSessionId = conv.activeSessionId.value
+  conv.startNewSession()
+  assert.equal(conv.turns.value.length, 0)
+  assert.equal(conv.sessions.value.length, 2)
+
+  conv.switchSession(firstSessionId)
+  assert.equal(conv.turns.value.length, 4, '切回历史会话后完整恢复记录')
   scope.stop()
+
+  // 模拟切页面或刷新后同账号恢复，不同账号严格隔离
+  const scopeReload = effectScope()
+  const reloaded = scopeReload.run(() => useAiConversation({
+    request: mockLiveRequest,
+    organizationId: '236',
+    userId: '1',
+    storage,
+  }, { value: null }))
+  assert.equal(reloaded.turns.value.length, 4, '刷新重进后自动恢复上次活跃对话')
+  scopeReload.stop()
+
+  const scopeOtherUser = effectScope()
+  const otherUser = scopeOtherUser.run(() => useAiConversation({
+    request: mockLiveRequest,
+    organizationId: '236',
+    userId: '99',
+    storage,
+  }, { value: null }))
+  assert.equal(otherUser.turns.value.length, 0, '同组织其他成员账号不会读取他人对话记录')
+  scopeOtherUser.stop()
 })

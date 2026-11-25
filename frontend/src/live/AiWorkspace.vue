@@ -20,9 +20,10 @@ const skillsExpanded = ref(false)
 const copiedUrl = ref('')
 
 const {
-  demo, input, turns, projects, selectedId, inquiryProjects, loadingProjects, projectError, working,
+  demo, input, turns, sessions, activeSessionId, projects, selectedId, inquiryProjects, loadingProjects, projectError, working,
   approval, approvalOpen, approvalError, pendingWrite, recoveryError,
   inquiryStepsPreview, applyMarkupToApproval, refreshApprovalMatches, refreshVisitPreview, formatMoneyCents,
+  startNewSession, switchSession, clearCurrentSession,
   loadProjects, dispatch, fillManually, closeApproval, reopenApproval, declineApproval, approve, reviewSavedDraft, recoverWrite,
 } = useAiConversation(props, log)
 
@@ -55,6 +56,18 @@ async function copyConfirmLink(url) {
     copiedUrl.value = url
     setTimeout(() => { if (copiedUrl.value === url) copiedUrl.value = '' }, 2400)
   } catch {}
+}
+
+function formatBubbleHtml(raw) {
+  const escaped = String(raw ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+  return escaped
+    .replace(/^#{1,4}\s+(.+)$/gm, '<strong class="ai-md-heading">$1</strong>')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
 }
 
 function onEnter(event) {
@@ -101,7 +114,24 @@ function onEnter(event) {
 
     <div class="ai-chat">
       <div class="ai-chat-head">
-        <div class="ai-assistant-title"><UiIcon name="ai" :size="20" /><strong>渠道业务工作流助手</strong></div>
+        <div class="ai-head-session">
+          <div class="ai-assistant-title"><UiIcon name="ai" :size="20" /><strong>渠道业务工作流助手</strong></div>
+          <div class="ai-session-controls">
+            <select
+              :value="activeSessionId"
+              aria-label="历史对话列表"
+              class="ai-session-select"
+              :disabled="!!working || !!approval || !!pendingWrite"
+              @change="switchSession($event.target.value)"
+            >
+              <option v-for="sess in sessions" :key="sess.id" :value="sess.id">
+                {{ sess.title }}{{ sess.turns.length ? ` (${Math.ceil(sess.turns.length / 2)})` : '' }}
+              </option>
+            </select>
+            <UiButton compact icon="add" :disabled="!!working || !!approval || !!pendingWrite" @click="startNewSession">新对话</UiButton>
+            <UiButton v-if="turns.length" compact variant="text" :disabled="!!working || !!approval || !!pendingWrite" @click="clearCurrentSession">清空</UiButton>
+          </div>
+        </div>
         <UiField label="项目上下文" v-slot="{ control }">
           <select v-bind="control" v-model="selectedId" :disabled="!!working || !!approval || loadingProjects">
             <option value="">自动识别或新建项目（可选指定）</option>
@@ -141,7 +171,8 @@ function onEnter(event) {
           <div v-if="turn.role === 'assistant'" class="ai-avatar"><UiIcon name="ai" :size="19" /></div>
           <div class="ai-turn-content">
             <p class="ai-speaker">{{ turn.role === 'user' ? '你' : '渠道业务助手' }}</p>
-            <p class="ai-bubble">{{ turn.text }}</p>
+            <p v-if="turn.role === 'user'" class="ai-bubble">{{ turn.text }}</p>
+            <div v-else class="ai-bubble" v-html="formatBubbleHtml(turn.text)" />
 
             <UiButton
               v-if="turn.manualSource"
@@ -266,6 +297,18 @@ function onEnter(event) {
                 </li>
               </ul>
             </article>
+
+            <div v-if="turn.chatLinks?.length" class="ai-prompts">
+              <UiButton
+                v-for="link in turn.chatLinks"
+                :key="link.view"
+                compact
+                end-icon="open-detail"
+                @click="link.view === 'projects' ? emit('open-projects') : link.view === 'opportunities' ? emit('open-opportunity', '', '') : emit('navigate', link.view)"
+              >
+                {{ link.label }}
+              </UiButton>
+            </div>
 
             <article v-if="turn.navAction" class="ai-result">
               <div class="ai-prompts">

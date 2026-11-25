@@ -4,6 +4,7 @@ import { aiDemoProject, routeDemoWorkspace } from '../channel/aiInquiryDemo.js'
 import { createHttpVisitRepository } from './httpVisits.js'
 import { createVisitDraftStore } from './visitDrafts.js'
 import { createWorkflowJournal } from './aiWorkflowJournal.js'
+import { createAiSessionStore } from './aiChatSessions.js'
 import { inquirySummary } from './aiInquiry.js'
 import { routeLocalWorkspace, skillShortcuts, workspaceSkills } from './aiSkillCatalog.js'
 import {
@@ -32,10 +33,18 @@ export function useAiConversation(props, log) {
   const get = path => props.request(path, options)
   const post = (path, body, timeout) => props.request(path, { ...options, method: 'POST', body, timeout })
 
+  const sessionScope = demo ? 'demo' : `${props.organizationId}:${props.userId}`
+  const sessionStore = createAiSessionStore(sessionScope, props.storage)
+  const initialStore = sessionStore.loadInitial(props.initialProject || '')
+
+  const sessions = ref(initialStore.sessions)
+  const activeSessionId = ref(initialStore.activeId)
+  const currentSessionObj = () => sessions.value.find(item => item.id === activeSessionId.value) ?? sessions.value[0]
+
   const input = ref('')
-  const turns = ref([])
+  const turns = ref((currentSessionObj()?.turns ?? []).map(item => reactive({ ...item })))
   const projects = ref([])
-  const selectedId = ref(props.initialProject || '')
+  const selectedId = ref(props.initialProject || currentSessionObj()?.selectedProjectId || '')
   const selectedProject = computed(() => projects.value.find(item => item.id === selectedId.value))
   const inquiryProjects = computed(() => projects.value.filter(canInquire))
   const loadingProjects = ref(false)
@@ -45,7 +54,66 @@ export function useAiConversation(props, log) {
   const approvalOpen = ref(false)
   const approvalError = ref('')
   const disposed = ref(false)
-  let turnId = 0
+  let turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+
+  function persistCurrentSession() {
+    const active = currentSessionObj()
+    if (!active) return
+    const updated = sessionStore.buildUpdatedSession(active, turns.value, selectedId.value)
+    sessions.value = [updated, ...sessions.value.filter(item => item.id !== updated.id)]
+    sessionStore.saveSessions(activeSessionId.value, sessions.value)
+  }
+
+  function startNewSession() {
+    if (working.value || approval.value || pendingWrite.value) return
+    const active = currentSessionObj()
+    if (active && active.turns.length === 0) {
+      input.value = ''
+      return
+    }
+    const fresh = sessionStore.makeEmptySession('')
+    sessions.value = [fresh, ...sessions.value]
+    activeSessionId.value = fresh.id
+    turns.value = []
+    selectedId.value = ''
+    input.value = ''
+    sessionStore.saveSessions(fresh.id, sessions.value)
+  }
+
+  function switchSession(id) {
+    if (working.value || approval.value || pendingWrite.value) return
+    const target = sessions.value.find(item => item.id === id)
+    if (!target) return
+    activeSessionId.value = target.id
+    turns.value = (target.turns ?? []).map(item => reactive({ ...item }))
+    turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+    if (target.selectedProjectId && projects.value.some(p => p.id === target.selectedProjectId)) {
+      selectedId.value = target.selectedProjectId
+    } else {
+      selectedId.value = ''
+    }
+    sessionStore.saveSessions(activeSessionId.value, sessions.value)
+    nextTick(() => {
+      if (log?.value) log.value.scrollTop = log.value.scrollHeight
+    })
+  }
+
+  function clearCurrentSession() {
+    if (working.value || approval.value || pendingWrite.value) return
+    const remaining = sessions.value.filter(item => item.id !== activeSessionId.value)
+    if (!remaining.length) {
+      const fresh = sessionStore.makeEmptySession(selectedId.value)
+      sessions.value = [fresh]
+      activeSessionId.value = fresh.id
+      turns.value = []
+    } else {
+      sessions.value = remaining
+      activeSessionId.value = remaining[0].id
+      turns.value = (remaining[0].turns ?? []).map(item => reactive({ ...item }))
+      turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+    }
+    sessionStore.saveSessions(activeSessionId.value, sessions.value)
+  }
 
   const stepHandlers = {
     async createProject({ input: payload, requestId }) {
@@ -176,6 +244,7 @@ export function useAiConversation(props, log) {
     if (disposed.value) return null
     const entry = reactive({ id: ++turnId, role: 'assistant', text, ...extra })
     turns.value.push(entry)
+    persistCurrentSession()
     nextTick(() => {
       if (log?.value) log.value.scrollTop = log.value.scrollHeight
     })
@@ -309,19 +378,35 @@ export function useAiConversation(props, log) {
     return `收到你的问题：「${text}」。在本地离线演示空间中我已为你梳理当前台账（共 ${projects.value.length} 个项目）；登录正式工作台后，我将结合贵组织的实时数据库与火山方舟大模型为你深度解答任意业务或日常话题。`
   }
 
+  const chatLinkLabels = {
+    customers: '打开客户档案',
+    renewals: '打开续费跟进',
+    'business-overview': '打开经营看板',
+    projects: '打开项目协作',
+    opportunities: '打开商机拾遗',
+    commission: '查看佣金结算',
+    'service-tickets': '打开服务工单',
+  }
+
   async function replyWithChat(text) {
     if (demo) {
       say(demoChatReply(text))
       return
     }
-    working.value = '正在结合业务上下文思考回复'
+    working.value = '正在结合全量业务数据深入分析回复'
     const history = turns.value
       .filter(item => (item.role === 'user' || item.role === 'assistant') && item.text?.trim())
-      .slice(-10)
-      .map(item => ({ role: item.role, content: item.text.slice(0, 2000) }))
-    const res = await post('/api/ai/workspace/chat', { messages: history }, 38000)
+      .slice(-12)
+      .map(item => ({ role: item.role, content: item.text.slice(0, 3500) }))
+    const res = await post('/api/ai/workspace/chat', { messages: history }, 45000)
     if (!disposed.value) {
-      say(res?.reply || '我已收到你的消息，请告诉我接下来想了解或办理的内容。')
+      const chatLinks = (res?.links ?? [])
+        .filter(view => chatLinkLabels[view])
+        .map(view => ({ view, label: chatLinkLabels[view] }))
+      say(
+        res?.reply || '我已收到你的消息，请告诉我接下来想了解或办理的内容。',
+        chatLinks.length ? { chatLinks } : {},
+      )
     }
   }
 
@@ -922,9 +1007,10 @@ export function useAiConversation(props, log) {
   }
 
   return {
-    demo, input, turns, projects, selectedId, inquiryProjects, loadingProjects, projectError, working,
+    demo, input, turns, sessions, activeSessionId, projects, selectedId, inquiryProjects, loadingProjects, projectError, working,
     approval, approvalOpen, approvalError, pendingWrite, recoveryError,
     inquiryStepsPreview, applyMarkupToApproval, refreshApprovalMatches, refreshVisitPreview, formatMoneyCents,
+    startNewSession, switchSession, clearCurrentSession,
     loadProjects, dispatch, fillManually, closeApproval, reopenApproval, declineApproval, approve, reviewSavedDraft, recoverWrite,
   }
 }
