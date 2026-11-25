@@ -327,3 +327,84 @@ test('客户信息查询、经营汇总查询与多轮自由对话直接返回�
   assert.equal(otherUser.turns.value.length, 0, '同组织其他成员账号不会读取他人对话记录')
   scopeOtherUser.stop()
 })
+
+test('SSE 单跳流式打字机逐字渲染、实时工具状态更新与 propose_workflow_skill 直开审批弹窗', async () => {
+  const storage = memoryStorage()
+  const observedStatuses = []
+
+  async function mockLiveRequest(path) {
+    if (path.startsWith('/api/channel/v1/projects?')) {
+      return {
+        items: [{
+          id: '45',
+          title: '财务共享中心 ERP 采购',
+          revision: 3,
+          stage: 'quoted',
+          stageLabel: '已拿渠道底价',
+          nextStep: '编制并发送对客报价',
+          isTodo: true,
+          actions: ['salesQuote'],
+        }],
+        next_cursor: null,
+      }
+    }
+    if (path === '/api/channel/v1/projects/45') {
+      return {
+        id: '45',
+        title: '财务共享中心 ERP 采购',
+        revision: 3,
+        stage: 'quoted',
+        stageLabel: '已拿渠道底价',
+        nextStep: '编制并发送对客报价',
+        isTodo: true,
+        actions: ['salesQuote'],
+        channelQuotes: [{
+          id: 'CQ-1',
+          total: '48000.00',
+          deliveryDays: 14,
+          validUntil: '2026-12-25',
+          lines: [{ label: '云序 ERP 专业版 25席', quantity: 1, unitPrice: '48000.00' }],
+        }],
+      }
+    }
+    return {}
+  }
+
+  async function mockStream({ messages, onStatus, onRoute, onDelta, onDone }) {
+    const latest = messages.at(-1).content
+    if (latest.includes('加价 25%')) {
+      onRoute({ intent: 'sales_quote', use_project_requirement: true, slots: { markup_percent: 25 } })
+      return { unsupported: false, routed: { intent: 'sales_quote' }, streamedAny: false }
+    }
+    onStatus('正在查询商机拾遗与团队合作人脉')
+    observedStatuses.push('status_emitted')
+    onDelta('团队已登记 ')
+    onDelta('**海岱智造集成伙伴**，可协助对接 MES。')
+    onDone({ links: ['opportunities', 'catalog'], model: 'deepseek-v4-1-flash-261017' })
+    return { unsupported: false, routed: null, streamedAny: true }
+  }
+
+  const scope = effectScope()
+  const conv = scope.run(() => useAiConversation({
+    request: mockLiveRequest,
+    stream: mockStream,
+    organizationId: '236',
+    userId: '1',
+    storage,
+  }, { value: null }))
+  await conv.loadProjects()
+
+  await conv.dispatch('我们团队有能对接 MES 的合作人脉吗？')
+  const streamedTurn = conv.turns.value.at(-1)
+  assert.equal(observedStatuses.length, 1)
+  assert.equal(streamedTurn.text, '团队已登记 **海岱智造集成伙伴**，可协助对接 MES。')
+  assert.equal(streamedTurn.streaming, false)
+  assert.deepEqual(streamedTurn.chatLinks.map(item => item.view), ['opportunities', 'catalog'])
+
+  await conv.dispatch('给财务共享中心 ERP 采购项目加价 25% 发对客报价')
+  assert.equal(conv.approvalOpen.value, true)
+  assert.equal(conv.approval.value.kind, 'sales_quote')
+  assert.equal(conv.approval.value.lines[0].unitPrice, '60000.00')
+  conv.declineApproval()
+  scope.stop()
+})

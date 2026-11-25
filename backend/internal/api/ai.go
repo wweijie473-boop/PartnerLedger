@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -83,6 +84,90 @@ func (s server) chatWorkspace(c *gin.Context) {
 	snapshot := s.buildDealerSnapshot(c.Request.Context(), actor)
 	result, err := chatter.ChatWorkspace(c.Request.Context(), snapshot, input.Messages)
 	aiWorkspaceResult(c, result, err)
+}
+
+func (s server) streamWorkspace(c *gin.Context) {
+	actor := principal(c)
+	if actor.Organization.Kind != data.Reseller {
+		respond(c, http.StatusForbidden, "forbidden", nil)
+		return
+	}
+	var input struct {
+		Messages []ai.ChatMessage `json:"messages"`
+	}
+	if !decodeWithLimit(c, &input, 64<<10) {
+		return
+	}
+	if len(input.Messages) == 0 || len(input.Messages) > 16 {
+		respond(c, http.StatusBadRequest, "invalid_request", nil)
+		return
+	}
+	for i := range input.Messages {
+		role := strings.TrimSpace(input.Messages[i].Role)
+		text := strings.TrimSpace(input.Messages[i].Content)
+		if (role != "user" && role != "assistant") || text == "" || utf8.RuneCountInString(text) > 4000 {
+			respond(c, http.StatusBadRequest, "invalid_request", nil)
+			return
+		}
+		input.Messages[i].Role = role
+		input.Messages[i].Content = text
+	}
+	if input.Messages[len(input.Messages)-1].Role != "user" {
+		respond(c, http.StatusBadRequest, "invalid_request", nil)
+		return
+	}
+	streamer, ok := s.parser.(interface {
+		StreamWorkspace(context.Context, string, []ai.ChatMessage, ai.ToolExecutor, ai.StreamCallbacks) error
+	})
+	if !ok {
+		aiWorkspaceResult(c, nil, ai.ErrUnavailable)
+		return
+	}
+
+	c.Header("Content-Type", "text/event-stream; charset=utf-8")
+	c.Header("Cache-Control", "no-cache, no-transform")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(http.StatusOK)
+
+	writeEvent := func(event string, payload any) {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return
+		}
+		_, _ = fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", event, raw)
+		c.Writer.Flush()
+	}
+
+	today := time.Now().In(chinaTime).Format(time.DateOnly)
+	actorHeader := fmt.Sprintf("日期：%s | 代理商组织：%s | 当前经办账号：%s", today, actor.Organization.Name, actor.Username)
+
+	err := streamer.StreamWorkspace(c.Request.Context(), actorHeader, input.Messages,
+		func(toolCtx context.Context, name string, args json.RawMessage) (string, string, string, error) {
+			return s.executeDealerReadTool(toolCtx, actor, name, args)
+		},
+		ai.StreamCallbacks{
+			OnStatus: func(label string) {
+				writeEvent("status", gin.H{"label": label})
+			},
+			OnRoute: func(route ai.WorkspaceRoute) {
+				writeEvent("route", route)
+			},
+			OnDelta: func(delta string) {
+				writeEvent("delta", gin.H{"text": delta})
+			},
+			OnDone: func(links []string, model string) {
+				writeEvent("done", gin.H{"links": links, "model": model})
+			},
+		},
+	)
+	if err != nil {
+		code := "model_response_error"
+		if errors.Is(err, ai.ErrUnavailable) {
+			code = "model_unavailable"
+		}
+		writeEvent("error", gin.H{"code": code})
+	}
 }
 
 func (s server) buildDealerSnapshot(ctx context.Context, actor data.User) string {

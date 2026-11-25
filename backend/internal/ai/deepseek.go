@@ -403,6 +403,7 @@ func filterAllowedChatLinks(links []string) []string {
 		"opportunities":     true,
 		"commission":        true,
 		"service-tickets":   true,
+		"catalog":           true,
 	}
 	seen := make(map[string]bool)
 	out := make([]string, 0, 2)

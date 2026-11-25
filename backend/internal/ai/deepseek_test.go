@@ -290,3 +290,96 @@ func TestLiveArkFailoverAndExtraction(t *testing.T) {
 	}
 	t.Logf("Live ParseRequirement succeeded on cached healthy model: %+v", req)
 }
+
+func TestStreamWorkspaceExecutesToolsOnDemandAndStreamsDeltas(t *testing.T) {
+	round := 0
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		round++
+		w.Header().Set("Content-Type", "text/event-stream")
+		if round == 1 {
+			// Stream fragmented tool_calls arguments across SSE chunks
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"query_customers\",\"arguments\":\"{\\\"keyword\\\":\\\"\"}}]}}]}\n\n"))
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"海川\\\"}\"}},{\"index\":1,\"id\":\"call_2\",\"function\":{\"name\":\"query_product_catalog\",\"arguments\":\"{}\"}}]}}]}\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+			return
+		}
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"海川精密（陈志远）\"}}]}\n\n"))
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"适合升级云序 ERP。\"}}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer mock.Close()
+
+	provider := NewProvider(mock.URL, "test-key", "stream-model")
+	var toolSeen []string
+	var statuses []string
+	var deltas string
+	var doneLinks []string
+	var doneModel string
+
+	err := provider.StreamWorkspace(
+		context.Background(),
+		"日期：2026-11-25 | 代理商组织：测试代理商",
+		[]ChatMessage{{Role: "user", Content: "帮我查一下海川精密适合哪款产品"}},
+		func(_ context.Context, name string, args json.RawMessage) (string, string, string, error) {
+			toolSeen = append(toolSeen, name+":"+string(args))
+			if name == "query_customers" {
+				return "海川精密机械制造有限公司 | 陈志远", "customers", "正在按需检索客户档案", nil
+			}
+			return "云序 ERP 专业版 v5.2（5–500席）", "catalog", "正在查询已发布软件目录与产品知识库", nil
+		},
+		StreamCallbacks{
+			OnStatus: func(label string) { statuses = append(statuses, label) },
+			OnDelta:  func(d string) { deltas += d },
+			OnDone:   func(links []string, model string) { doneLinks = links; doneModel = model },
+		},
+	)
+	if err != nil {
+		t.Fatalf("StreamWorkspace failed: %v", err)
+	}
+	if len(toolSeen) != 2 || toolSeen[0] != `query_customers:{"keyword":"海川"}` {
+		t.Fatalf("unexpected tools executed: %v", toolSeen)
+	}
+	if deltas != "海川精密（陈志远）适合升级云序 ERP。" {
+		t.Fatalf("unexpected streamed text: %q", deltas)
+	}
+	if doneModel != "stream-model" || len(doneLinks) != 2 || doneLinks[0] != "customers" || doneLinks[1] != "catalog" {
+		t.Fatalf("unexpected done metadata: model=%s links=%v", doneModel, doneLinks)
+	}
+	if len(statuses) < 2 {
+		t.Fatalf("expected live status updates, got %v", statuses)
+	}
+}
+
+func TestStreamWorkspaceSingleHopProposeWorkflowSkillAndFailover(t *testing.T) {
+	calls := 0
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"code":"SetLimitExceeded"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_route\",\"function\":{\"name\":\"propose_workflow_skill\",\"arguments\":\"{\\\"intent\\\":\\\"sales_quote\\\",\\\"use_project_requirement\\\":true,\\\"markup_percent\\\":25}\"}}]}}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer mock.Close()
+
+	provider := NewProvider(mock.URL, "test-key", "quota-zero-a,healthy-stream-b")
+	var routed *WorkspaceRoute
+	err := provider.StreamWorkspace(
+		context.Background(),
+		"",
+		[]ChatMessage{{Role: "user", Content: "给财务共享中心项目加价 25% 发对客报价"}},
+		func(_ context.Context, _ string, _ json.RawMessage) (string, string, string, error) {
+			t.Fatal("read tool should not execute when propose_workflow_skill is called")
+			return "", "", "", nil
+		},
+		StreamCallbacks{
+			OnRoute: func(r WorkspaceRoute) { routed = &r },
+		},
+	)
+	if err != nil || routed == nil || routed.Intent != "sales_quote" || routed.Slots == nil || *routed.Slots.MarkupPercent != 25 {
+		t.Fatalf("expected single-hop sales_quote route after failover, got %+v err=%v", routed, err)
+	}
+}

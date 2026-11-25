@@ -58,6 +58,12 @@ async function copyConfirmLink(url) {
   } catch {}
 }
 
+function formatInlineMd(escapedLine) {
+  return escapedLine
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`\n]+)`/g, '<code class="ai-md-code">$1</code>')
+}
+
 function formatBubbleHtml(raw) {
   const escaped = String(raw ?? '')
     .replace(/&/g, '&amp;')
@@ -65,9 +71,40 @@ function formatBubbleHtml(raw) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
-  return escaped
-    .replace(/^#{1,4}\s+(.+)$/gm, '<strong class="ai-md-heading">$1</strong>')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+
+  const lines = escaped.split('\n')
+  const out = []
+  let i = 0
+  while (i < lines.length) {
+    if (
+      i + 1 < lines.length &&
+      /^\s*\|.+\|\s*$/.test(lines[i]) &&
+      /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])
+    ) {
+      const parseRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(cell => formatInlineMd(cell.trim()))
+      const headers = parseRow(lines[i])
+      i += 2
+      const bodyRows = []
+      while (i < lines.length && /^\s*\|.+\|\s*$/.test(lines[i])) {
+        bodyRows.push(parseRow(lines[i]))
+        i++
+      }
+      const thead = '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead>'
+      const tbody = bodyRows.length
+        ? '<tbody>' + bodyRows.map(r => '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>').join('') + '</tbody>'
+        : ''
+      out.push(`<div class="ai-md-table-wrap"><table class="ai-md-table">${thead}${tbody}</table></div>`)
+      continue
+    }
+    const heading = /^#{1,4}\s+(.+)$/.exec(lines[i])
+    if (heading) {
+      out.push(`<strong class="ai-md-heading">${formatInlineMd(heading[1])}</strong>`)
+    } else {
+      out.push(formatInlineMd(lines[i]))
+    }
+    i++
+  }
+  return out.join('\n')
 }
 
 function onEnter(event) {
@@ -172,7 +209,7 @@ function onEnter(event) {
           <div class="ai-turn-content">
             <p class="ai-speaker">{{ turn.role === 'user' ? '你' : '渠道业务助手' }}</p>
             <p v-if="turn.role === 'user'" class="ai-bubble">{{ turn.text }}</p>
-            <div v-else class="ai-bubble" v-html="formatBubbleHtml(turn.text)" />
+            <div v-else class="ai-bubble" :class="{ 'is-streaming': turn.streaming }" v-html="formatBubbleHtml(turn.text)" />
 
             <UiButton
               v-if="turn.manualSource"

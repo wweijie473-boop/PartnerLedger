@@ -5,6 +5,7 @@ import { createHttpVisitRepository } from './httpVisits.js'
 import { createVisitDraftStore } from './visitDrafts.js'
 import { createWorkflowJournal } from './aiWorkflowJournal.js'
 import { createAiSessionStore } from './aiChatSessions.js'
+import { streamWorkspaceChat } from './aiStreamClient.js'
 import { inquirySummary } from './aiInquiry.js'
 import { routeLocalWorkspace, skillShortcuts, workspaceSkills } from './aiSkillCatalog.js'
 import {
@@ -386,6 +387,20 @@ export function useAiConversation(props, log) {
     opportunities: '打开商机拾遗',
     commission: '查看佣金结算',
     'service-tickets': '打开服务工单',
+    catalog: '浏览软件产品目录',
+  }
+
+  function buildConversationHistory() {
+    return turns.value
+      .filter(item => (item.role === 'user' || item.role === 'assistant') && item.text?.trim())
+      .slice(-14)
+      .map(item => ({ role: item.role, content: item.text.slice(0, 3500) }))
+  }
+
+  function mapChatLinks(links) {
+    return (links ?? [])
+      .filter(view => chatLinkLabels[view])
+      .map(view => ({ view, label: chatLinkLabels[view] }))
   }
 
   async function replyWithChat(text) {
@@ -394,15 +409,10 @@ export function useAiConversation(props, log) {
       return
     }
     working.value = '正在结合全量业务数据深入分析回复'
-    const history = turns.value
-      .filter(item => (item.role === 'user' || item.role === 'assistant') && item.text?.trim())
-      .slice(-12)
-      .map(item => ({ role: item.role, content: item.text.slice(0, 3500) }))
+    const history = buildConversationHistory()
     const res = await post('/api/ai/workspace/chat', { messages: history }, 45000)
     if (!disposed.value) {
-      const chatLinks = (res?.links ?? [])
-        .filter(view => chatLinkLabels[view])
-        .map(view => ({ view, label: chatLinkLabels[view] }))
+      const chatLinks = mapChatLinks(res?.links)
       say(
         res?.reply || '我已收到你的消息，请告诉我接下来想了解或办理的内容。',
         chatLinks.length ? { chatLinks } : {},
@@ -418,15 +428,91 @@ export function useAiConversation(props, log) {
     input.value = ''
     say(text, { role: 'user' })
     working.value = '正在理解你的问题与所需技能'
+    let streamingTurn = null
     try {
-      const route = demo ? routeDemoWorkspace(text) : await post('/api/ai/workspace/route', { text }, 32000)
-      if (disposed.value) return
-      if (route.intent === 'chat' || route.intent === 'help' || !Object.hasOwn(workspaceSkills, route.intent)) {
-        await replyWithChat(text)
+      if (demo) {
+        const route = routeDemoWorkspace(text)
+        if (disposed.value) return
+        if (route.intent === 'chat' || route.intent === 'help' || !Object.hasOwn(workspaceSkills, route.intent)) {
+          await replyWithChat(text)
+          return
+        }
+        await openSkillByRoute(route, text)
         return
       }
-      await openSkillByRoute(route, text)
+
+      const streamFn = props.stream || streamWorkspaceChat
+      let routedSkill = null
+      const streamRes = await streamFn({
+        messages: buildConversationHistory(),
+        signal: controller.signal,
+        onStatus(label) {
+          if (!disposed.value && label) working.value = label
+        },
+        onRoute(route) {
+          routedSkill = route
+        },
+        onDelta(chunk) {
+          if (disposed.value) return
+          if (!streamingTurn) {
+            streamingTurn = reactive({ id: ++turnId, role: 'assistant', text: '', streaming: true })
+            turns.value.push(streamingTurn)
+            working.value = '正在流式生成回答'
+          }
+          streamingTurn.text += chunk
+          nextTick(() => {
+            if (log?.value) log.value.scrollTop = log.value.scrollHeight
+          })
+        },
+        onDone({ links }) {
+          if (disposed.value || !streamingTurn) return
+          streamingTurn.streaming = false
+          const chatLinks = mapChatLinks(links)
+          if (chatLinks.length) streamingTurn.chatLinks = chatLinks
+          persistCurrentSession()
+        },
+      })
+
+      if (disposed.value) return
+
+      if (streamRes?.unsupported) {
+        const route = await post('/api/ai/workspace/route', { text }, 32000)
+        if (disposed.value) return
+        if (route.intent === 'chat' || route.intent === 'help' || !Object.hasOwn(workspaceSkills, route.intent)) {
+          await replyWithChat(text)
+          return
+        }
+        await openSkillByRoute(route, text)
+        return
+      }
+
+      if (routedSkill) {
+        if (streamingTurn) {
+          streamingTurn.streaming = false
+          turns.value = turns.value.filter(item => item !== streamingTurn)
+          streamingTurn = null
+        }
+        await openSkillByRoute(routedSkill, text)
+        return
+      }
+
+      if (streamingTurn) {
+        streamingTurn.streaming = false
+        persistCurrentSession()
+      }
     } catch (cause) {
+      if (streamingTurn) {
+        streamingTurn.streaming = false
+        if (streamingTurn.text.trim()) {
+          streamingTurn.text += '\n\n（流式输出中断，以上为已生成内容）'
+          persistCurrentSession()
+          return
+        }
+        turns.value = turns.value.filter(item => item !== streamingTurn)
+      }
+      if (cause.status === 401 && props.request) {
+        props.request('/api/user/profile', options).catch(() => {})
+      }
       if (cause.name !== 'AbortError') {
         const modelUnavailable = [502, 503, 504].includes(cause.status)
         const fallbackRoute = modelUnavailable ? routeLocalWorkspace(text) : null
