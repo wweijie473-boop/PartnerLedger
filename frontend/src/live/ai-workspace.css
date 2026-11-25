@@ -156,7 +156,7 @@
   color: var(--ui-ink);
   font: inherit;
 }
-.ai-composer-hint, .ai-notice, .ai-working { margin: 0; color: var(--ui-ink-secondary); font-size: var(--ui-text-sm); }
+.ai-notice, .ai-working { margin: 0; color: var(--ui-ink-secondary); font-size: var(--ui-text-sm); }
 .ai-notice { padding: 4px 12px; }
 .ai-working { display: flex; align-items: center; gap: 6px; color: var(--ui-link); }
 .ai-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }

@@ -284,7 +284,6 @@ function onEnter(event) {
             </UiButton>
           </div>
         </form>
-        <p class="ai-composer-hint">Enter 发送 · Shift + Enter 换行 · 支持麦克风语音转文字输入</p>
       </div>
     </div>
 
