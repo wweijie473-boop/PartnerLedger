@@ -6,22 +6,24 @@ import (
 )
 
 type Config struct {
-	HTTPAddr       string
-	MySQLDSN       string
-	RedisAddr      string
-	RedisPassword  string
-	DeepSeekAPIKey string
-	DeepSeekModel  string
+	HTTPAddr         string
+	MySQLDSN         string
+	RedisAddr        string
+	RedisPassword    string
+	DeepSeekEndpoint string
+	DeepSeekAPIKey   string
+	DeepSeekModel    string
 }
 
 func Load() Config {
 	return Config{
-		HTTPAddr:       envOr("PARTNERLEDGER_HTTP_ADDR", "127.0.0.1:8080"),
-		MySQLDSN:       os.Getenv("PARTNERLEDGER_MYSQL_DSN"),
-		RedisAddr:      os.Getenv("PARTNERLEDGER_REDIS_ADDR"),
-		RedisPassword:  os.Getenv("PARTNERLEDGER_REDIS_PASSWORD"),
-		DeepSeekAPIKey: os.Getenv("DEEPSEEK_API_KEY"),
-		DeepSeekModel:  envOr("PARTNERLEDGER_DEEPSEEK_MODEL", "deepseek-flash"),
+		HTTPAddr:         envOr("PARTNERLEDGER_HTTP_ADDR", "127.0.0.1:8080"),
+		MySQLDSN:         os.Getenv("PARTNERLEDGER_MYSQL_DSN"),
+		RedisAddr:        os.Getenv("PARTNERLEDGER_REDIS_ADDR"),
+		RedisPassword:    os.Getenv("PARTNERLEDGER_REDIS_PASSWORD"),
+		DeepSeekEndpoint: os.Getenv("PARTNERLEDGER_DEEPSEEK_ENDPOINT"),
+		DeepSeekAPIKey:   os.Getenv("DEEPSEEK_API_KEY"),
+		DeepSeekModel:    envOr("PARTNERLEDGER_DEEPSEEK_MODEL", "deepseek-flash"),
 	}
 }
 

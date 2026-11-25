@@ -149,7 +149,7 @@ func run(args []string) error {
 		return err
 	}
 	gin.SetMode(gin.ReleaseMode)
-	parser := ai.NewDeepSeek(cfg.DeepSeekAPIKey, cfg.DeepSeekModel)
+	parser := ai.NewProvider(cfg.DeepSeekEndpoint, cfg.DeepSeekAPIKey, cfg.DeepSeekModel)
 	return serve(cfg.HTTPAddr, api.New(db, sqlDB, cache, parser))
 }
 

@@ -139,7 +139,7 @@ func TestOrganizationIsolation(t *testing.T) {
 		if cfg.DeepSeekAPIKey == "" {
 			t.Fatal("DEEPSEEK_API_KEY is required for the live model test")
 		}
-		router = New(db, sqlDB, cache, ai.NewDeepSeek(cfg.DeepSeekAPIKey, cfg.DeepSeekModel))
+		router = New(db, sqlDB, cache, ai.NewProvider(cfg.DeepSeekEndpoint, cfg.DeepSeekAPIKey, cfg.DeepSeekModel))
 		var extraction ai.Requirement
 		request(http.MethodPost, "/api/ai/parse-requirement", reseller,
 			`{"text":"我们是一家120人的制造公司，需要ERP财务和库存模块，希望私有化部署，授权数量待确认。"}`,
