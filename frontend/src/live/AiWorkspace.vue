@@ -1,9 +1,10 @@
 <script setup>
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { UiBadge, UiButton, UiField, UiIcon } from '../ui/index.js'
 import { aiDemoProject } from '../channel/aiInquiryDemo.js'
 import AiApprovalDialog from './AiApprovalDialog.vue'
 import { skillShortcuts, useAiConversation, workspaceSkills } from './useAiConversation.js'
+import { useVoiceInput } from './useVoiceInput.js'
 
 const props = defineProps({
   request: Function,
@@ -14,6 +15,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['open-project', 'open-projects', 'open-opportunity', 'navigate'])
 const log = ref(null)
+const composerInput = ref(null)
 const skillsExpanded = ref(false)
 const copiedUrl = ref('')
 
@@ -23,6 +25,15 @@ const {
   inquiryStepsPreview, applyMarkupToApproval, refreshApprovalMatches, refreshVisitPreview, formatMoneyCents,
   loadProjects, dispatch, fillManually, closeApproval, reopenApproval, declineApproval, approve, reviewSavedDraft, recoverWrite,
 } = useAiConversation(props, log)
+
+const {
+  recording, transcribing, formattedDuration, voiceError, toggleVoice, cancelVoice,
+} = useVoiceInput({
+  demo,
+  request: props.request,
+  input,
+  onReady: () => nextTick(() => composerInput.value?.focus()),
+})
 
 const sample = aiDemoProject.requirement + '\n请帮我准备询价草稿。'
 const fitLabels = {
@@ -226,23 +237,54 @@ function onEnter(event) {
 
       <div class="ai-composer">
         <div v-if="working" class="ai-working" role="status"><UiIcon name="loading" :size="16" /> {{ working }}…</div>
+        <div v-if="recording" class="ai-voice-status is-recording" role="status">
+          <span class="ai-voice-dot" aria-hidden="true" />
+          <span>正在录音 {{ formattedDuration }} · 说完点击「完成说词」自动转写文字</span>
+          <UiButton compact variant="text" @click="cancelVoice">取消</UiButton>
+        </div>
+        <div v-else-if="transcribing" class="ai-working" role="status">
+          <UiIcon name="loading" :size="16" /> 正在通过大模型转写语音…
+        </div>
+        <p v-if="voiceError" class="form-error ai-voice-error" role="alert">{{ voiceError }}</p>
         <div v-if="pendingWrite && !working" class="ai-recovery" role="status">
           <span>上次工作流结果待确认。{{ recoveryError }}</span>
           <UiButton compact :disabled="!!working" @click="recoverWrite">用原请求确认结果</UiButton>
         </div>
         <form class="ai-composer-form" @submit.prevent="dispatch()">
           <textarea
+            ref="composerInput"
             v-model="input"
             aria-label="给渠道业务助手发消息"
             rows="2"
             maxlength="2000"
-            placeholder="输入你想办的业务，例如：给财务共享中心加价 25% 发对客报价 / 记拜访转商机 / 代客下单 2 套云财务"
-            :disabled="!!pendingWrite"
+            placeholder="输入或点击右侧语音说出你想办的业务，例如：给财务共享中心加价 25% 发对客报价"
+            :disabled="!!pendingWrite || transcribing"
             @keydown.enter="onEnter"
           />
-          <UiButton type="submit" variant="primary" end-icon="forward" :disabled="!input.trim() || !!working || loadingProjects || !!pendingWrite">发送</UiButton>
+          <div class="ai-composer-buttons">
+            <UiButton
+              type="button"
+              :variant="recording ? 'danger' : 'secondary'"
+              :icon="recording ? 'stop' : 'mic'"
+              :loading="transcribing"
+              :aria-pressed="recording"
+              :aria-label="recording ? '完成说词并转写' : '语音输入'"
+              :disabled="!!working || loadingProjects || !!pendingWrite || transcribing"
+              @click="toggleVoice"
+            >
+              {{ recording ? '完成说词' : '语音' }}
+            </UiButton>
+            <UiButton
+              type="submit"
+              variant="primary"
+              end-icon="forward"
+              :disabled="!input.trim() || !!working || loadingProjects || !!pendingWrite || recording || transcribing"
+            >
+              发送
+            </UiButton>
+          </div>
         </form>
-        <p class="ai-composer-hint">Enter 发送 · Shift + Enter 换行 · 所有写操作均先弹出打包审批单，同意后自动执行到底</p>
+        <p class="ai-composer-hint">Enter 发送 · Shift + Enter 换行 · 支持麦克风语音转文字输入</p>
       </div>
     </div>
 

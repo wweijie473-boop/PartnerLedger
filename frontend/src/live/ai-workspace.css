@@ -120,6 +120,30 @@
 .ai-source { padding-block: 6px; font-size: var(--ui-text-sm); }
 .ai-composer { display: grid; gap: 5px; padding: 12px clamp(12px, 2.3vw, 25px); border-top: 1px solid var(--ui-border); }
 .ai-composer-form { display: flex; gap: 8px; align-items: end; }
+.ai-composer-buttons { display: flex; gap: 6px; flex: none; align-items: center; }
+.ai-voice-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: var(--ui-radius-sm);
+  background: #fff4f4;
+  color: #b42318;
+  font-size: var(--ui-text-sm);
+}
+.ai-voice-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d92d20;
+  animation: ai-voice-pulse 1.1s ease-in-out infinite;
+}
+.ai-voice-error { margin: 0; font-size: var(--ui-text-sm); }
+@keyframes ai-voice-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.82); }
+}
 .ai-composer-form textarea {
   width: 100%;
   min-width: 0;

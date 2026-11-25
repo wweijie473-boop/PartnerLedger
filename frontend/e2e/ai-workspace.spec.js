@@ -7,6 +7,7 @@ test('打包弹窗一次审批自动执行建项与询价，草稿阶段厂商�
   const tab = navigation.getByRole('button', { name: 'AI 工作台' })
   await expect(tab.locator('svg')).toBeVisible()
   await tab.click()
+  await expect(page.getByRole('button', { name: '语音输入' })).toBeVisible()
   await page.getByRole('button', { name: '试试 ERP 询价示例' }).click()
 
   const dialog = page.getByRole('dialog', { name: '审批采购询价工作流' })

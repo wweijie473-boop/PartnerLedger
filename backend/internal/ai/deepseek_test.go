@@ -146,8 +146,40 @@ func TestUnauthorizedStopsWithoutCascadingAllModels(t *testing.T) {
 
 func TestArkPrefixDefaultsToArkEndpointAndPool(t *testing.T) {
 	provider := NewDeepSeek("ark-placeholder-key", "deepseek-flash")
-	if provider.endpoint != defaultArkEndpoint || len(provider.models) < 3 {
-		t.Fatalf("expected Ark defaults, got endpoint=%s models=%v", provider.endpoint, provider.models)
+	if provider.endpoint != defaultArkEndpoint || len(provider.models) < 3 || len(provider.audioModels) < 2 {
+		t.Fatalf("expected Ark defaults, got endpoint=%s models=%v audioModels=%v", provider.endpoint, provider.models, provider.audioModels)
+	}
+}
+
+func TestTranscribeAudioSkipsNonAudioModelAndFailsOver(t *testing.T) {
+	var seen []string
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		seen = append(seen, payload.Model)
+		if payload.Model == "text-only-model" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"audio input is not supported by this model"}}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{
+				"finish_reason": "stop",
+				"message":       map[string]string{"content": `{"text":"给财务共享中心加价25%发对客报价"}`},
+			}},
+		})
+	}))
+	defer mock.Close()
+
+	provider := NewProvider(mock.URL, "test-key", "text-only-model,audio-capable-model")
+	text, err := provider.TranscribeAudio(context.Background(), "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=", "wav")
+	if err != nil || text != "给财务共享中心加价25%发对客报价" {
+		t.Fatalf("unexpected transcription: %q, err=%v", text, err)
+	}
+	if len(seen) != 2 || seen[0] != "text-only-model" || seen[1] != "audio-capable-model" {
+		t.Fatalf("unexpected audio failover sequence: %v", seen)
 	}
 }
 

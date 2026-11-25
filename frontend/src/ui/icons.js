@@ -1,7 +1,7 @@
 import {
   Activity, ArrowLeft, ArrowRight, ArrowUpRight, Box, BriefcaseBusiness, Building2, Check, ChevronDown,
   ChevronRight, CircleAlert, ClipboardList, Clock3, FileText, Gauge, Info, Layers3, LoaderCircle, LogOut,
-  PackageCheck, Pause, Play, Plus, Search, ShieldAlert, Store, Truck, Workflow, Menu, X,
+  Mic, PackageCheck, Pause, Play, Plus, Search, ShieldAlert, Square, Store, Truck, Workflow, Menu, X,
 } from 'lucide-vue-next'
 import UiAiIcon from './UiAiIcon.vue'
 
@@ -12,7 +12,7 @@ export const icons = Object.freeze({
   quote: FileText, order: PackageCheck, delivery: Truck, product: Box,
   dealer: Store, vendor: Building2, customer: BriefcaseBusiness, activity: Activity,
   add: Plus, search: Search, back: ArrowLeft, forward: ArrowRight,
-  menu: Menu, close: X, pause: Pause, play: Play,
+  menu: Menu, close: X, pause: Pause, play: Play, mic: Mic, stop: Square,
   'open-detail': ArrowUpRight, 'chevron-right': ChevronRight, 'chevron-down': ChevronDown,
   'sign-out': LogOut, check: Check, time: Clock3, info: Info, error: CircleAlert, permission: ShieldAlert, loading: LoaderCircle,
 })

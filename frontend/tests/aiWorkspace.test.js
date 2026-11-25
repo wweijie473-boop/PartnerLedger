@@ -6,6 +6,7 @@ import { demoActor } from '../src/channel/domain.js'
 import { createWorkflowJournal } from '../src/live/aiWorkflowJournal.js'
 import { routeLocalWorkspace } from '../src/live/aiSkillCatalog.js'
 import { useAiConversation } from '../src/live/useAiConversation.js'
+import { appendTranscript, encodeMonoWavBase64 } from '../src/live/useVoiceInput.js'
 
 function memoryStorage() {
   const map = new Map()
@@ -221,4 +222,21 @@ test('直购下单、催办佣金、申请开票与提交工单技能均打包�
   assert.equal(submitted.at(-1)[0], '/api/retail/v1/operations/tickets')
 
   scope.stop()
+})
+
+test('语音输入编码标准 16kHz 单声道 RIFF WAVE 并无损拼接到输入框', () => {
+  const chunk = new Float32Array(4800)
+  for (let i = 0; i < chunk.length; i++) chunk[i] = Math.sin(i / 10) * 0.5
+  const base64 = encodeMonoWavBase64([chunk], 48000, 16000)
+  const raw = Buffer.from(base64, 'base64')
+
+  assert.equal(raw.subarray(0, 4).toString('ascii'), 'RIFF')
+  assert.equal(raw.subarray(8, 12).toString('ascii'), 'WAVE')
+  assert.equal(raw.readUInt16LE(22), 1, '单声道')
+  assert.equal(raw.readUInt32LE(24), 16000, '降采样至 16kHz')
+  assert.equal(raw.length, 44 + 1600 * 2)
+
+  assert.equal(appendTranscript('', ' 帮我发对客报价 '), '帮我发对客报价')
+  assert.equal(appendTranscript('给财务共享中心', '加价25%发报价'), '给财务共享中心加价25%发报价')
+  assert.equal(appendTranscript('ERP', 'MES对接'), 'ERP MES对接')
 })
