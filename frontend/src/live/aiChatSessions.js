@@ -6,10 +6,15 @@ function makeSessionId() {
   return 'sess-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
 }
 
-function sessionTitleFromTurns(turns) {
+function sessionTitleFromTurns(turns, existingCustomTitle = '') {
+  if (existingCustomTitle) return existingCustomTitle
   const firstUser = turns.find(item => item.role === 'user' && item.text?.trim())
   if (!firstUser) return '新对话'
-  const clean = firstUser.text.trim().replace(/\s+/g, ' ')
+  const lines = firstUser.text.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+  const candidate = lines.length > 1 && [...lines.at(-1)].length <= 20
+    ? lines.at(-1).replace(/[。！？!?]+$/, '')
+    : lines[0] || firstUser.text.trim()
+  const clean = candidate.replace(/\s+/g, ' ')
   return [...clean].length > 18 ? [...clean].slice(0, 18).join('') + '…' : clean
 }
 
@@ -117,7 +122,7 @@ export function createAiSessionStore(scopeKey, storage = globalThis.window?.loca
       const serialized = turns.slice(-MAX_TURNS_PER_SESSION).map(serializeTurn)
       return {
         ...session,
-        title: sessionTitleFromTurns(serialized),
+        title: sessionTitleFromTurns(serialized, session.customTitle),
         updatedAt: new Date().toISOString(),
         selectedProjectId: selectedProjectId || '',
         turns: serialized,

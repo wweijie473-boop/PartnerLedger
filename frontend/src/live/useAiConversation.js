@@ -54,8 +54,19 @@ export function useAiConversation(props, log) {
   const approval = ref(null)
   const approvalOpen = ref(false)
   const approvalError = ref('')
+  const isStreaming = ref(false)
   const disposed = ref(false)
+  let streamAbort = null
+  let userStopped = false
   let turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+
+  function stopGeneration() {
+    if (streamAbort) {
+      userStopped = true
+      streamAbort.abort()
+      streamAbort = null
+    }
+  }
 
   function persistCurrentSession() {
     const active = currentSessionObj()
@@ -455,35 +466,48 @@ export function useAiConversation(props, log) {
 
       const streamFn = props.stream || streamWorkspaceChat
       let routedSkill = null
-      const streamRes = await streamFn({
-        messages: buildConversationHistory(),
-        signal: controller.signal,
-        onStatus(label) {
-          if (!disposed.value && label) working.value = label
-        },
-        onRoute(route) {
-          routedSkill = route
-        },
-        onDelta(chunk) {
-          if (disposed.value) return
-          if (!streamingTurn) {
-            streamingTurn = reactive({ id: ++turnId, role: 'assistant', text: '', streaming: true })
-            turns.value.push(streamingTurn)
-            working.value = '正在流式生成回答'
-          }
-          streamingTurn.text += chunk
-          nextTick(() => {
-            if (log?.value) log.value.scrollTop = log.value.scrollHeight
-          })
-        },
-        onDone({ links }) {
-          if (disposed.value || !streamingTurn) return
-          streamingTurn.streaming = false
-          const chatLinks = mapChatLinks(links)
-          if (chatLinks.length) streamingTurn.chatLinks = chatLinks
-          persistCurrentSession()
-        },
-      })
+      userStopped = false
+      const runCtrl = new AbortController()
+      streamAbort = runCtrl
+      const onParentAbort = () => runCtrl.abort()
+      controller.signal.addEventListener('abort', onParentAbort, { once: true })
+      isStreaming.value = true
+      let streamRes
+      try {
+        streamRes = await streamFn({
+          messages: buildConversationHistory(),
+          signal: runCtrl.signal,
+          onStatus(label) {
+            if (!disposed.value && label) working.value = label
+          },
+          onRoute(route) {
+            routedSkill = route
+          },
+          onDelta(chunk) {
+            if (disposed.value) return
+            if (!streamingTurn) {
+              streamingTurn = reactive({ id: ++turnId, role: 'assistant', text: '', streaming: true })
+              turns.value.push(streamingTurn)
+              working.value = '正在流式生成回答'
+            }
+            streamingTurn.text += chunk
+            nextTick(() => {
+              if (log?.value) log.value.scrollTop = log.value.scrollHeight
+            })
+          },
+          onDone({ links }) {
+            if (disposed.value || !streamingTurn) return
+            streamingTurn.streaming = false
+            const chatLinks = mapChatLinks(links)
+            if (chatLinks.length) streamingTurn.chatLinks = chatLinks
+            persistCurrentSession()
+          },
+        })
+      } finally {
+        controller.signal.removeEventListener('abort', onParentAbort)
+        if (streamAbort === runCtrl) streamAbort = null
+        isStreaming.value = false
+      }
 
       if (disposed.value) return
 
@@ -516,12 +540,13 @@ export function useAiConversation(props, log) {
       if (streamingTurn) {
         streamingTurn.streaming = false
         if (streamingTurn.text.trim()) {
-          streamingTurn.text += '\n\n（流式输出中断，以上为已生成内容）'
+          streamingTurn.text += userStopped ? '\n\n（已停止生成）' : '\n\n（流式输出中断，以上为已生成内容）'
           persistCurrentSession()
           return
         }
         turns.value = turns.value.filter(item => item !== streamingTurn)
       }
+      if (userStopped) return
       if (cause.status === 401 && props.request) {
         props.request('/api/user/profile', options).catch(() => {})
       }
@@ -1105,10 +1130,10 @@ export function useAiConversation(props, log) {
   }
 
   return {
-    demo, input, turns, sessions, activeSessionId, projects, selectedId, selectedProject, inquiryProjects, loadingProjects, projectError, working,
+    demo, input, turns, sessions, activeSessionId, projects, selectedId, selectedProject, inquiryProjects, loadingProjects, projectError, working, isStreaming,
     approval, approvalOpen, approvalError, pendingWrite, recoveryError,
     inquiryStepsPreview, applyMarkupToApproval, refreshApprovalMatches, refreshVisitPreview, formatMoneyCents,
-    startNewSession, switchSession, deleteSession, clearCurrentSession,
+    startNewSession, switchSession, deleteSession, clearCurrentSession, stopGeneration,
     loadProjects, dispatch, fillManually, closeApproval, reopenApproval, declineApproval, approve, reviewSavedDraft, recoverWrite,
   }
 }

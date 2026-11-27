@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElDialog } from 'element-plus'
 import { UiBadge, UiButton, UiField, UiIcon } from '../ui/index.js'
 import { createHttpProjectRepository } from '../channel/httpProjects.js'
@@ -27,11 +27,19 @@ const options = { signal: controller.signal }
 
 const log = ref(null)
 const composerInput = ref(null)
+const skillPopoverRef = ref(null)
+const skillTopBtnRef = ref(null)
+const skillPlusBtnRef = ref(null)
 const skillsExpanded = ref(false)
 const sidebarCollapsed = ref(false)
 const mobileSidebarOpen = ref(false)
 const searchOpen = ref(false)
 const sessionQuery = ref('')
+const copiedTurnId = ref(0)
+const showScrollBottom = ref(false)
+const isStreaming = ref(false)
+let streamAbort = null
+let userStopped = false
 
 const { theme, toggleTheme } = useAiTheme()
 
@@ -81,6 +89,56 @@ function toggleSearch() {
   searchOpen.value = !searchOpen.value
   if (!searchOpen.value) sessionQuery.value = ''
 }
+
+function stopGeneration() {
+  if (streamAbort) {
+    userStopped = true
+    streamAbort.abort()
+    streamAbort = null
+  }
+}
+
+async function copyTurnText(turn) {
+  if (!turn?.text || !navigator.clipboard) return
+  try {
+    await navigator.clipboard.writeText(turn.text)
+    copiedTurnId.value = turn.id
+    setTimeout(() => { if (copiedTurnId.value === turn.id) copiedTurnId.value = 0 }, 2000)
+  } catch {}
+}
+
+function onLogScroll() {
+  const el = log.value
+  if (!el || !turns.value.length) {
+    showScrollBottom.value = false
+    return
+  }
+  showScrollBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight > 120
+}
+
+function scrollToBottom() {
+  if (log.value) {
+    log.value.scrollTo({ top: log.value.scrollHeight, behavior: 'smooth' })
+  }
+}
+
+function handleOutsidePointer(event) {
+  if (!skillsExpanded.value) return
+  const t = event.target
+  if (skillPopoverRef.value?.contains(t) || skillTopBtnRef.value?.contains(t) || skillPlusBtnRef.value?.contains(t)) return
+  skillsExpanded.value = false
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key === 'Escape' && skillsExpanded.value) {
+    skillsExpanded.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', handleOutsidePointer)
+  document.addEventListener('keydown', handleGlobalKeydown)
+})
 
 const {
   recording, transcribing, autoSending, waveformBars, voiceError,
@@ -187,6 +245,8 @@ function clearCurrentSession() {
 onUnmounted(() => {
   disposed.value = true
   controller.abort()
+  document.removeEventListener('pointerdown', handleOutsidePointer)
+  document.removeEventListener('keydown', handleGlobalKeydown)
 })
 
 function say(text, extra = {}) {
@@ -607,35 +667,47 @@ async function dispatch(value = input.value) {
       .slice(-14)
       .map(item => ({ role: item.role, content: item.text.slice(0, 3500) }))
 
-    await streamWorkspaceChat({
-      messages: history,
-      signal: controller.signal,
-      onStatus(label) {
-        if (!disposed.value && label) working.value = label
-      },
-      onRoute(route) {
-        routedSkill = route
-      },
-      onDelta(chunk) {
-        if (disposed.value) return
-        if (!streamingTurn) {
-          streamingTurn = reactive({ id: ++turnId, role: 'assistant', text: '', streaming: true })
-          turns.value.push(streamingTurn)
-          working.value = '正在流式生成回答'
-        }
-        streamingTurn.text += chunk
-        nextTick(() => { if (log.value) log.value.scrollTop = log.value.scrollHeight })
-      },
-      onDone({ links }) {
-        if (disposed.value || !streamingTurn) return
-        streamingTurn.streaming = false
-        const chatLinks = (links ?? [])
-          .filter(v => linkLabels[v])
-          .map(v => ({ view: v, label: linkLabels[v] }))
-        if (chatLinks.length) streamingTurn.chatLinks = chatLinks
-        persistCurrentSession()
-      },
-    })
+    userStopped = false
+    const runCtrl = new AbortController()
+    streamAbort = runCtrl
+    const onParentAbort = () => runCtrl.abort()
+    controller.signal.addEventListener('abort', onParentAbort, { once: true })
+    isStreaming.value = true
+    try {
+      await streamWorkspaceChat({
+        messages: history,
+        signal: runCtrl.signal,
+        onStatus(label) {
+          if (!disposed.value && label) working.value = label
+        },
+        onRoute(route) {
+          routedSkill = route
+        },
+        onDelta(chunk) {
+          if (disposed.value) return
+          if (!streamingTurn) {
+            streamingTurn = reactive({ id: ++turnId, role: 'assistant', text: '', streaming: true })
+            turns.value.push(streamingTurn)
+            working.value = '正在流式生成回答'
+          }
+          streamingTurn.text += chunk
+          nextTick(() => { if (log.value) log.value.scrollTop = log.value.scrollHeight })
+        },
+        onDone({ links }) {
+          if (disposed.value || !streamingTurn) return
+          streamingTurn.streaming = false
+          const chatLinks = (links ?? [])
+            .filter(v => linkLabels[v])
+            .map(v => ({ view: v, label: linkLabels[v] }))
+          if (chatLinks.length) streamingTurn.chatLinks = chatLinks
+          persistCurrentSession()
+        },
+      })
+    } finally {
+      controller.signal.removeEventListener('abort', onParentAbort)
+      if (streamAbort === runCtrl) streamAbort = null
+      isStreaming.value = false
+    }
 
     if (disposed.value) return
 
@@ -657,12 +729,13 @@ async function dispatch(value = input.value) {
     if (streamingTurn) {
       streamingTurn.streaming = false
       if (streamingTurn.text.trim()) {
-        streamingTurn.text += '\n\n（流式输出中断，以上为已生成内容）'
+        streamingTurn.text += userStopped ? '\n\n（已停止生成）' : '\n\n（流式输出中断，以上为已生成内容）'
         persistCurrentSession()
         return
       }
       turns.value = turns.value.filter(item => item !== streamingTurn)
     }
+    if (userStopped) return
     if (cause.name !== 'AbortError') {
       say(cause.message || 'AI 顾问暂时不可用，请稍后重试。')
     }
@@ -723,7 +796,7 @@ const deploymentOptions = { cloud: '云部署', saas: 'SaaS', private: '私有�
       </button>
 
       <div class="ai-sidebar-scroll" aria-label="历史对话列表">
-        <div class="ai-session-section">
+        <div v-if="filteredSessions.length" class="ai-session-section">
           <div class="ai-section-label">最近</div>
           <div
             v-for="sess in filteredSessions"
@@ -747,6 +820,7 @@ const deploymentOptions = { cloud: '云部署', saas: 'SaaS', private: '私有�
             </button>
           </div>
         </div>
+        <p v-else class="ai-sidebar-empty">未找到匹配对话</p>
       </div>
 
       <div class="ai-sidebar-foot">
@@ -775,7 +849,7 @@ const deploymentOptions = { cloud: '云部署', saas: 'SaaS', private: '私有�
         </div>
 
         <div class="ai-topbar-right">
-          <button type="button" class="ai-topbar-pill" :aria-expanded="skillsExpanded" @click="skillsExpanded = !skillsExpanded">
+          <button ref="skillTopBtnRef" type="button" class="ai-topbar-pill" :aria-expanded="skillsExpanded" @click="skillsExpanded = !skillsExpanded">
             <UiIcon name="workflow" :size="14" />
             <span>技能 ({{ shortcuts.length }})</span>
           </button>
@@ -802,7 +876,7 @@ const deploymentOptions = { cloud: '云部署', saas: 'SaaS', private: '私有�
         </div>
       </header>
 
-      <div ref="log" class="ai-log" :class="{ 'is-empty': !turns.length }" role="log" aria-label="AI 对话记录">
+      <div ref="log" class="ai-log" :class="{ 'is-empty': !turns.length }" role="log" aria-label="AI 对话记录" @scroll="onLogScroll">
         <div v-if="!turns.length" class="ai-empty-hero">
           <div class="ai-codex-emblem" aria-hidden="true">
             <svg viewBox="0 0 48 48" width="46" height="46" fill="none">
@@ -895,16 +969,46 @@ const deploymentOptions = { cloud: '云部署', saas: 'SaaS', private: '私有�
                       <UiIcon name="open-detail" :size="13" />
                     </button>
                   </article>
+
+                  <div v-if="!turn.streaming && turn.text" class="ai-turn-toolbar">
+                    <button
+                      type="button"
+                      class="ai-copy-btn"
+                      :aria-label="copiedTurnId === turn.id ? '已复制回复' : '复制回复内容'"
+                      @click="copyTurnText(turn)"
+                    >
+                      <UiIcon :name="copiedTurnId === turn.id ? 'check' : 'copy'" :size="12" />
+                      <span>{{ copiedTurnId === turn.id ? '已复制' : '复制' }}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </template>
+          </div>
+
+          <div v-if="working && !turns.some(t => t.streaming)" class="ai-assistant-row ai-thinking-row" role="status">
+            <div class="ai-assistant-badge is-pulsing" aria-hidden="true"><UiIcon name="ai" :size="15" /></div>
+            <div class="ai-thinking-label">
+              <span class="ai-shimmer-text">{{ working }}…</span>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="ai-dock">
         <div class="ai-dock-inner">
-          <section v-if="skillsExpanded" class="ai-skill-popover" aria-label="专属工作流技能">
+          <button
+            v-if="showScrollBottom"
+            type="button"
+            class="ai-scroll-bottom-btn"
+            aria-label="滚动到最新消息"
+            title="回到最新消息"
+            @click="scrollToBottom"
+          >
+            <UiIcon name="arrow-down" :size="15" />
+          </button>
+
+          <section v-if="skillsExpanded" ref="skillPopoverRef" class="ai-skill-popover" aria-label="专属工作流技能">
             <div class="ai-skill-popover-head">
               <strong>选择要调用的专属业务技能</strong>
               <button type="button" class="ai-rail-icon-btn" aria-label="关闭技能菜单" @click="skillsExpanded = false">
@@ -1006,6 +1110,7 @@ const deploymentOptions = { cloud: '云部署', saas: 'SaaS', private: '私有�
               <div class="ai-composer-bar">
                 <div class="ai-composer-left">
                   <button
+                    ref="skillPlusBtnRef"
                     type="button"
                     class="ai-plus-trigger"
                     :aria-expanded="skillsExpanded"
@@ -1033,6 +1138,17 @@ const deploymentOptions = { cloud: '云部署', saas: 'SaaS', private: '私有�
                     <UiIcon name="mic" :size="15" />
                   </button>
                   <button
+                    v-if="isStreaming"
+                    type="button"
+                    class="ai-stop-gen-btn"
+                    aria-label="停止生成"
+                    title="停止生成回答"
+                    @click="stopGeneration"
+                  >
+                    <span class="ai-stop-square" aria-hidden="true" />
+                  </button>
+                  <button
+                    v-else
                     type="submit"
                     class="ai-send-btn"
                     aria-label="发送"

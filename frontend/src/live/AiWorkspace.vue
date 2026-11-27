@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { UiBadge, UiButton, UiIcon } from '../ui/index.js'
 import { aiDemoProject } from '../channel/aiInquiryDemo.js'
 import AiApprovalDialog from './AiApprovalDialog.vue'
@@ -19,20 +19,25 @@ const emit = defineEmits(['open-project', 'open-projects', 'open-opportunity', '
 
 const log = ref(null)
 const composerInput = ref(null)
+const skillPopoverRef = ref(null)
+const skillTopBtnRef = ref(null)
+const skillPlusBtnRef = ref(null)
 const skillsExpanded = ref(false)
 const sidebarCollapsed = ref(false)
 const mobileSidebarOpen = ref(false)
 const searchOpen = ref(false)
 const sessionQuery = ref('')
 const copiedUrl = ref('')
+const copiedTurnId = ref(0)
+const showScrollBottom = ref(false)
 
 const { theme, toggleTheme } = useAiTheme()
 
 const {
   demo, input, turns, sessions, activeSessionId, projects, selectedId, selectedProject, inquiryProjects,
-  loadingProjects, projectError, working, approval, approvalOpen, approvalError, pendingWrite, recoveryError,
+  loadingProjects, projectError, working, isStreaming, approval, approvalOpen, approvalError, pendingWrite, recoveryError,
   inquiryStepsPreview, applyMarkupToApproval, refreshApprovalMatches, refreshVisitPreview, formatMoneyCents,
-  startNewSession, switchSession, deleteSession, clearCurrentSession,
+  startNewSession, switchSession, deleteSession, clearCurrentSession, stopGeneration,
   loadProjects, dispatch, fillManually, closeApproval, reopenApproval, declineApproval, approve, reviewSavedDraft, recoverWrite,
 } = useAiConversation(props, log)
 
@@ -136,6 +141,53 @@ async function copyConfirmLink(url) {
   } catch {}
 }
 
+async function copyTurnText(turn) {
+  if (!turn?.text || !navigator.clipboard) return
+  try {
+    await navigator.clipboard.writeText(turn.text)
+    copiedTurnId.value = turn.id
+    setTimeout(() => { if (copiedTurnId.value === turn.id) copiedTurnId.value = 0 }, 2000)
+  } catch {}
+}
+
+function onLogScroll() {
+  const el = log.value
+  if (!el || !turns.value.length) {
+    showScrollBottom.value = false
+    return
+  }
+  showScrollBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight > 120
+}
+
+function scrollToBottom() {
+  if (log.value) {
+    log.value.scrollTo({ top: log.value.scrollHeight, behavior: 'smooth' })
+  }
+}
+
+function handleOutsidePointer(event) {
+  if (!skillsExpanded.value) return
+  const t = event.target
+  if (skillPopoverRef.value?.contains(t) || skillTopBtnRef.value?.contains(t) || skillPlusBtnRef.value?.contains(t)) return
+  skillsExpanded.value = false
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key === 'Escape' && skillsExpanded.value) {
+    skillsExpanded.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', handleOutsidePointer)
+  document.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('pointerdown', handleOutsidePointer)
+  document.removeEventListener('keydown', handleGlobalKeydown)
+})
+
 function onEnter(event) {
   if (event.isComposing || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return
   event.preventDefault()
@@ -205,10 +257,10 @@ function onEnter(event) {
           </div>
         </template>
 
-        <div class="ai-session-section">
+        <div v-if="recentSessions.length" class="ai-session-section">
           <div class="ai-section-label">最近</div>
           <div
-            v-for="sess in (recentSessions.length ? recentSessions : filteredSessions)"
+            v-for="sess in recentSessions"
             :key="sess.id"
             class="ai-session-row"
             :class="{ 'is-active': sess.id === activeSessionId }"
@@ -229,6 +281,8 @@ function onEnter(event) {
             </button>
           </div>
         </div>
+
+        <p v-if="!filteredSessions.length" class="ai-sidebar-empty">未找到匹配对话</p>
       </div>
 
       <div class="ai-sidebar-foot">
@@ -261,6 +315,7 @@ function onEnter(event) {
 
         <div class="ai-topbar-right">
           <button
+            ref="skillTopBtnRef"
             type="button"
             class="ai-topbar-pill"
             :aria-expanded="skillsExpanded"
@@ -292,7 +347,7 @@ function onEnter(event) {
         </div>
       </header>
 
-      <div ref="log" class="ai-log" :class="{ 'is-empty': !turns.length }" role="log" aria-label="AI 对话记录">
+      <div ref="log" class="ai-log" :class="{ 'is-empty': !turns.length }" role="log" aria-label="AI 对话记录" @scroll="onLogScroll">
         <div v-if="!turns.length" class="ai-empty-hero">
           <div class="ai-codex-emblem" aria-hidden="true">
             <svg viewBox="0 0 48 48" width="46" height="46" fill="none">
@@ -542,16 +597,46 @@ function onEnter(event) {
                       </button>
                     </div>
                   </article>
+
+                  <div v-if="!turn.streaming && turn.text" class="ai-turn-toolbar">
+                    <button
+                      type="button"
+                      class="ai-copy-btn"
+                      :aria-label="copiedTurnId === turn.id ? '已复制回复' : '复制回复内容'"
+                      @click="copyTurnText(turn)"
+                    >
+                      <UiIcon :name="copiedTurnId === turn.id ? 'check' : 'copy'" :size="12" />
+                      <span>{{ copiedTurnId === turn.id ? '已复制' : '复制' }}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </template>
+          </div>
+
+          <div v-if="working && !turns.some(t => t.streaming)" class="ai-assistant-row ai-thinking-row" role="status">
+            <div class="ai-assistant-badge is-pulsing" aria-hidden="true"><UiIcon name="ai" :size="15" /></div>
+            <div class="ai-thinking-label">
+              <span class="ai-shimmer-text">{{ working }}…</span>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="ai-dock">
         <div class="ai-dock-inner">
-          <section v-if="skillsExpanded" class="ai-skill-popover" aria-label="已集成工作流技能">
+          <button
+            v-if="showScrollBottom"
+            type="button"
+            class="ai-scroll-bottom-btn"
+            aria-label="滚动到最新消息"
+            title="回到最新消息"
+            @click="scrollToBottom"
+          >
+            <UiIcon name="arrow-down" :size="15" />
+          </button>
+
+          <section v-if="skillsExpanded" ref="skillPopoverRef" class="ai-skill-popover" aria-label="已集成工作流技能">
             <div class="ai-skill-popover-head">
               <strong>选择要调用的业务工作流技能</strong>
               <button type="button" class="ai-rail-icon-btn" aria-label="关闭技能菜单" @click="skillsExpanded = false">
@@ -584,10 +669,14 @@ function onEnter(event) {
               </span>
               <label class="ai-context-select-wrap">
                 <UiIcon name="folder" :size="13" />
+                <span class="ai-context-select-label" aria-hidden="true">
+                  {{ selectedProject ? `${selectedProject.title} · ${selectedProject.id}` : '选择项目（自动识别）' }}
+                </span>
+                <UiIcon name="chevron-down" :size="12" class="ai-context-chevron" />
                 <select
                   v-model="selectedId"
                   aria-label="项目上下文"
-                  class="ai-context-select"
+                  class="ai-context-native-select"
                   :disabled="!!working || !!approval || loadingProjects"
                 >
                   <option value="">选择项目（自动识别）</option>
@@ -683,6 +772,7 @@ function onEnter(event) {
               <div class="ai-composer-bar">
                 <div class="ai-composer-left">
                   <button
+                    ref="skillPlusBtnRef"
                     type="button"
                     class="ai-plus-trigger"
                     :aria-expanded="skillsExpanded"
@@ -710,6 +800,17 @@ function onEnter(event) {
                     <UiIcon name="mic" :size="15" />
                   </button>
                   <button
+                    v-if="isStreaming"
+                    type="button"
+                    class="ai-stop-gen-btn"
+                    aria-label="停止生成"
+                    title="停止生成回答"
+                    @click="stopGeneration"
+                  >
+                    <span class="ai-stop-square" aria-hidden="true" />
+                  </button>
+                  <button
+                    v-else
                     type="submit"
                     class="ai-send-btn"
                     aria-label="发送"

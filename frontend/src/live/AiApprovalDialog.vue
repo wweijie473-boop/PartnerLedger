@@ -110,6 +110,7 @@ function onInvoiceOrderChange() {
     :model-value="open"
     :title="approval?.title || '人工审批'"
     width="min(94vw, 700px)"
+    align-center
     :close-on-click-modal="false"
     @update:model-value="value => { if (!value) emit('close') }"
   >
