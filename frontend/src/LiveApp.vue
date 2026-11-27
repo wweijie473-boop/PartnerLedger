@@ -455,7 +455,7 @@ function openOpportunity(id = '', projectId = '') {
     <LiveOpportunities v-else-if="view === 'opportunities' && isDealer" :key="navigationRevision" :request="authenticated" :scope="organization.id + ':' + user.id" :project-id="captureProject" :capture="!!captureProject" @project="openProject" />
     <ProductCatalog v-else-if="view === 'catalog' && entry !== 'customer'" :request="authenticated" :is-manufacturer="isManufacturer" />
     <AiWorkspace v-else-if="view === 'requirement' && isDealer" :key="navigationRevision" :request="authenticated"
-      :initial-project="aiProject" :organization-id="organization.id" :user-id="user.id"
+      :initial-project="aiProject" :organization-id="organization.id" :user-id="user.id" :organization-name="organization.name"
       @open-project="id => openProject(id)" @open-projects="navigate('projects')"
       @open-opportunity="(id, projectId) => openOpportunity(id, projectId)"
       @navigate="(target, params) => navigate(target, params)" />

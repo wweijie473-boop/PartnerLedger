@@ -4,6 +4,7 @@ import { effectScope } from 'vue'
 import { createDemoRepository } from '../src/channel/repository.js'
 import { demoActor } from '../src/channel/domain.js'
 import { createWorkflowJournal } from '../src/live/aiWorkflowJournal.js'
+import { formatBubbleHtml, useAiTheme } from '../src/live/aiMarkdown.js'
 import { routeLocalWorkspace } from '../src/live/aiSkillCatalog.js'
 import { useAiConversation } from '../src/live/useAiConversation.js'
 import { appendTranscript, encodeMonoWavBase64 } from '../src/live/useVoiceInput.js'
@@ -406,5 +407,27 @@ test('SSE 单跳流式打字机逐字渲染、实时工具状态更新与 propos
   assert.equal(conv.approval.value.kind, 'sales_quote')
   assert.equal(conv.approval.value.lines[0].unitPrice, '60000.00')
   conv.declineApproval()
+
+  const s1 = conv.activeSessionId.value
+  conv.startNewSession()
+  assert.equal(conv.sessions.value.length, 2)
+  conv.deleteSession(s1)
+  assert.equal(conv.sessions.value.length, 1)
   scope.stop()
+})
+
+test('Codex 主题切换持久化且富文本渲染安全转义并支持标题、列表与表格', () => {
+  const storage = memoryStorage()
+  const t1 = useAiTheme(storage)
+  assert.equal(t1.theme.value, 'dark')
+  t1.toggleTheme()
+  assert.equal(t1.theme.value, 'light')
+  assert.equal(useAiTheme(storage).theme.value, 'light')
+
+  const html = formatBubbleHtml('## 客户盘点\n- **海川精工** `<script>`\n1. 首期续签\n\n| 客户 | 状态 |\n| --- | --- |\n| 海川 | 正常 |')
+  assert.match(html, /class="ai-md-h">客户盘点/)
+  assert.match(html, /<strong>海川精工<\/strong>/)
+  assert.match(html, /&lt;script&gt;/)
+  assert.match(html, /class="ai-md-list"/)
+  assert.match(html, /class="ai-md-table"/)
 })

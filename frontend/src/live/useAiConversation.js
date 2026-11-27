@@ -99,21 +99,33 @@ export function useAiConversation(props, log) {
     })
   }
 
-  function clearCurrentSession() {
+  function deleteSession(id) {
     if (working.value || approval.value || pendingWrite.value) return
-    const remaining = sessions.value.filter(item => item.id !== activeSessionId.value)
+    const remaining = sessions.value.filter(item => item.id !== id)
     if (!remaining.length) {
-      const fresh = sessionStore.makeEmptySession(selectedId.value)
+      const fresh = sessionStore.makeEmptySession('')
       sessions.value = [fresh]
       activeSessionId.value = fresh.id
       turns.value = []
+      selectedId.value = ''
     } else {
       sessions.value = remaining
-      activeSessionId.value = remaining[0].id
-      turns.value = (remaining[0].turns ?? []).map(item => reactive({ ...item }))
-      turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+      if (activeSessionId.value === id) {
+        activeSessionId.value = remaining[0].id
+        turns.value = (remaining[0].turns ?? []).map(item => reactive({ ...item }))
+        turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+        if (remaining[0].selectedProjectId && projects.value.some(p => p.id === remaining[0].selectedProjectId)) {
+          selectedId.value = remaining[0].selectedProjectId
+        } else {
+          selectedId.value = ''
+        }
+      }
     }
     sessionStore.saveSessions(activeSessionId.value, sessions.value)
+  }
+
+  function clearCurrentSession() {
+    deleteSession(activeSessionId.value)
   }
 
   const stepHandlers = {
@@ -1093,10 +1105,10 @@ export function useAiConversation(props, log) {
   }
 
   return {
-    demo, input, turns, sessions, activeSessionId, projects, selectedId, inquiryProjects, loadingProjects, projectError, working,
+    demo, input, turns, sessions, activeSessionId, projects, selectedId, selectedProject, inquiryProjects, loadingProjects, projectError, working,
     approval, approvalOpen, approvalError, pendingWrite, recoveryError,
     inquiryStepsPreview, applyMarkupToApproval, refreshApprovalMatches, refreshVisitPreview, formatMoneyCents,
-    startNewSession, switchSession, clearCurrentSession,
+    startNewSession, switchSession, deleteSession, clearCurrentSession,
     loadProjects, dispatch, fillManually, closeApproval, reopenApproval, declineApproval, approve, reviewSavedDraft, recoverWrite,
   }
 }

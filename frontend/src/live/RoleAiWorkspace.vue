@@ -1,10 +1,11 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElDialog } from 'element-plus'
 import { UiBadge, UiButton, UiField, UiIcon } from '../ui/index.js'
 import { createHttpProjectRepository } from '../channel/httpProjects.js'
 import { formatCents } from '../channel/quoteMoney.js'
 import { createAiSessionStore } from './aiChatSessions.js'
+import { formatBubbleHtml, useAiTheme } from './aiMarkdown.js'
 import { streamWorkspaceChat } from './aiStreamClient.js'
 import { retailApi, readRetailCatalog } from './retailRequest.js'
 import { useVoiceInput } from './useVoiceInput.js'
@@ -27,12 +28,19 @@ const options = { signal: controller.signal }
 const log = ref(null)
 const composerInput = ref(null)
 const skillsExpanded = ref(false)
+const sidebarCollapsed = ref(false)
+const mobileSidebarOpen = ref(false)
+const searchOpen = ref(false)
+const sessionQuery = ref('')
+
+const { theme, toggleTheme } = useAiTheme()
 
 const sessionStore = createAiSessionStore(`${props.role}:${props.organizationId}:${props.userId}`)
 const initialStore = sessionStore.loadInitial('')
 const sessions = ref(initialStore.sessions)
 const activeSessionId = ref(initialStore.activeId)
 const currentSessionObj = () => sessions.value.find(item => item.id === activeSessionId.value) ?? sessions.value[0]
+const activeSession = computed(() => currentSessionObj())
 
 const input = ref('')
 const turns = ref((currentSessionObj()?.turns ?? []).map(item => reactive({ ...item })))
@@ -42,6 +50,35 @@ const approvalOpen = ref(false)
 const approvalError = ref('')
 const disposed = ref(false)
 let turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+
+const busy = computed(() => Boolean(working.value || approval.value))
+const filteredSessions = computed(() => {
+  const kw = sessionQuery.value.trim().toLowerCase()
+  if (!kw) return sessions.value
+  return sessions.value.filter(sess => sess.title.toLowerCase().includes(kw))
+})
+
+watch(input, () => {
+  nextTick(() => {
+    const el = composerInput.value
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 168) + 'px'
+  })
+})
+
+function toggleSidebar() {
+  if (window.matchMedia('(max-width: 860px)').matches) {
+    mobileSidebarOpen.value = !mobileSidebarOpen.value
+  } else {
+    sidebarCollapsed.value = !sidebarCollapsed.value
+  }
+}
+
+function toggleSearch() {
+  searchOpen.value = !searchOpen.value
+  if (!searchOpen.value) sessionQuery.value = ''
+}
 
 const {
   recording, transcribing, formattedDuration, voiceError, toggleVoice, cancelVoice,
@@ -92,9 +129,11 @@ function persistCurrentSession() {
 
 function startNewSession() {
   if (working.value || approval.value) return
+  mobileSidebarOpen.value = false
   const active = currentSessionObj()
   if (active && active.turns.length === 0) {
     input.value = ''
+    nextTick(() => composerInput.value?.focus())
     return
   }
   const fresh = sessionStore.makeEmptySession('')
@@ -103,6 +142,7 @@ function startNewSession() {
   turns.value = []
   input.value = ''
   sessionStore.saveSessions(fresh.id, sessions.value)
+  nextTick(() => composerInput.value?.focus())
 }
 
 function switchSession(id) {
@@ -113,12 +153,13 @@ function switchSession(id) {
   turns.value = (target.turns ?? []).map(item => reactive({ ...item }))
   turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
   sessionStore.saveSessions(activeSessionId.value, sessions.value)
+  mobileSidebarOpen.value = false
   nextTick(() => { if (log.value) log.value.scrollTop = log.value.scrollHeight })
 }
 
-function clearCurrentSession() {
+function deleteSession(id) {
   if (working.value || approval.value) return
-  const remaining = sessions.value.filter(item => item.id !== activeSessionId.value)
+  const remaining = sessions.value.filter(item => item.id !== id)
   if (!remaining.length) {
     const fresh = sessionStore.makeEmptySession('')
     sessions.value = [fresh]
@@ -126,11 +167,17 @@ function clearCurrentSession() {
     turns.value = []
   } else {
     sessions.value = remaining
-    activeSessionId.value = remaining[0].id
-    turns.value = (remaining[0].turns ?? []).map(item => reactive({ ...item }))
-    turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+    if (activeSessionId.value === id) {
+      activeSessionId.value = remaining[0].id
+      turns.value = (remaining[0].turns ?? []).map(item => reactive({ ...item }))
+      turnId = turns.value.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0)
+    }
   }
   sessionStore.saveSessions(activeSessionId.value, sessions.value)
+}
+
+function clearCurrentSession() {
+  deleteSession(activeSessionId.value)
 }
 
 onUnmounted(() => {
@@ -625,48 +672,10 @@ function triggerSkill(skill) {
   dispatch(skill.prompt)
 }
 
-function formatInlineMd(escapedLine) {
-  return escapedLine
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`\n]+)`/g, '<code class="ai-md-code">$1</code>')
-}
-
-function formatBubbleHtml(raw) {
-  const escaped = String(raw ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-
-  const lines = escaped.split('\n')
-  const out = []
-  let i = 0
-  while (i < lines.length) {
-    if (i + 1 < lines.length && /^\s*\|.+\|\s*$/.test(lines[i]) && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
-      const parseRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(cell => formatInlineMd(cell.trim()))
-      const headers = parseRow(lines[i])
-      i += 2
-      const bodyRows = []
-      while (i < lines.length && /^\s*\|.+\|\s*$/.test(lines[i])) {
-        bodyRows.push(parseRow(lines[i]))
-        i++
-      }
-      const thead = '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead>'
-      const tbody = bodyRows.length ? '<tbody>' + bodyRows.map(r => '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>').join('') + '</tbody>' : ''
-      out.push(`<div class="ai-md-table-wrap"><table class="ai-md-table">${thead}${tbody}</table></div>`)
-      continue
-    }
-    const heading = /^#{1,4}\s+(.+)$/.exec(lines[i])
-    out.push(heading ? `<strong class="ai-md-heading">${formatInlineMd(heading[1])}</strong>` : formatInlineMd(lines[i]))
-    i++
-  }
-  return out.join('\n')
-}
-
 function onEnter(event) {
   if (event.isComposing || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return
   event.preventDefault()
+  skillsExpanded.value = false
   dispatch()
 }
 
@@ -675,139 +684,322 @@ const deploymentOptions = { cloud: '云部署', saas: 'SaaS', private: '私有�
 </script>
 
 <template>
-  <section class="ai-workspace" aria-labelledby="role-ai-title">
-    <header class="ai-hero">
-      <div class="ai-hero-heading">
-        <div class="ai-emblem"><UiIcon name="ai" :size="36" /></div>
-        <div>
-          <h1 id="role-ai-title">{{ isVendor ? '软件厂商 AI 工作台' : '企业客户 AI 采购工作台' }}</h1>
-          <p>{{ isVendor ? '智能盘点渠道询价、分佣结算与工单积压，一句话提取产品知识库并打包审批执行。' : '用自然语言梳理数字化痛点并一键立项，实时分析对客报价方案、跟进订单与项目验收。' }}</p>
+  <section
+    class="ai-codex-shell"
+    :class="{ 'is-sidebar-collapsed': sidebarCollapsed, 'is-mobile-sidebar-open': mobileSidebarOpen }"
+    :data-ai-theme="theme"
+    aria-labelledby="role-ai-title"
+  >
+    <div v-if="mobileSidebarOpen" class="ai-sidebar-backdrop" aria-hidden="true" @click="mobileSidebarOpen = false" />
+
+    <aside class="ai-sidebar" aria-label="AI 会话列表">
+      <div class="ai-sidebar-top">
+        <div class="ai-brand">
+          <span class="ai-brand-dot" aria-hidden="true" />
+          <strong>渠智链 AI</strong>
+          <small>{{ isVendor ? '软件厂商' : '企业客户' }}</small>
+        </div>
+        <div class="ai-sidebar-tools">
+          <button type="button" class="ai-rail-icon-btn" :aria-pressed="searchOpen" title="搜索历史对话" @click="toggleSearch">
+            <UiIcon name="search" :size="15" />
+          </button>
+          <button type="button" class="ai-rail-icon-btn" title="收起侧栏" @click="toggleSidebar">
+            <UiIcon name="sidebar-close" :size="15" />
+          </button>
         </div>
       </div>
-      <div class="ai-hero-badges">
-        <UiButton compact variant="secondary" icon="workflow" :aria-expanded="skillsExpanded" @click="skillsExpanded = !skillsExpanded">
-          {{ skillsExpanded ? '收起技能面板' : `已接入技能 (${shortcuts.length})` }}
-        </UiButton>
-      </div>
-    </header>
 
-    <section v-if="skillsExpanded" class="ai-skill-drawer" aria-label="专属工作流技能">
-      <button v-for="skill in shortcuts" :key="skill.id" type="button" class="ai-skill-card" :disabled="!!working" @click="triggerSkill(skill)">
-        <span class="ai-skill-card-head"><UiIcon :name="skill.icon" :size="16" /><strong>{{ skill.label }}</strong></span>
-        <small>{{ skill.description }}</small>
+      <div v-if="searchOpen" class="ai-sidebar-search">
+        <input v-model="sessionQuery" type="search" placeholder="筛选历史会话…" aria-label="筛选历史会话" />
+      </div>
+
+      <button type="button" class="ai-new-chat-btn" :disabled="busy" @click="startNewSession">
+        <UiIcon name="new-chat" :size="15" />
+        <span>新对话</span>
       </button>
-    </section>
 
-    <div class="ai-chat">
-      <div class="ai-chat-head">
-        <div class="ai-head-session">
-          <div class="ai-assistant-title"><UiIcon name="ai" :size="20" /><strong>{{ isVendor ? '原厂渠道运营 AI 顾问' : '企业数字化选型与验收顾问' }}</strong></div>
-          <div class="ai-session-controls">
-            <select :value="activeSessionId" aria-label="历史对话列表" class="ai-session-select" :disabled="!!working || !!approval" @change="switchSession($event.target.value)">
-              <option v-for="sess in sessions" :key="sess.id" :value="sess.id">
-                {{ sess.title }}{{ sess.turns.length ? ` (${Math.ceil(sess.turns.length / 2)})` : '' }}
-              </option>
-            </select>
-            <UiButton compact icon="add" :disabled="!!working || !!approval" @click="startNewSession">新对话</UiButton>
-            <UiButton v-if="turns.length" compact variant="text" :disabled="!!working || !!approval" @click="clearCurrentSession">清空</UiButton>
-          </div>
-        </div>
-      </div>
-
-      <div ref="log" class="ai-log" role="log" aria-label="AI 对话记录">
-        <div class="ai-turn">
-          <div class="ai-avatar"><UiIcon name="ai" :size="19" /></div>
-          <div class="ai-turn-content">
-            <p class="ai-speaker">{{ isVendor ? '原厂运营助手' : '企业采购顾问' }}</p>
-            <p class="ai-bubble">
-              {{ isVendor
-                ? '你好！我可以帮你实时盘点渠道询价、待收款订单、待结代理佣金、财务申请与售后工单，也支持粘贴产品介绍一键提取录入匹配知识库、发渠道底价或回复工单。'
-                : '你好！你可以直接用语音或文字告诉我企业目前的管理痛点（我将自动整理规范需求并向合作代理商立项），也可以让我帮你核对对客报价方案、查看交付进度或确认订单与验收。' }}
-            </p>
-            <div v-if="!turns.length" class="ai-prompts">
-              <UiButton compact icon="ai" :disabled="!!working" @click="dispatch(isVendor ? '帮我全面盘点一下目前有哪些待我处理的渠道询价、收款、结佣、财务申请和售后工单？' : '帮我看看目前名下所有采购项目和软件订单进展到哪一步了，有没有需要我拍板的？')">
-                {{ isVendor ? '盘点全渠道待办事项' : '盘点我的项目与待确认事项' }}
-              </UiButton>
-              <UiButton v-for="skill in shortcuts.slice(0, 3)" :key="skill.id" compact :icon="skill.icon" :disabled="!!working" @click="triggerSkill(skill)">
-                {{ skill.label }}
-              </UiButton>
-            </div>
-          </div>
-        </div>
-
-        <div v-for="turn in turns" :key="turn.id" class="ai-turn" :class="{ 'is-user': turn.role === 'user' }">
-          <div v-if="turn.role === 'assistant'" class="ai-avatar"><UiIcon name="ai" :size="19" /></div>
-          <div class="ai-turn-content">
-            <p class="ai-speaker">{{ turn.role === 'user' ? '你' : (isVendor ? '原厂运营助手' : '企业采购顾问') }}</p>
-            <p v-if="turn.role === 'user'" class="ai-bubble">{{ turn.text }}</p>
-            <div v-else class="ai-bubble" :class="{ 'is-streaming': turn.streaming }" v-html="formatBubbleHtml(turn.text)" />
-
-            <div v-if="turn.approval" class="ai-result">
-              <div class="ai-result-head">
-                <strong>{{ turn.approval.title }}</strong>
-                <UiBadge :tone="approval === turn.approval ? 'warning' : 'neutral'">{{ approval === turn.approval ? '待人工审批' : '审批已结束' }}</UiBadge>
-              </div>
-              <UiButton v-if="approval === turn.approval" compact icon="permission" @click="reopenApproval">打开审批弹窗</UiButton>
-            </div>
-
-            <article v-if="turn.project" class="ai-result">
-              <div class="ai-result-head">
-                <strong>{{ turn.project.title }}</strong>
-                <UiBadge tone="info">{{ turn.project.stageLabel }}</UiBadge>
-              </div>
-              <p v-if="turn.project.nextStep">下一步：{{ turn.project.nextStep }}</p>
-              <UiButton compact end-icon="open-detail" @click="emit('open-project', turn.project.id)">打开项目详情</UiButton>
-            </article>
-
-            <div v-if="turn.chatLinks?.length" class="ai-prompts">
-              <UiButton v-for="link in turn.chatLinks" :key="link.view" compact end-icon="open-detail" @click="emit('navigate', link.view)">
-                {{ link.label }}
-              </UiButton>
-            </div>
-
-            <article v-if="turn.navAction" class="ai-result">
-              <UiButton compact end-icon="open-detail" @click="emit('navigate', turn.navAction.view)">{{ turn.navAction.label }}</UiButton>
-            </article>
-          </div>
-        </div>
-      </div>
-
-      <div class="ai-composer">
-        <div v-if="working" class="ai-working" role="status"><UiIcon name="loading" :size="16" /> {{ working }}…</div>
-        <div v-if="recording" class="ai-voice-status is-recording" role="status">
-          <span class="ai-voice-dot" aria-hidden="true" />
-          <span>正在录音 {{ formattedDuration }} · 说完点击「完成说词」自动转写文字</span>
-          <UiButton compact variant="text" @click="cancelVoice">取消</UiButton>
-        </div>
-        <div v-else-if="transcribing" class="ai-working" role="status"><UiIcon name="loading" :size="16" /> 正在通过大模型转写语音…</div>
-        <p v-if="voiceError" class="form-error ai-voice-error" role="alert">{{ voiceError }}</p>
-
-        <form class="ai-composer-form" @submit.prevent="dispatch()">
-          <textarea
-            ref="composerInput"
-            v-model="input"
-            :aria-label="isVendor ? '给原厂运营助手发消息' : '给企业采购顾问发消息'"
-            rows="2"
-            maxlength="2000"
-            :placeholder="isVendor ? '输入或语音说出诉求，例如：盘点待处理渠道询价和待结佣金' : '输入或语音描述需求，例如：帮我看看有哪些待确认报价或整理新采购需求'"
-            :disabled="transcribing"
-            @keydown.enter="onEnter"
-          />
-          <div class="ai-composer-buttons">
-            <UiButton
+      <div class="ai-sidebar-scroll" aria-label="历史对话列表">
+        <div class="ai-session-section">
+          <div class="ai-section-label">最近</div>
+          <div
+            v-for="sess in filteredSessions"
+            :key="sess.id"
+            class="ai-session-row"
+            :class="{ 'is-active': sess.id === activeSessionId }"
+          >
+            <button type="button" class="ai-session-btn" :disabled="busy" @click="switchSession(sess.id)">
+              <span>{{ sess.title }}</span>
+            </button>
+            <button
+              v-if="sessions.length > 1 || sess.turns.length"
               type="button"
-              :variant="recording ? 'danger' : 'secondary'"
-              :icon="recording ? 'stop' : 'mic'"
-              :loading="transcribing"
-              :aria-pressed="recording"
-              :disabled="!!working || transcribing"
-              @click="toggleVoice"
+              class="ai-session-del"
+              :disabled="busy"
+              aria-label="删除此对话"
+              title="删除此对话"
+              @click.stop="deleteSession(sess.id)"
             >
-              {{ recording ? '完成说词' : '语音' }}
-            </UiButton>
-            <UiButton type="submit" variant="primary" end-icon="forward" :disabled="!input.trim() || !!working || recording || transcribing">发送</UiButton>
+              <UiIcon name="close" :size="13" />
+            </button>
           </div>
-        </form>
+        </div>
+      </div>
+
+      <div class="ai-sidebar-foot">
+        <span class="ai-org-pill">
+          <UiIcon :name="isVendor ? 'vendor' : 'customer'" :size="13" />
+          <span>{{ organizationName || (isVendor ? '软件厂商组织' : '企业客户组织') }}</span>
+        </span>
+      </div>
+    </aside>
+
+    <div class="ai-stage">
+      <header class="ai-topbar">
+        <div class="ai-topbar-left">
+          <button
+            type="button"
+            class="ai-topbar-icon-btn ai-open-rail-btn"
+            aria-label="展开历史会话侧栏"
+            title="展开历史会话侧栏"
+            @click="toggleSidebar"
+          >
+            <UiIcon name="sidebar-open" :size="16" />
+          </button>
+          <h1 id="role-ai-title" class="ai-topbar-title">
+            {{ turns.length ? (activeSession?.title || 'AI 工作台') : (isVendor ? '软件厂商 AI 工作台' : '企业客户 AI 采购工作台') }}
+          </h1>
+        </div>
+
+        <div class="ai-topbar-right">
+          <button type="button" class="ai-topbar-pill" :aria-expanded="skillsExpanded" @click="skillsExpanded = !skillsExpanded">
+            <UiIcon name="workflow" :size="14" />
+            <span>技能 ({{ shortcuts.length }})</span>
+          </button>
+          <button
+            v-if="turns.length"
+            type="button"
+            class="ai-topbar-icon-btn"
+            :disabled="busy"
+            title="清空当前对话"
+            aria-label="清空当前对话"
+            @click="clearCurrentSession"
+          >
+            <UiIcon name="trash" :size="15" />
+          </button>
+          <button
+            type="button"
+            class="ai-topbar-icon-btn"
+            :title="theme === 'dark' ? '切换为极简浅色' : '切换为 Codex 深色'"
+            :aria-label="theme === 'dark' ? '切换为极简浅色' : '切换为 Codex 深色'"
+            @click="toggleTheme"
+          >
+            <UiIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="15" />
+          </button>
+        </div>
+      </header>
+
+      <div ref="log" class="ai-log" :class="{ 'is-empty': !turns.length }" role="log" aria-label="AI 对话记录">
+        <div v-if="!turns.length" class="ai-empty-hero">
+          <div class="ai-codex-emblem" aria-hidden="true">
+            <svg viewBox="0 0 48 48" width="46" height="46" fill="none">
+              <path
+                d="M24 6c3.2 0 5.9 1.7 7.3 4.3 2.9-.5 5.9.8 7.4 3.4 1.5 2.6 1.1 5.8-.8 8 1.9 2.2 2.3 5.4.8 8-1.5 2.6-4.5 3.9-7.4 3.4-1.4 2.6-4.1 4.3-7.3 4.3s-5.9-1.7-7.3-4.3c-2.9.5-5.9-.8-7.4-3.4-1.5-2.6-1.1-5.8.8-8-1.9-2.2-2.3-5.4-.8-8 1.5-2.6 4.5-3.9 7.4-3.4C18.1 7.7 20.8 6 24 6Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+              <path d="M18.5 20.5L22.5 24l-4 3.5M24.5 27.5h5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+          <h2 class="ai-empty-title">{{ isVendor ? '今天要处理哪项渠道事务？' : '今天想推进哪项采购计划？' }}</h2>
+          <p class="ai-empty-sub">
+            {{ isVendor
+              ? '实时盘点渠道询价、分佣结算与售后工单，一句话提取知识库并弹窗审批执行。'
+              : '用自然语言梳理企业数字化痛点并一键立项，实时核对报价方案、订单与验收。' }}
+          </p>
+
+          <div class="ai-starter-chips">
+            <button
+              type="button"
+              class="ai-starter-chip is-accent"
+              :disabled="!!working"
+              @click="dispatch(isVendor ? '帮我全面盘点一下目前有哪些待我处理的渠道询价、收款、结佣、财务申请和售后工单？' : '帮我看看目前名下所有采购项目和软件订单进展到哪一步了，有没有需要我拍板的？')"
+            >
+              <UiIcon name="ai" :size="14" />
+              <span>{{ isVendor ? '盘点全渠道待办事项' : '盘点我的项目与待确认事项' }}</span>
+            </button>
+            <button
+              v-for="skill in shortcuts.slice(0, 3)"
+              :key="skill.id"
+              type="button"
+              class="ai-starter-chip"
+              :disabled="!!working"
+              @click="triggerSkill(skill)"
+            >
+              <UiIcon :name="skill.icon" :size="14" />
+              <span>{{ skill.label }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="ai-stream-column">
+          <div v-for="turn in turns" :key="turn.id" class="ai-turn" :class="{ 'is-user': turn.role === 'user' }">
+            <template v-if="turn.role === 'user'">
+              <div class="ai-user-bubble">{{ turn.text }}</div>
+            </template>
+            <template v-else>
+              <div class="ai-assistant-row">
+                <div class="ai-assistant-badge" aria-hidden="true"><UiIcon name="ai" :size="15" /></div>
+                <div class="ai-turn-content">
+                  <div class="ai-prose" :class="{ 'is-streaming': turn.streaming }" v-html="formatBubbleHtml(turn.text)" />
+
+                  <div v-if="turn.approval" class="ai-result">
+                    <div class="ai-result-head">
+                      <strong>{{ turn.approval.title }}</strong>
+                      <UiBadge :tone="approval === turn.approval ? 'warning' : 'neutral'">
+                        {{ approval === turn.approval ? '待人工审批' : '审批已结束' }}
+                      </UiBadge>
+                    </div>
+                    <button v-if="approval === turn.approval" type="button" class="ai-action-chip is-primary" @click="reopenApproval">
+                      <UiIcon name="permission" :size="14" />
+                      <span>打开审批弹窗</span>
+                    </button>
+                  </div>
+
+                  <article v-if="turn.project" class="ai-result">
+                    <div class="ai-result-head">
+                      <strong>{{ turn.project.title }}</strong>
+                      <UiBadge tone="info">{{ turn.project.stageLabel }}</UiBadge>
+                    </div>
+                    <p v-if="turn.project.nextStep">下一步：{{ turn.project.nextStep }}</p>
+                    <button type="button" class="ai-action-chip" @click="emit('open-project', turn.project.id)">
+                      <span>打开项目详情</span>
+                      <UiIcon name="open-detail" :size="13" />
+                    </button>
+                  </article>
+
+                  <div v-if="turn.chatLinks?.length" class="ai-prompts">
+                    <button v-for="link in turn.chatLinks" :key="link.view" type="button" class="ai-action-chip" @click="emit('navigate', link.view)">
+                      <span>{{ link.label }}</span>
+                      <UiIcon name="open-detail" :size="13" />
+                    </button>
+                  </div>
+
+                  <article v-if="turn.navAction" class="ai-result">
+                    <button type="button" class="ai-action-chip" @click="emit('navigate', turn.navAction.view)">
+                      <span>{{ turn.navAction.label }}</span>
+                      <UiIcon name="open-detail" :size="13" />
+                    </button>
+                  </article>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="ai-dock">
+        <div class="ai-dock-inner">
+          <section v-if="skillsExpanded" class="ai-skill-popover" aria-label="专属工作流技能">
+            <div class="ai-skill-popover-head">
+              <strong>选择要调用的专属业务技能</strong>
+              <button type="button" class="ai-rail-icon-btn" aria-label="关闭技能菜单" @click="skillsExpanded = false">
+                <UiIcon name="close" :size="14" />
+              </button>
+            </div>
+            <div class="ai-skill-grid">
+              <button v-for="skill in shortcuts" :key="skill.id" type="button" class="ai-skill-card" :disabled="!!working" @click="triggerSkill(skill)">
+                <span class="ai-skill-card-head"><UiIcon :name="skill.icon" :size="15" /><strong>{{ skill.label }}</strong></span>
+                <small>{{ skill.description }}</small>
+              </button>
+            </div>
+          </section>
+
+          <div class="ai-context-strip">
+            <div class="ai-context-items">
+              <span class="ai-context-chip">
+                <UiIcon :name="isVendor ? 'vendor' : 'customer'" :size="13" />
+                <span>{{ organizationName || (isVendor ? '软件厂商组织' : '企业客户组织') }}</span>
+              </span>
+              <span class="ai-context-chip">
+                <UiIcon name="folder" :size="13" />
+                <span>{{ isVendor ? '渠道询价与产品台账' : '企业采购与直购台账' }}</span>
+              </span>
+            </div>
+            <div v-if="working" class="ai-working-inline" role="status">
+              <UiIcon name="loading" :size="13" class="ai-spin" />
+              <span>{{ working }}…</span>
+            </div>
+          </div>
+
+          <form class="ai-composer-pod" @submit.prevent="dispatch()">
+            <div v-if="recording" class="ai-voice-banner is-recording" role="status">
+              <span class="ai-voice-dot" aria-hidden="true" />
+              <span>正在录音 {{ formattedDuration }} · 说完点击右侧麦克风按钮完成转写</span>
+              <button type="button" class="ai-banner-link" @click="cancelVoice">取消</button>
+            </div>
+            <div v-else-if="transcribing" class="ai-voice-banner" role="status">
+              <UiIcon name="loading" :size="14" class="ai-spin" />
+              <span>正在通过多模态模型转写语音…</span>
+            </div>
+            <p v-if="voiceError" class="ai-voice-error" role="alert">{{ voiceError }}</p>
+
+            <textarea
+              ref="composerInput"
+              v-model="input"
+              :aria-label="isVendor ? '给原厂运营助手发消息' : '给企业采购顾问发消息'"
+              rows="1"
+              maxlength="2000"
+              :placeholder="isVendor ? '随心输入渠道运营指令或分析问题…' : '随心输入采购需求、报价核对或验收指令…'"
+              :disabled="transcribing"
+              @keydown.enter="onEnter"
+            />
+
+            <div class="ai-composer-bar">
+              <div class="ai-composer-left">
+                <button
+                  type="button"
+                  class="ai-plus-trigger"
+                  :aria-expanded="skillsExpanded"
+                  title="打开专属技能面板"
+                  @click="skillsExpanded = !skillsExpanded"
+                >
+                  <UiIcon name="add" :size="15" />
+                </button>
+                <span class="ai-guard-badge">
+                  <UiIcon name="shield-check" :size="13" />
+                  <span>弹窗审批执行</span>
+                </span>
+              </div>
+
+              <div class="ai-composer-right">
+                <span class="ai-model-label">渠智链多模池 · 自动轮换</span>
+                <button
+                  type="button"
+                  class="ai-mic-btn"
+                  :class="{ 'is-recording': recording }"
+                  :aria-pressed="recording"
+                  :aria-label="recording ? '完成说词并转写' : '语音输入'"
+                  :title="recording ? '完成说词并转写' : '语音输入'"
+                  :disabled="!!working || transcribing"
+                  @click="toggleVoice"
+                >
+                  <UiIcon :name="recording ? 'stop' : 'mic'" :size="15" />
+                  <span v-if="recording" class="ai-mic-rec-label">完成说词</span>
+                </button>
+                <button
+                  type="submit"
+                  class="ai-send-btn"
+                  aria-label="发送"
+                  title="发送消息"
+                  :disabled="!input.trim() || !!working || recording || transcribing"
+                >
+                  <UiIcon name="send-up" :size="16" />
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
 
