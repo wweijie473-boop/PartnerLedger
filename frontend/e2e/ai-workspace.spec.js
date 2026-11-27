@@ -142,9 +142,21 @@ test('Codex 声波录音胶囊支持实时波形展示、左键取消与蓝键�
   await expect(micBtn).toBeVisible()
   await micBtn.click()
 
-  await expect(page.getByRole('button', { name: '取消录音' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '完成说词并转写' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '完成录音并直接发送' })).toBeVisible()
+  const cancelBtn = page.getByRole('button', { name: '取消录音' })
+  const stopBtn = page.getByRole('button', { name: '完成说词并转写' })
+  const sendVoiceBtn = page.getByRole('button', { name: '完成录音并直接发送' })
+  await expect(cancelBtn).toBeVisible()
+  await expect(stopBtn).toBeVisible()
+  await expect(sendVoiceBtn).toBeVisible()
+
+  const podBox = await page.locator('.ai-composer-pod.is-voice-mode').boundingBox()
+  const cancelBox = await cancelBtn.boundingBox()
+  const sendBox = await sendVoiceBtn.boundingBox()
+  expect(cancelBox.x - podBox.x).toBeGreaterThanOrEqual(7)
+  expect(cancelBox.x - podBox.x).toBeLessThanOrEqual(11)
+  expect((podBox.x + podBox.width) - (sendBox.x + sendBox.width)).toBeGreaterThanOrEqual(7)
+  expect((podBox.x + podBox.width) - (sendBox.x + sendBox.width)).toBeLessThanOrEqual(11)
+
   await expect.poll(() => page.locator('.ai-wave-bar.is-active').count()).toBeGreaterThan(3)
 
   await page.getByRole('button', { name: '取消录音' }).click()
