@@ -37,12 +37,14 @@ const {
 } = useAiConversation(props, log)
 
 const {
-  recording, transcribing, formattedDuration, voiceError, toggleVoice, cancelVoice,
+  recording, transcribing, autoSending, waveformBars, voiceError,
+  startVoice, finishVoice, sendVoice, cancelVoice,
 } = useVoiceInput({
   demo,
   request: props.request,
   input,
   onReady: () => nextTick(() => composerInput.value?.focus()),
+  onSend: () => dispatch(),
 })
 
 const sample = aiDemoProject.requirement + '\n请帮我准备询价草稿。'
@@ -604,76 +606,119 @@ function onEnter(event) {
             </div>
           </div>
 
-          <form class="ai-composer-pod" @submit.prevent="dispatch()">
-            <div v-if="recording" class="ai-voice-banner is-recording" role="status">
-              <span class="ai-voice-dot" aria-hidden="true" />
-              <span>正在录音 {{ formattedDuration }} · 说完点击右侧麦克风按钮完成转写</span>
-              <button type="button" class="ai-banner-link" @click="cancelVoice">取消</button>
-            </div>
-            <div v-else-if="transcribing" class="ai-voice-banner" role="status">
-              <UiIcon name="loading" :size="14" class="ai-spin" />
-              <span>正在通过多模态模型转写语音…</span>
-            </div>
-            <p v-if="voiceError" class="ai-voice-error" role="alert">{{ voiceError }}</p>
-            <div v-if="pendingWrite && !working" class="ai-recovery-banner" role="status">
-              <span>上次工作流结果待确认。{{ recoveryError }}</span>
-              <UiButton compact :disabled="!!working" @click="recoverWrite">用原请求确认结果</UiButton>
-            </div>
-
-            <textarea
-              ref="composerInput"
-              v-model="input"
-              aria-label="给渠道业务助手发消息"
-              rows="1"
-              maxlength="2000"
-              placeholder="随心输入业务指令、客户分析问题，或点击右侧语音输入…"
-              :disabled="!!pendingWrite || transcribing"
-              @keydown.enter="onEnter"
-            />
-
-            <div class="ai-composer-bar">
-              <div class="ai-composer-left">
+          <form
+            class="ai-composer-pod"
+            :class="{ 'is-voice-mode': recording || transcribing }"
+            @submit.prevent="dispatch()"
+          >
+            <template v-if="recording || transcribing">
+              <div class="ai-voice-capsule" role="status" :aria-label="transcribing ? '正在转写语音' : '正在录音'">
                 <button
                   type="button"
-                  class="ai-plus-trigger"
-                  :aria-expanded="skillsExpanded"
-                  title="打开业务工作流技能面板"
-                  @click="skillsExpanded = !skillsExpanded"
+                  class="ai-voice-circle-btn is-cancel"
+                  aria-label="取消录音"
+                  title="取消录音"
+                  @click="cancelVoice"
                 >
-                  <UiIcon name="add" :size="15" />
+                  <UiIcon name="close" :size="16" />
                 </button>
-                <span class="ai-guard-badge">
-                  <UiIcon name="shield-check" :size="13" />
-                  <span>弹窗审批执行</span>
-                </span>
+
+                <div class="ai-waveform-track" :class="{ 'is-transcribing': transcribing }" aria-hidden="true">
+                  <span
+                    v-for="(lvl, idx) in waveformBars"
+                    :key="idx"
+                    class="ai-wave-bar"
+                    :class="{ 'is-active': lvl > 0.02 }"
+                    :style="{ height: `${lvl > 0.02 ? Math.round(4 + lvl * 22) : 2}px` }"
+                  />
+                </div>
+
+                <div class="ai-voice-actions">
+                  <button
+                    type="button"
+                    class="ai-voice-circle-btn is-stop"
+                    aria-label="完成说词并转写"
+                    title="停止录音并转为文字编辑"
+                    :disabled="transcribing"
+                    @click="finishVoice"
+                  >
+                    <UiIcon v-if="transcribing && !autoSending" name="loading" :size="15" class="ai-spin" />
+                    <span v-else class="ai-stop-square" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    class="ai-voice-circle-btn is-send"
+                    aria-label="完成录音并直接发送"
+                    title="停止录音并直接发送"
+                    :disabled="transcribing"
+                    @click="sendVoice"
+                  >
+                    <UiIcon v-if="transcribing && autoSending" name="loading" :size="15" class="ai-spin" />
+                    <UiIcon v-else name="send-up" :size="16" />
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else>
+              <p v-if="voiceError" class="ai-voice-error" role="alert">{{ voiceError }}</p>
+              <div v-if="pendingWrite && !working" class="ai-recovery-banner" role="status">
+                <span>上次工作流结果待确认。{{ recoveryError }}</span>
+                <UiButton compact :disabled="!!working" @click="recoverWrite">用原请求确认结果</UiButton>
               </div>
 
-              <div class="ai-composer-right">
-                <span class="ai-model-label">{{ demo ? '本地演示引擎' : '渠智链多模池 · 自动轮换' }}</span>
-                <button
-                  type="button"
-                  class="ai-mic-btn"
-                  :class="{ 'is-recording': recording }"
-                  :aria-pressed="recording"
-                  :aria-label="recording ? '完成说词并转写' : '语音输入'"
-                  :title="recording ? '完成说词并转写' : '语音输入'"
-                  :disabled="!!working || loadingProjects || !!pendingWrite || transcribing"
-                  @click="toggleVoice"
-                >
-                  <UiIcon :name="recording ? 'stop' : 'mic'" :size="15" />
-                  <span v-if="recording" class="ai-mic-rec-label">完成说词</span>
-                </button>
-                <button
-                  type="submit"
-                  class="ai-send-btn"
-                  aria-label="发送"
-                  title="发送消息"
-                  :disabled="!input.trim() || !!working || loadingProjects || !!pendingWrite || recording || transcribing"
-                >
-                  <UiIcon name="send-up" :size="16" />
-                </button>
+              <textarea
+                ref="composerInput"
+                v-model="input"
+                aria-label="给渠道业务助手发消息"
+                rows="1"
+                maxlength="2000"
+                placeholder="随心输入业务指令、客户分析问题，或点击右侧语音输入…"
+                :disabled="!!pendingWrite"
+                @keydown.enter="onEnter"
+              />
+
+              <div class="ai-composer-bar">
+                <div class="ai-composer-left">
+                  <button
+                    type="button"
+                    class="ai-plus-trigger"
+                    :aria-expanded="skillsExpanded"
+                    title="打开业务工作流技能面板"
+                    @click="skillsExpanded = !skillsExpanded"
+                  >
+                    <UiIcon name="add" :size="15" />
+                  </button>
+                  <span class="ai-guard-badge">
+                    <UiIcon name="shield-check" :size="13" />
+                    <span>弹窗审批执行</span>
+                  </span>
+                </div>
+
+                <div class="ai-composer-right">
+                  <span class="ai-model-label">{{ demo ? '本地演示引擎' : '渠智链多模池 · 自动轮换' }}</span>
+                  <button
+                    type="button"
+                    class="ai-mic-btn"
+                    aria-label="语音输入"
+                    title="语音输入"
+                    :disabled="!!working || loadingProjects || !!pendingWrite"
+                    @click="startVoice"
+                  >
+                    <UiIcon name="mic" :size="15" />
+                  </button>
+                  <button
+                    type="submit"
+                    class="ai-send-btn"
+                    aria-label="发送"
+                    title="发送消息"
+                    :disabled="!input.trim() || !!working || loadingProjects || !!pendingWrite"
+                  >
+                    <UiIcon name="send-up" :size="16" />
+                  </button>
+                </div>
               </div>
-            </div>
+            </template>
           </form>
         </div>
       </div>

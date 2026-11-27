@@ -88,3 +88,70 @@ test('多候选产品在弹窗内一次选定并自动执行，对客报价与�
   await visitDialog.getByRole('button', { name: '同意并自动执行' }).click()
   await expect(page.getByText('拜访记录与团队附加商机已自动沉淀完成，主项目订单不受影响。')).toBeVisible()
 })
+
+test('Codex 声波录音胶囊支持实时波形展示、左键取消与蓝键一键转写直发', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 860 })
+  await page.addInitScript(() => {
+    sessionStorage.setItem('partnerledger-api-session', JSON.stringify({ token: 'demo-session', expiresAt: Date.now() + 60_000 }))
+    navigator.mediaDevices.getUserMedia = async () => {
+      const ctx = new AudioContext()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.frequency.value = 260
+      gain.gain.value = 0.28
+      const dest = ctx.createMediaStreamDestination()
+      osc.connect(gain)
+      gain.connect(dest)
+      osc.start()
+      let tick = 0
+      setInterval(() => {
+        tick++
+        gain.gain.value = tick % 3 === 0 ? 0.002 : (0.12 + (tick % 5) * 0.06)
+      }, 60)
+      return dest.stream
+    }
+  })
+
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url())
+    const p = url.pathname
+    if (p === '/api/user/profile') {
+      return route.fulfill({ json: { code: 200, message: 'success', data: { id: '1', username: 'test_dealer', organization: { id: '2', name: '测试代理商', kind: 'RESELLER' } } } })
+    }
+    if (p === '/api/org/current') {
+      return route.fulfill({ json: { code: 200, message: 'success', data: { id: '2', name: '测试代理商', kind: 'RESELLER' } } })
+    }
+    if (p === '/api/workspace/badges') {
+      return route.fulfill({ json: { code: 200, message: 'success', data: { total: 0, pages: {}, items: [] } } })
+    }
+    if (p === '/api/ai/transcribe') {
+      return route.fulfill({ json: { code: 200, message: 'success', data: { text: '帮我查看一下我的所有客户信息' } } })
+    }
+    if (p === '/api/ai/workspace/stream') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream; charset=utf-8',
+        body: 'event: delta\ndata: {"text":"已整理客户：**海川精密机械制造有限公司**"}\n\nevent: done\ndata: {"links":["customers"],"model":"test"}\n\n',
+      })
+    }
+    return route.fulfill({ json: { code: 200, message: 'success', data: { items: [], next_cursor: null } } })
+  })
+
+  await page.goto('/login/dealer?view=requirement')
+  const micBtn = page.getByRole('button', { name: '语音输入' })
+  await expect(micBtn).toBeVisible()
+  await micBtn.click()
+
+  await expect(page.getByRole('button', { name: '取消录音' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '完成说词并转写' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '完成录音并直接发送' })).toBeVisible()
+  await expect.poll(() => page.locator('.ai-wave-bar.is-active').count()).toBeGreaterThan(3)
+
+  await page.getByRole('button', { name: '取消录音' }).click()
+  await expect(page.getByRole('textbox', { name: '给渠道业务助手发消息' })).toBeVisible()
+
+  await micBtn.click()
+  await page.waitForTimeout(350)
+  await page.getByRole('button', { name: '完成录音并直接发送' }).click()
+  await expect(page.getByText('海川精密机械制造有限公司')).toBeVisible()
+})

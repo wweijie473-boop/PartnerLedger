@@ -7,7 +7,7 @@ import { createWorkflowJournal } from '../src/live/aiWorkflowJournal.js'
 import { formatBubbleHtml, useAiTheme } from '../src/live/aiMarkdown.js'
 import { routeLocalWorkspace } from '../src/live/aiSkillCatalog.js'
 import { useAiConversation } from '../src/live/useAiConversation.js'
-import { appendTranscript, encodeMonoWavBase64 } from '../src/live/useVoiceInput.js'
+import { appendTranscript, computeVoiceBarLevel, encodeMonoWavBase64 } from '../src/live/useVoiceInput.js'
 
 function memoryStorage() {
   const map = new Map()
@@ -240,6 +240,9 @@ test('语音输入编码标准 16kHz 单声道 RIFF WAVE 并无损拼接到输�
   assert.equal(appendTranscript('', ' 帮我发对客报价 '), '帮我发对客报价')
   assert.equal(appendTranscript('给财务共享中心', '加价25%发报价'), '给财务共享中心加价25%发报价')
   assert.equal(appendTranscript('ERP', 'MES对接'), 'ERP MES对接')
+
+  assert.equal(computeVoiceBarLevel(new Float32Array(256)), 0, '静音帧保持圆点基线')
+  assert.ok(computeVoiceBarLevel(chunk) > 0.35 && computeVoiceBarLevel(chunk) <= 1, '说话帧映射为动态竖条高度')
 })
 
 test('客户信息查询、经营汇总查询与多轮自由对话直接返回真实回答与数据卡片，不答非所问', async () => {

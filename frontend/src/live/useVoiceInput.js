@@ -2,6 +2,22 @@ import { computed, getCurrentInstance, onUnmounted, ref } from 'vue'
 
 const MAX_RECORD_SECONDS = 55
 const TARGET_SAMPLE_RATE = 16000
+export const WAVEFORM_BAR_COUNT = 112
+
+export function computeVoiceBarLevel(samples) {
+  if (!samples || !samples.length) return 0
+  let sumSq = 0
+  let peak = 0
+  for (let i = 0; i < samples.length; i++) {
+    const v = Math.abs(samples[i])
+    sumSq += v * v
+    if (v > peak) peak = v
+  }
+  const rms = Math.sqrt(sumSq / samples.length)
+  const blended = rms * 0.72 + peak * 0.28
+  if (blended < 0.014) return 0
+  return Math.min(1, Math.pow((blended - 0.014) * 6.2, 0.72))
+}
 
 export function encodeMonoWavBase64(chunks, inputSampleRate, targetRate = TARGET_SAMPLE_RATE) {
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
@@ -81,11 +97,13 @@ export function appendTranscript(existing, addition) {
   return base.trimEnd() + (needsSpace ? ' ' : '') + cleanAdd
 }
 
-export function useVoiceInput({ demo, request, input, onReady }) {
+export function useVoiceInput({ demo, request, input, onReady, onSend }) {
   const recording = ref(false)
   const transcribing = ref(false)
+  const autoSending = ref(false)
   const seconds = ref(0)
   const voiceError = ref('')
+  const waveformBars = ref(Array(WAVEFORM_BAR_COUNT).fill(0))
 
   const formattedDuration = computed(() => {
     const mins = String(Math.floor(seconds.value / 60)).padStart(2, '0')
@@ -95,6 +113,25 @@ export function useVoiceInput({ demo, request, input, onReady }) {
 
   let activeCleanup = null
   let timer = null
+  let waveInterval = null
+  let transcribeController = null
+
+  function resetWaveform() {
+    waveformBars.value = Array(WAVEFORM_BAR_COUNT).fill(0)
+  }
+
+  function pushWaveSample(level) {
+    const next = waveformBars.value.slice(1)
+    next.push(level)
+    waveformBars.value = next
+  }
+
+  function clearWaveTicker() {
+    if (waveInterval) {
+      clearInterval(waveInterval)
+      waveInterval = null
+    }
+  }
 
   function clearTimer() {
     if (timer) {
@@ -137,6 +174,11 @@ export function useVoiceInput({ demo, request, input, onReady }) {
       await audioCtx.resume().catch(() => {})
     }
     const source = audioCtx.createMediaStreamSource(stream)
+    const analyser = audioCtx.createAnalyser()
+    analyser.fftSize = 256
+    analyser.smoothingTimeConstant = 0.45
+    const timeDomainBuf = new Float32Array(analyser.fftSize)
+
     const processor = audioCtx.createScriptProcessor(4096, 1, 1)
     const muteGain = audioCtx.createGain()
     muteGain.gain.value = 0
@@ -149,65 +191,124 @@ export function useVoiceInput({ demo, request, input, onReady }) {
       chunks.push(new Float32Array(channel))
     }
 
-    source.connect(processor)
+    source.connect(analyser)
+    analyser.connect(processor)
     processor.connect(muteGain)
     muteGain.connect(audioCtx.destination)
-    recording.value = true
 
-    const finish = async (cancel = false) => {
+    resetWaveform()
+    recording.value = true
+    clearWaveTicker()
+    waveInterval = setInterval(() => {
+      if (!recording.value) return
+      analyser.getFloatTimeDomainData(timeDomainBuf)
+      pushWaveSample(computeVoiceBarLevel(timeDomainBuf))
+    }, 55)
+
+    const finish = async ({ cancel = false, sendAfter = false } = {}) => {
       if (!recording.value && !cancel) return
       recording.value = false
       clearTimer()
+      clearWaveTicker()
       activeCleanup = null
-      try { processor.disconnect(); source.disconnect(); muteGain.disconnect() } catch {}
+      try { processor.disconnect(); analyser.disconnect(); source.disconnect(); muteGain.disconnect() } catch {}
       for (const track of stream.getTracks()) track.stop()
       await audioCtx.close().catch(() => {})
-      if (cancel) return
+      if (cancel) {
+        resetWaveform()
+        return
+      }
 
       const sampleCount = chunks.reduce((sum, item) => sum + item.length, 0)
       if (sampleCount < sampleRate * 0.25) {
-        voiceError.value = '说话时间太短，请点击语音按钮后说出完整业务指令。'
+        resetWaveform()
+        voiceError.value = '说话时间太短，请点击麦克风后说出完整指令。'
         return
       }
 
       transcribing.value = true
+      autoSending.value = Boolean(sendAfter)
+      const ctrl = new AbortController()
+      transcribeController = ctrl
       try {
         const audio = encodeMonoWavBase64(chunks, sampleRate, TARGET_SAMPLE_RATE)
         const res = await request('/api/ai/transcribe', {
           method: 'POST',
           body: { audio, format: 'wav' },
           timeout: 30000,
+          signal: ctrl.signal,
         })
+        if (ctrl.signal.aborted) return
         const text = String(res?.text ?? '').trim()
         if (!text) {
           voiceError.value = '未识别到清晰语音，请靠近麦克风重试。'
           return
         }
         input.value = appendTranscript(input.value, text)
-        onReady?.()
+        if (sendAfter && onSend) {
+          await onSend()
+        } else {
+          onReady?.()
+        }
       } catch (cause) {
+        if (cause?.name === 'AbortError' || ctrl.signal.aborted) return
         voiceError.value = cause?.message || '语音转写失败，请稍后重试或直接输入文字。'
       } finally {
+        if (transcribeController === ctrl) transcribeController = null
         transcribing.value = false
+        autoSending.value = false
+        resetWaveform()
       }
     }
 
     activeCleanup = finish
-    startTimer(() => finish(false))
+    startTimer(() => finish({ cancel: false, sendAfter: false }))
   }
 
-  function startBrowserSpeechRecognition() {
+  async function startBrowserSpeechRecognition() {
     const SpeechRec = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition
     if (!SpeechRec) {
       voiceError.value = '本地演示模式依赖浏览器原生语音识别，请使用 Edge/Chrome 或登录正式工作台使用云端语音转写。'
       return
     }
+
+    let micStream = null
+    let micCtx = null
+    let micAnalyser = null
+    let micBuf = null
+    if (globalThis.navigator?.mediaDevices?.getUserMedia) {
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const AudioCtx = globalThis.AudioContext || globalThis.webkitAudioContext
+        micCtx = new AudioCtx()
+        const src = micCtx.createMediaStreamSource(micStream)
+        micAnalyser = micCtx.createAnalyser()
+        micAnalyser.fftSize = 256
+        micBuf = new Float32Array(micAnalyser.fftSize)
+        src.connect(micAnalyser)
+      } catch {}
+    }
+
+    const stopMicMeter = () => {
+      clearWaveTicker()
+      if (micStream) {
+        for (const t of micStream.getTracks()) t.stop()
+        micStream = null
+      }
+      if (micCtx) {
+        micCtx.close().catch(() => {})
+        micCtx = null
+      }
+      micAnalyser = null
+    }
+
     const recognition = new SpeechRec()
     recognition.lang = 'zh-CN'
     recognition.continuous = true
     recognition.interimResults = true
     const initialBase = input.value
     let confirmed = ''
+    let speechEnergyBoost = 0
 
     recognition.onresult = event => {
       let interim = ''
@@ -216,6 +317,7 @@ export function useVoiceInput({ demo, request, input, onReady }) {
         if (event.results[i].isFinal) confirmed += transcript
         else interim += transcript
       }
+      speechEnergyBoost = 0.65
       input.value = appendTranscript(initialBase, confirmed + interim)
     }
 
@@ -232,6 +334,8 @@ export function useVoiceInput({ demo, request, input, onReady }) {
       voiceError.value = messages[code] || '语音识别中断，请重试或直接输入文字。'
       recording.value = false
       clearTimer()
+      stopMicMeter()
+      resetWaveform()
       activeCleanup = null
     }
 
@@ -239,49 +343,103 @@ export function useVoiceInput({ demo, request, input, onReady }) {
       if (recording.value) {
         recording.value = false
         clearTimer()
+        stopMicMeter()
+        resetWaveform()
         activeCleanup = null
         onReady?.()
       }
     }
 
     try {
+      resetWaveform()
       recognition.start()
       recording.value = true
-      const finish = (cancel = false) => {
+      clearWaveTicker()
+      waveInterval = setInterval(() => {
+        if (!recording.value) return
+        if (micAnalyser && micBuf) {
+          micAnalyser.getFloatTimeDomainData(micBuf)
+          pushWaveSample(computeVoiceBarLevel(micBuf))
+        } else {
+          const v = speechEnergyBoost > 0.05 ? Math.min(1, speechEnergyBoost * (0.55 + Math.random() * 0.6)) : 0
+          speechEnergyBoost *= 0.8
+          pushWaveSample(v)
+        }
+      }, 55)
+
+      const finish = async ({ cancel = false, sendAfter = false } = {}) => {
         recording.value = false
         clearTimer()
+        stopMicMeter()
+        resetWaveform()
         activeCleanup = null
         try {
-          if (cancel) recognition.abort()
-          else recognition.stop()
+          if (cancel) {
+            recognition.abort()
+            input.value = initialBase
+          } else {
+            recognition.stop()
+          }
         } catch {}
-        if (!cancel) onReady?.()
+        if (!cancel) {
+          if (sendAfter && input.value.trim() && onSend) {
+            await onSend()
+          } else {
+            onReady?.()
+          }
+        }
       }
       activeCleanup = finish
-      startTimer(() => finish(false))
+      startTimer(() => finish({ cancel: false, sendAfter: false }))
     } catch {
+      stopMicMeter()
       voiceError.value = '无法启动语音识别，请重试。'
     }
   }
 
-  async function toggleVoice() {
-    if (transcribing.value) return
+  async function startVoice() {
+    if (recording.value || transcribing.value) return
     voiceError.value = ''
-    if (recording.value && activeCleanup) {
-      await activeCleanup(false)
-      return
-    }
     if (demo) {
-      startBrowserSpeechRecognition()
+      await startBrowserSpeechRecognition()
     } else {
       await startBackendAudioRecording()
     }
   }
 
+  async function finishVoice() {
+    if (recording.value && activeCleanup) {
+      await activeCleanup({ cancel: false, sendAfter: false })
+    }
+  }
+
+  async function sendVoice() {
+    if (recording.value && activeCleanup) {
+      await activeCleanup({ cancel: false, sendAfter: true })
+    }
+  }
+
+  async function toggleVoice() {
+    if (transcribing.value) return
+    if (recording.value) {
+      await finishVoice()
+    } else {
+      await startVoice()
+    }
+  }
+
   function cancelVoice() {
-    if (activeCleanup) activeCleanup(true)
+    if (transcribeController) {
+      transcribeController.abort()
+      transcribeController = null
+    }
+    if (activeCleanup) activeCleanup({ cancel: true, sendAfter: false })
     clearTimer()
+    clearWaveTicker()
     recording.value = false
+    transcribing.value = false
+    autoSending.value = false
+    resetWaveform()
   }
 
   if (getCurrentInstance()) {
@@ -291,9 +449,14 @@ export function useVoiceInput({ demo, request, input, onReady }) {
   return {
     recording,
     transcribing,
+    autoSending,
     seconds,
     formattedDuration,
+    waveformBars,
     voiceError,
+    startVoice,
+    finishVoice,
+    sendVoice,
     toggleVoice,
     cancelVoice,
   }
