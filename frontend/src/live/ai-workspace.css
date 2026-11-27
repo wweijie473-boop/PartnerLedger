@@ -1216,10 +1216,12 @@ main.workspace-content:has(.ai-codex-shell) :is(.live-links, .demo-footer) {
   background: transparent;
   color: var(--cx-ink);
   font-size: 14.5px;
-  line-height: 1.55;
+  line-height: 1.5;
   resize: none;
   outline: none;
-  overflow-y: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cx-border-strong) transparent;
 }
 
 .ai-composer-pod textarea::placeholder {

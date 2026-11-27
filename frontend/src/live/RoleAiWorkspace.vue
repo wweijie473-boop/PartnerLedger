@@ -58,14 +58,16 @@ const filteredSessions = computed(() => {
   return sessions.value.filter(sess => sess.title.toLowerCase().includes(kw))
 })
 
-watch(input, () => {
-  nextTick(() => {
-    const el = composerInput.value
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 168) + 'px'
-  })
-})
+function syncComposerHeight() {
+  const el = composerInput.value
+  if (!el) return
+  el.style.height = 'auto'
+  const nextHeight = Math.min(el.scrollHeight, 168)
+  el.style.height = nextHeight + 'px'
+  el.style.overflowY = el.scrollHeight > 168 ? 'auto' : 'hidden'
+}
+
+watch(input, () => nextTick(syncComposerHeight))
 
 function toggleSidebar() {
   if (window.matchMedia('(max-width: 860px)').matches) {

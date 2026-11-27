@@ -87,14 +87,16 @@ const recentSessions = computed(() =>
   filteredSessions.value.filter(sess => !sess.selectedProjectId),
 )
 
-watch(input, () => {
-  nextTick(() => {
-    const el = composerInput.value
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 168) + 'px'
-  })
-})
+function syncComposerHeight() {
+  const el = composerInput.value
+  if (!el) return
+  el.style.height = 'auto'
+  const nextHeight = Math.min(el.scrollHeight, 168)
+  el.style.height = nextHeight + 'px'
+  el.style.overflowY = el.scrollHeight > 168 ? 'auto' : 'hidden'
+}
+
+watch(input, () => nextTick(syncComposerHeight))
 
 function selectSession(id) {
   switchSession(id)
